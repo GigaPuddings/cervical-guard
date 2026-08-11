@@ -1,0 +1,3 @@
+# 此目录用于存放姿态估计 ONNX 模型文件。
+# 期望文件: movenet_singlepose_lightning.onnx
+# 运行 scripts/download_movenet_model.ps1 下载并转换模型。

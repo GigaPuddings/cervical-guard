@@ -1,0 +1,320 @@
+use std::path::Path;
+
+use rusqlite::{params, Connection};
+
+use crate::model::{AppSettings, DailyStatistics, PersistedMeta};
+
+pub struct Database {
+    connection: Connection,
+}
+
+impl Database {
+    pub fn open(path: &Path) -> Result<Self, String> {
+        let connection = Connection::open(path).map_err(|error| error.to_string())?;
+        connection
+            .pragma_update(None, "foreign_keys", "ON")
+            .map_err(|error| error.to_string())?;
+        connection
+            .pragma_update(None, "journal_mode", "WAL")
+            .map_err(|error| error.to_string())?;
+        let database = Self { connection };
+        database.migrate()?;
+        Ok(database)
+    }
+
+    #[cfg(test)]
+    pub fn memory() -> Self {
+        let database = Self {
+            connection: Connection::open_in_memory().expect("in-memory database"),
+        };
+        database.migrate().expect("migration");
+        database
+    }
+
+    fn migrate(&self) -> Result<(), String> {
+        self.connection
+            .execute_batch(
+                "
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS monitoring_sessions (
+                id TEXT PRIMARY KEY,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                end_reason TEXT,
+                model_bundle_version TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS behavior_events (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                event_type TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                duration_seconds INTEGER,
+                confidence_bucket TEXT,
+                reminder_action TEXT,
+                FOREIGN KEY(session_id) REFERENCES monitoring_sessions(id)
+            );
+            CREATE TABLE IF NOT EXISTS daily_statistics (
+                local_date TEXT PRIMARY KEY,
+                seated_seconds INTEGER NOT NULL DEFAULT 0,
+                longest_seated_seconds INTEGER NOT NULL DEFAULT 0,
+                head_down_seconds INTEGER NOT NULL DEFAULT 0,
+                suspected_phone_seconds INTEGER NOT NULL DEFAULT 0,
+                break_count INTEGER NOT NULL DEFAULT 0,
+                reminder_count INTEGER NOT NULL DEFAULT 0,
+                dismissed_count INTEGER NOT NULL DEFAULT 0,
+                away_seconds INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS model_registry (
+                bundle_version TEXT PRIMARY KEY,
+                manifest_json TEXT NOT NULL,
+                installed_at TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 0
+            );
+            PRAGMA user_version = 1;
+            ",
+            )
+            .map_err(|error| error.to_string())?;
+        // 增量迁移：为已有数据库添加 away_seconds 列。
+        // ALTER TABLE ADD COLUMN 在列已存在时会报错，因此先检查列是否存在。
+        let has_column = self
+            .connection
+            .prepare("SELECT away_seconds FROM daily_statistics LIMIT 0")
+            .is_ok();
+        if !has_column {
+            self.connection
+                .execute(
+                    "ALTER TABLE daily_statistics ADD COLUMN away_seconds INTEGER NOT NULL DEFAULT 0",
+                    [],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        // 增量迁移：为已有数据库添加 away_count 列（今日离开次数）。
+        let has_away_count = self
+            .connection
+            .prepare("SELECT away_count FROM daily_statistics LIMIT 0")
+            .is_ok();
+        if !has_away_count {
+            self.connection
+                .execute(
+                    "ALTER TABLE daily_statistics ADD COLUMN away_count INTEGER NOT NULL DEFAULT 0",
+                    [],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+
+    pub fn load_settings(&self) -> AppSettings {
+        self.load_json("app_settings").unwrap_or_default()
+    }
+
+    pub fn load_meta(&self) -> PersistedMeta {
+        self.load_json("app_meta").unwrap_or_default()
+    }
+
+    fn load_json<T: serde::de::DeserializeOwned>(&self, key: &str) -> Option<T> {
+        let json: String = self
+            .connection
+            .query_row(
+                "SELECT value_json FROM settings WHERE key = ?1",
+                [key],
+                |row| row.get(0),
+            )
+            .ok()?;
+        serde_json::from_str(&json).ok()
+    }
+
+    pub fn save_settings(&self, settings: &AppSettings) -> Result<(), String> {
+        self.save_json("app_settings", settings)
+    }
+
+    pub fn save_meta(&self, meta: &PersistedMeta) -> Result<(), String> {
+        self.save_json("app_meta", meta)
+    }
+
+    fn save_json<T: serde::Serialize>(&self, key: &str, value: &T) -> Result<(), String> {
+        let json = serde_json::to_string(value).map_err(|error| error.to_string())?;
+        self.connection.execute(
+            "INSERT INTO settings (key, value_json, updated_at) VALUES (?1, ?2, datetime('now'))
+             ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at",
+            params![key, json],
+        ).map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn load_today(&self) -> DailyStatistics {
+        let today = chrono::Local::now().date_naive().to_string();
+        self.connection
+            .query_row(
+                "SELECT local_date, seated_seconds, longest_seated_seconds, head_down_seconds,
+                    suspected_phone_seconds, break_count, reminder_count, dismissed_count, away_seconds, away_count
+             FROM daily_statistics WHERE local_date = ?1",
+                [today],
+                map_statistics,
+            )
+            .unwrap_or_else(|_| DailyStatistics::today())
+    }
+
+    pub fn save_daily(&self, item: &DailyStatistics) -> Result<(), String> {
+        self.connection
+            .execute(
+                "INSERT INTO daily_statistics (
+                local_date, seated_seconds, longest_seated_seconds, head_down_seconds,
+                suspected_phone_seconds, break_count, reminder_count, dismissed_count, away_seconds, away_count
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(local_date) DO UPDATE SET
+                seated_seconds = excluded.seated_seconds,
+                longest_seated_seconds = excluded.longest_seated_seconds,
+                head_down_seconds = excluded.head_down_seconds,
+                suspected_phone_seconds = excluded.suspected_phone_seconds,
+                break_count = excluded.break_count,
+                reminder_count = excluded.reminder_count,
+                dismissed_count = excluded.dismissed_count,
+                away_seconds = excluded.away_seconds,
+                away_count = excluded.away_count",
+                params![
+                    item.local_date,
+                    item.seated_seconds,
+                    item.longest_seated_seconds,
+                    item.head_down_seconds,
+                    item.suspected_phone_seconds,
+                    item.break_count,
+                    item.reminder_count,
+                    item.dismissed_count,
+                    item.away_seconds,
+                    item.away_count,
+                ],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn statistics(&self, days: u32) -> Result<Vec<DailyStatistics>, String> {
+        let mut statement = self.connection.prepare(
+            "WITH RECURSIVE dates(day, n) AS (
+                SELECT date('now', 'localtime'), 1
+                UNION ALL SELECT date(day, '-1 day'), n + 1 FROM dates WHERE n < ?1
+             )
+             SELECT dates.day,
+                    COALESCE(d.seated_seconds, 0), COALESCE(d.longest_seated_seconds, 0),
+                    COALESCE(d.head_down_seconds, 0), COALESCE(d.suspected_phone_seconds, 0),
+                    COALESCE(d.break_count, 0), COALESCE(d.reminder_count, 0), COALESCE(d.dismissed_count, 0),
+                    COALESCE(d.away_seconds, 0), COALESCE(d.away_count, 0)
+             FROM dates LEFT JOIN daily_statistics d ON d.local_date = dates.day
+             ORDER BY dates.day ASC",
+        ).map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([days.clamp(1, 366)], map_statistics)
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn record_event(
+        &self,
+        event_type: &str,
+        duration: u64,
+        action: Option<&str>,
+    ) -> Result<(), String> {
+        self.connection.execute(
+            "INSERT INTO behavior_events (id, event_type, started_at, duration_seconds, reminder_action)
+             VALUES (?1, ?2, datetime('now'), ?3, ?4)",
+            params![uuid::Uuid::new_v4().to_string(), event_type, duration, action],
+        ).map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn delete_statistics(&self) -> Result<(), String> {
+        let transaction = self
+            .connection
+            .unchecked_transaction()
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute("DELETE FROM behavior_events", [])
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute("DELETE FROM monitoring_sessions", [])
+            .map_err(|error| error.to_string())?;
+        transaction
+            .execute("DELETE FROM daily_statistics", [])
+            .map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())
+    }
+}
+
+fn map_statistics(row: &rusqlite::Row<'_>) -> rusqlite::Result<DailyStatistics> {
+    Ok(DailyStatistics {
+        local_date: row.get(0)?,
+        seated_seconds: row.get(1)?,
+        longest_seated_seconds: row.get(2)?,
+        head_down_seconds: row.get(3)?,
+        suspected_phone_seconds: row.get(4)?,
+        break_count: row.get(5)?,
+        reminder_count: row.get(6)?,
+        dismissed_count: row.get(7)?,
+        away_seconds: row.get(8)?,
+        away_count: row.get(9)?,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn persists_only_structured_statistics() {
+        let database = Database::memory();
+        let mut day = DailyStatistics::today();
+        day.seated_seconds = 120;
+        database.save_daily(&day).unwrap();
+        let rows = database.statistics(1).unwrap();
+        assert_eq!(rows[0].seated_seconds, 120);
+    }
+
+    #[test]
+    fn deletion_removes_events_and_statistics() {
+        let database = Database::memory();
+        let mut day = DailyStatistics::today();
+        day.break_count = 2;
+        database.save_daily(&day).unwrap();
+        database
+            .record_event("break", 120, Some("completed"))
+            .unwrap();
+        database.delete_statistics().unwrap();
+        assert_eq!(database.statistics(1).unwrap()[0].break_count, 0);
+    }
+
+    #[test]
+    fn persists_custom_sedentary_seconds() {
+        let database = Database::memory();
+        let settings = AppSettings {
+            sedentary_seconds: 10,
+            ..AppSettings::default()
+        };
+        database.save_settings(&settings).unwrap();
+        assert_eq!(database.load_settings().sedentary_seconds, 10);
+    }
+
+    #[test]
+    fn persists_runtime_preferences_as_one_consistent_snapshot() {
+        let database = Database::memory();
+        let settings = AppSettings {
+            sound_enabled: true,
+            meeting_mode: true,
+            run_in_background: false,
+            autostart: true,
+            weekend_enabled: true,
+            statistics_enabled: false,
+            ..AppSettings::default()
+        };
+
+        database.save_settings(&settings).unwrap();
+
+        assert_eq!(database.load_settings(), settings);
+    }
+}

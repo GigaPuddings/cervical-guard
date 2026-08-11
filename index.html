@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#34734a" />
+    <meta name="description" content="健康提醒 - 本地运行的姿态与久坐健康行为提醒应用" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>健康提醒 · 姿态与久坐</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif;
+        background: #f4f7f2;
+      }
+      html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      body { background: #f4f7f2; }
+      .boot-shell {
+        --boot-green: #34734a;
+        --boot-ink: #203027;
+        --boot-muted: #75847b;
+        --boot-line: rgba(52, 115, 74, .14);
+        position: relative; isolation: isolate; display: grid; width: 100%; height: 100%; place-items: center;
+        overflow: hidden; color: var(--boot-ink);
+        background:
+          radial-gradient(circle at 50% 42%, rgba(209, 229, 210, .52), transparent 28%),
+          linear-gradient(145deg, #f8faf7 0%, #f2f6f1 55%, #edf3ee 100%);
+        transition: opacity .18s ease, transform .22s cubic-bezier(.2,.8,.2,1), filter .18s ease;
+      }
+      .boot-shell.boot-exit { opacity: 0; filter: blur(2px); transform: scale(1.012); }
+      .boot-ambient { position: absolute; inset: 0; z-index: -1; opacity: .78; }
+      .boot-ambient::before, .boot-ambient::after {
+        content: ""; position: absolute; border: 1px solid var(--boot-line); border-radius: 50%;
+      }
+      .boot-ambient::before { width: min(52vw, 680px); aspect-ratio: 1; left: -16vw; top: -34vw; }
+      .boot-ambient::after { width: min(38vw, 480px); aspect-ratio: 1; right: -13vw; bottom: -25vw; }
+      .boot-content { display: flex; width: min(84vw, 420px); flex-direction: column; align-items: center; text-align: center; }
+      .boot-mark-stage { position: relative; display: grid; width: 108px; height: 108px; place-items: center; }
+      .boot-orbit { position: absolute; inset: 5px; border: 1px solid rgba(52, 115, 74, .12); border-radius: 50%; animation: boot-breathe 2.4s ease-in-out infinite; }
+      .boot-orbit::after {
+        content: ""; position: absolute; width: 7px; height: 7px; left: 50%; top: -4px; border-radius: 50%;
+        background: #77a887; box-shadow: 0 0 0 6px rgba(119, 168, 135, .12);
+        transform-origin: 0 53px; animation: boot-orbit 2.8s linear infinite;
+      }
+      .boot-mark {
+        display: grid; width: 68px; height: 68px; place-items: center; border-radius: 23px 23px 23px 8px;
+        background: linear-gradient(145deg, #3e8056, #2d6743); box-shadow: 0 18px 46px rgba(42, 91, 58, .2), inset 0 1px rgba(255,255,255,.18);
+      }
+      .boot-mark svg { width: 39px; height: 39px; overflow: visible; }
+      .boot-eyebrow { margin: 22px 0 0; color: var(--boot-green); font-size: 11px; font-weight: 800; letter-spacing: .28em; }
+      .boot-title { margin: 12px 0 0; font-size: clamp(24px, 3vw, 32px); line-height: 1.18; letter-spacing: -.035em; }
+      .boot-copy { margin: 11px 0 0; color: var(--boot-muted); font-size: 12px; line-height: 1.7; }
+      .boot-progress { width: 184px; height: 3px; margin-top: 26px; overflow: hidden; border-radius: 999px; background: rgba(52, 115, 74, .1); }
+      .boot-progress span { display: block; width: 44%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, transparent, #4f8d63, transparent); animation: boot-progress 1.45s ease-in-out infinite; }
+      .boot-status { display: flex; align-items: center; gap: 7px; margin-top: 13px; color: var(--boot-muted); font-size: 9px; letter-spacing: .04em; }
+      .boot-status i { width: 5px; height: 5px; border-radius: 50%; background: #63a777; box-shadow: 0 0 0 4px rgba(99,167,119,.12); }
+      .boot-privacy { position: absolute; bottom: 28px; color: var(--boot-muted); font-size: 9px; letter-spacing: .08em; opacity: .76; }
+      @keyframes boot-breathe { 50% { opacity: .54; transform: scale(1.055); } }
+      @keyframes boot-orbit { to { transform: rotate(360deg); } }
+      @keyframes boot-progress { from { transform: translateX(-125%); } to { transform: translateX(310%); } }
+      @media (prefers-color-scheme: dark) {
+        :root, body { background: #0d120f; }
+        .boot-shell {
+          --boot-ink: #edf4ef; --boot-muted: #98a99f; --boot-line: rgba(121, 197, 142, .11);
+          background: radial-gradient(circle at 50% 42%, rgba(45, 87, 57, .34), transparent 30%), linear-gradient(145deg, #111813, #0d120f);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-orbit, .boot-orbit::after, .boot-progress span { animation-duration: .01ms; animation-iteration-count: 1; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="boot-shell" role="status" aria-live="polite" aria-label="健康提醒正在启动">
+        <div class="boot-ambient" aria-hidden="true"></div>
+        <main class="boot-content">
+          <div class="boot-mark-stage" aria-hidden="true">
+            <div class="boot-orbit"></div>
+            <div class="boot-mark">
+              <svg viewBox="0 0 64 64" fill="none">
+                <path d="M31 53C27 46 27 40 31 34C38 24 38 17 32 10" stroke="#F7FAF5" stroke-width="5.4" stroke-linecap="round" />
+                <path d="M35 22C38.5 15.5 44.5 12.5 51.5 13.5C48.5 20 43 23 35 22Z" fill="#E4EFDF" />
+                <path d="M32 34C24.5 34.5 19.5 30.5 17 24C24.5 23.5 30 27 32 34Z" fill="#A9CAA8" />
+                <path d="M36.5 21C40.5 19 44 17.2 48.5 15.2M30.5 32.5C26.5 29.8 23.5 27.9 19.5 26" stroke="#F7FAF5" stroke-opacity=".46" stroke-width="1" stroke-linecap="round" />
+              </svg>
+            </div>
+          </div>
+          <p class="boot-eyebrow">健康提醒</p>
+          <h1 class="boot-title">正在准备你的健康节奏</h1>
+          <p class="boot-copy">连接本地状态与姿态服务，请稍候片刻</p>
+          <div class="boot-progress" aria-hidden="true"><span></span></div>
+          <div class="boot-status"><i></i><span>全部数据仅在本机处理</span></div>
+        </main>
+        <small class="boot-privacy">LOCAL · PRIVATE · CALM</small>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

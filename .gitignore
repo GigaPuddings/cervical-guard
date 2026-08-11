@@ -1,0 +1,10 @@
+node_modules/
+dist/
+src-tauri/target/
+.vite/
+.playwright-cli/
+*.log
+*.tsbuildinfo
+tmp/
+output/
+.DS_Store

@@ -1,0 +1,38 @@
+[package]
+name = "cervical-guard"
+version = "0.1.0"
+description = "本地运行的颈椎健康与久坐行为提醒应用"
+authors = ["Cervical Guard Contributors"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "cervical_guard_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "cervical-guard"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+nokhwa = { version = "0.10", features = ["input-msmf", "output-threaded"] }
+ort = { version = "=2.0.0-rc.13", features = ["download-binaries", "ndarray"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+thiserror = "2"
+tokio = { version = "1", features = ["time"] }
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62.2", features = ["Security_Authorization_AppCapabilityAccess", "Win32_System_WinRT"] }
