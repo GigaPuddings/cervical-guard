@@ -53,7 +53,7 @@ flowchart LR
 - 中国城市模糊搜索、行政中心过滤与同名村镇排除。
 - 最多 8 个地点，支持新增、删除和独立刷新。
 - 当前温度、体感温度、湿度、云量、紫外线、风力、降水量/概率、WMO 天气状态和 5 日预报。
-- 首选地点天气在今日概览、休息页和灵动岛复用；天气详情采用单屏主从布局，多地点不再纵向堆叠。
+- 首选地点天气在今日概览和灵动岛复用；天气详情采用单屏主从布局，多地点不再纵向堆叠。
 - 基于天气的非医疗活动建议，例如高降水时建议室内走动。
 - 15 分钟新鲜缓存；网络失败时回退到不超过 6 小时的旧缓存，并明确标注。
 - Open-Meteo / CC BY 4.0 页面署名。
@@ -72,7 +72,7 @@ flowchart LR
 | `WeatherPage.tsx` | 搜索交互、每地点加载状态、视图组合 | 外部 JSON 可信度、持久化细节 |
 | `openMeteo.ts` | URL 构造、城市结果排序、8 秒超时、Zod 校验、DTO 映射、WMO 文案 | UI 状态、长期缓存 |
 | `repository.ts` | 地点偏好、TTL、旧数据降级、同地点请求合并 | 健康 SQLite、后台任务 |
-| `usePrimaryWeather.ts` | 读取首选地点并向概览、休息页、灵动岛发布同一摘要 | 健康提醒决策 |
+| `usePrimaryWeather.ts` | 读取首选地点并向概览、灵动岛发布同一摘要 | 健康提醒决策 |
 | `types.ts` | 天气领域类型和缓存常量 | Open-Meteo 原始字段 |
 | Tauri CSP | 仅放行两个 Open-Meteo 源 | 通配网络访问 |
 
@@ -116,7 +116,7 @@ GET https://api.open-meteo.com/v1/forecast
 | 键 | 内容 | 生命周期 |
 | --- | --- | --- |
 | `cervical-guard-weather-locations-v1` | 最多 8 个地点偏好 | 用户删除前保留 |
-| `cervical-guard-weather-preferred-v1` | 概览、休息页与灵动岛共用的首选地点 id | 用户切换前保留 |
+| `cervical-guard-weather-preferred-v1` | 概览与灵动岛共用的首选地点 id | 用户切换前保留 |
 | `cervical-guard-weather-cache-v2` | 按地点 id 保存的内部预报 DTO | 新鲜 15 分钟，降级最多使用 6 小时 |
 
 读取算法：

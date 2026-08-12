@@ -2,7 +2,7 @@ use std::path::Path;
 
 use rusqlite::{params, Connection};
 
-use crate::model::{AppSettings, DailyStatistics, PersistedMeta};
+use crate::model::{AppSettings, BehaviorHistoryEvent, DailyStatistics, PersistedMeta};
 
 pub struct Database {
     connection: Connection,
@@ -221,12 +221,85 @@ impl Database {
         duration: u64,
         action: Option<&str>,
     ) -> Result<(), String> {
+        let now = chrono::Utc::now().to_rfc3339();
         self.connection.execute(
             "INSERT INTO behavior_events (id, event_type, started_at, duration_seconds, reminder_action)
-             VALUES (?1, ?2, datetime('now'), ?3, ?4)",
-            params![uuid::Uuid::new_v4().to_string(), event_type, duration, action],
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![uuid::Uuid::new_v4().to_string(), event_type, now, duration, action],
         ).map_err(|error| error.to_string())?;
         Ok(())
+    }
+
+    pub fn record_completed_event(
+        &self,
+        event_type: &str,
+        started_at: &str,
+        duration: u64,
+        action: Option<&str>,
+    ) -> Result<(), String> {
+        let ended_at = chrono::Utc::now().to_rfc3339();
+        self.connection.execute(
+            "INSERT INTO behavior_events (id, event_type, started_at, ended_at, duration_seconds, reminder_action)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![uuid::Uuid::new_v4().to_string(), event_type, started_at, ended_at, duration, action],
+        ).map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn start_event(&self, event_type: &str, action: Option<&str>) -> Result<String, String> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let started_at = chrono::Utc::now().to_rfc3339();
+        self.connection
+            .execute(
+                "INSERT INTO behavior_events (id, event_type, started_at, reminder_action)
+             VALUES (?1, ?2, ?3, ?4)",
+                params![id, event_type, started_at, action],
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(id)
+    }
+
+    pub fn finish_event(
+        &self,
+        id: &str,
+        duration: u64,
+        action: Option<&str>,
+    ) -> Result<(), String> {
+        let ended_at = chrono::Utc::now().to_rfc3339();
+        self.connection.execute(
+            "UPDATE behavior_events SET ended_at = ?2, duration_seconds = ?3, reminder_action = ?4
+             WHERE id = ?1",
+            params![id, ended_at, duration, action],
+        ).map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    pub fn behavior_history(&self, days: u32) -> Result<Vec<BehaviorHistoryEvent>, String> {
+        let mut statement = self.connection.prepare(
+            "SELECT id, event_type, started_at, ended_at, COALESCE(duration_seconds, 0), reminder_action
+             FROM behavior_events
+             WHERE date(started_at) >= date('now', 'localtime', ?1)
+             ORDER BY started_at DESC LIMIT 500",
+        ).map_err(|error| error.to_string())?;
+        let lookback = format!("-{} days", days.clamp(1, 366));
+        let rows = statement
+            .query_map([lookback], |row| {
+                Ok(BehaviorHistoryEvent {
+                    id: row.get(0)?,
+                    event_type: row.get(1)?,
+                    started_at: row.get(2)?,
+                    ended_at: row.get(3)?,
+                    duration_seconds: row.get(4)?,
+                    action: row.get(5)?,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn export_events(&self, days: u32) -> Result<Vec<BehaviorHistoryEvent>, String> {
+        self.behavior_history(days)
     }
 
     pub fn delete_statistics(&self) -> Result<(), String> {
@@ -287,6 +360,17 @@ mod tests {
             .unwrap();
         database.delete_statistics().unwrap();
         assert_eq!(database.statistics(1).unwrap()[0].break_count, 0);
+    }
+
+    #[test]
+    fn behavior_history_returns_structured_events_newest_first() {
+        let database = Database::memory();
+        database.record_event("away", 12, Some("returned")).unwrap();
+        let events = database.behavior_history(7).unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "away");
+        assert_eq!(events[0].duration_seconds, 12);
+        assert_eq!(events[0].action.as_deref(), Some("returned"));
     }
 
     #[test]

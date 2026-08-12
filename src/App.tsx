@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Calibration } from "./features/calibration/Calibration";
 import { Dashboard } from "./features/dashboard/Dashboard";
 import { Onboarding } from "./features/onboarding/Onboarding";
-import { BreakScreen } from "./features/reminders/BreakScreen";
+import { BreakIsland } from "./features/reminders/BreakIsland";
 import { ReminderOverlay } from "./features/reminders/ReminderOverlay";
 import { coreClient } from "./infra/client";
 import { mockCore } from "./infra/mockCore";
@@ -18,7 +18,7 @@ function errorMessage(reason: unknown): string {
 }
 
 export function App() {
-  const { snapshot, page, statistics, busy, error, setSnapshot, setPage, setStatistics, setBusy, setError } = useAppStore();
+  const { snapshot, page, statistics, behaviorHistory, busy, error, setSnapshot, setPage, setStatistics, setBehaviorHistory, setBusy, setError } = useAppStore();
   const [showIntro, setShowIntro] = useState(false);
   const [cameraFailure, setCameraFailure] = useState<string | null>(null);
   const ingesting = useRef(false);
@@ -87,8 +87,10 @@ export function App() {
 
   useEffect(() => {
     if (page !== "statistics") return;
-    void coreClient.getStatistics(30).then(setStatistics).catch((reason: unknown) => setError(errorMessage(reason)));
-  }, [page, setError, setStatistics]);
+    void Promise.all([coreClient.getStatistics(30), coreClient.getBehaviorHistory(30)])
+      .then(([rows, events]) => { setStatistics(rows); setBehaviorHistory(events); })
+      .catch((reason: unknown) => setError(errorMessage(reason)));
+  }, [page, setBehaviorHistory, setError, setStatistics]);
 
   useEffect(() => {
     const reminder = snapshot?.currentReminder;
@@ -175,6 +177,7 @@ export function App() {
     if (!window.confirm("确认删除全部本地统计数据？此操作无法撤销。设置和校准信息会保留。")) return;
     await run(() => coreClient.deleteLocalData());
     setStatistics([]);
+    setBehaviorHistory([]);
   };
   const recalibrate = async () => {
     await run(() => coreClient.startCalibration());
@@ -197,10 +200,6 @@ export function App() {
     );
   }
 
-  if (snapshot.lifecycle === "break") {
-    return <BreakScreen snapshot={snapshot} onEnd={() => void run(() => coreClient.endBreak())} />;
-  }
-
   return (
     <>
       {/* 隐藏的 Tauri 事件预览接收器：不随页面切换卸载 */}
@@ -209,6 +208,7 @@ export function App() {
         snapshot={snapshot}
         page={page}
         statistics={statistics}
+        behaviorHistory={behaviorHistory}
         visionStatus={vision.status}
         streamUrl={vision.streamUrl}
         previewError={vision.previewError}
@@ -219,6 +219,7 @@ export function App() {
         onPause={(minutes) => void run(() => coreClient.pauseMonitoring(minutes))}
         onResume={() => void run(() => coreClient.resumeMonitoring())}
         onStartBreak={() => void run(() => coreClient.startBreak())}
+        onEndBreak={() => void run(() => coreClient.endBreak())}
         onSaveSettings={saveSettings}
         onExport={() => void exportStatistics()}
         onDeleteData={() => void deleteData()}
@@ -234,6 +235,9 @@ export function App() {
           onDismiss={() => void run(() => coreClient.dismissReminder())}
           onPause={() => void run(() => coreClient.pauseMonitoring(60))}
         />
+      )}
+      {!isTauri() && snapshot.lifecycle === "break" && (
+        <BreakIsland snapshot={snapshot} onEnd={() => void run(() => coreClient.endBreak())} />
       )}
       {!isTauri() && import.meta.env.DEV && (
         <button className="fixed bottom-3 right-3 z-80 rounded-lg border border-dashed border-edge bg-panel/85 px-2 py-1 text-[8px] text-muted" onClick={() => { mockCore.triggerDemoReminder(); void coreClient.getSnapshot().then(setSnapshot); }}>预览提醒</button>

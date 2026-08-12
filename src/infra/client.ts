@@ -1,11 +1,12 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { snapshotSchema, statisticsSchema } from "../schemas";
+import { behaviorHistorySchema, snapshotSchema, statisticsSchema } from "../schemas";
 import type {
   AppSettings,
   AppSnapshot,
   CalibrationResult,
   CameraDevice,
   DailyStatistics,
+  BehaviorHistoryEvent,
   VisionFrame,
   VisionObservation,
 } from "../types";
@@ -72,6 +73,9 @@ export const coreClient = {
   async getStatistics(days: number): Promise<DailyStatistics[]> {
     return statisticsSchema.parse(await command<unknown>("get_statistics", { days }));
   },
+  async getBehaviorHistory(days: number): Promise<BehaviorHistoryEvent[]> {
+    return behaviorHistorySchema.parse(await command<unknown>("get_behavior_history", { days }));
+  },
 
   async exportStatistics(): Promise<string> {
     return command<string>("export_statistics");
@@ -79,6 +83,9 @@ export const coreClient = {
 
   async deleteLocalData(): Promise<AppSnapshot> {
     return snapshotSchema.parse(await command<unknown>("delete_local_data"));
+  },
+  async muteIsland(minutes?: number, permanent = false): Promise<AppSnapshot> {
+    return snapshotSchema.parse(await command<unknown>("mute_island", { minutes, permanent }));
   },
 
   async listCameras(): Promise<CameraDevice[]> {

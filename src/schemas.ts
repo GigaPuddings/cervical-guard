@@ -25,6 +25,14 @@ const settingsSchema = z.object({
   quietStart: z.string(),
   quietEnd: z.string(),
   weekendEnabled: z.boolean(),
+  islandEnabled: z.boolean().default(true),
+  islandReminderEnabled: z.boolean().default(true),
+  islandAwayEnabled: z.boolean().default(true),
+  islandHeadDownEnabled: z.boolean().default(true),
+  islandBreakEnabled: z.boolean().default(true),
+  islandPersistentStatusEnabled: z.boolean().default(false),
+  islandAllowWithMainWindow: z.boolean().default(false),
+  islandPermanentCloseEnabled: z.boolean().default(false),
 });
 
 const dailyStatisticsSchema = z.object({
@@ -77,3 +85,12 @@ export const snapshotSchema = z.object({
 });
 
 export const statisticsSchema = z.array(dailyStatisticsSchema);
+
+export const behaviorHistorySchema = z.array(z.object({
+  id: z.string(),
+  eventType: z.enum(["away", "head_down", "break", "proactive_break", "early_break", "proactive_pause", "reminder"]),
+  startedAt: z.string(),
+  endedAt: z.string().nullable(),
+  durationSeconds: z.number().nonnegative(),
+  action: z.string().nullable(),
+}));

@@ -231,7 +231,7 @@ export function WeatherPage() {
               })}
             </div>
           )}
-          <div className="shrink-0 border-t border-edge px-3 py-2 text-[clamp(8px,.58vw,10px)] leading-4 text-muted">点击地点会设为今日概览、休息页和灵动岛的首选天气。</div>
+          <div className="shrink-0 border-t border-edge px-3 py-2 text-[clamp(8px,.58vw,10px)] leading-4 text-muted">点击地点会设为今日概览和灵动岛的首选天气。</div>
         </aside>
 
         <WeatherDetail

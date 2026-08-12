@@ -154,6 +154,22 @@ pub struct AppSettings {
     pub quiet_start: String,
     pub quiet_end: String,
     pub weekend_enabled: bool,
+    #[serde(default = "default_enabled")]
+    pub island_enabled: bool,
+    #[serde(default = "default_enabled")]
+    pub island_reminder_enabled: bool,
+    #[serde(default = "default_enabled")]
+    pub island_away_enabled: bool,
+    #[serde(default = "default_enabled")]
+    pub island_head_down_enabled: bool,
+    #[serde(default = "default_enabled")]
+    pub island_break_enabled: bool,
+    #[serde(default)]
+    pub island_persistent_status_enabled: bool,
+    #[serde(default)]
+    pub island_allow_with_main_window: bool,
+    #[serde(default)]
+    pub island_permanent_close_enabled: bool,
 }
 
 impl Default for AppSettings {
@@ -183,6 +199,14 @@ impl Default for AppSettings {
             quiet_start: "12:00".into(),
             quiet_end: "13:00".into(),
             weekend_enabled: false,
+            island_enabled: true,
+            island_reminder_enabled: true,
+            island_away_enabled: true,
+            island_head_down_enabled: true,
+            island_break_enabled: true,
+            island_persistent_status_enabled: false,
+            island_allow_with_main_window: false,
+            island_permanent_close_enabled: false,
         }
     }
 }
@@ -235,9 +259,9 @@ impl AppSettings {
         }
         let work_start = parse_minutes(&self.workday_start).unwrap_or(0);
         let work_end = parse_minutes(&self.workday_end).unwrap_or(24 * 60);
+        let in_work = in_span(minute, work_start, work_end);
         let quiet_start = parse_minutes(&self.quiet_start).unwrap_or(0);
         let quiet_end = parse_minutes(&self.quiet_end).unwrap_or(0);
-        let in_work = in_span(minute, work_start, work_end);
         let in_quiet = self.quiet_hours_enabled
             && quiet_start != quiet_end
             && in_span(minute, quiet_start, quiet_end);
@@ -330,6 +354,17 @@ impl DailyStatistics {
             ..Self::default()
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BehaviorHistoryEvent {
+    pub id: String,
+    pub event_type: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub duration_seconds: u64,
+    pub action: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

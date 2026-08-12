@@ -1,6 +1,6 @@
 export const SCHEMA_VERSION = 2 as const;
 
-export type AppPage = "today" | "statistics" | "weather" | "settings";
+export type AppPage = "today" | "statistics" | "weather" | "settings" | "privacy";
 export type MonitoringLifecycle =
   | "unavailable"
   | "initializing"
@@ -20,6 +20,14 @@ export type FrameQuality = "good" | "dark" | "occluded" | "multi_person" | "unst
 export type PostureState = "unknown" | "sitting" | "standing";
 export type ReminderKind = "sedentary" | "head_down" | "combined";
 export type ReminderLevel = "gentle" | "noticeable" | "strong";
+export type BehaviorEventType =
+  | "away"
+  | "head_down"
+  | "break"
+  | "proactive_break"
+  | "early_break"
+  | "proactive_pause"
+  | "reminder";
 
 export interface VisionObservation {
   schemaVersion: typeof SCHEMA_VERSION;
@@ -67,6 +75,23 @@ export interface AppSettings {
   quietStart: string;
   quietEnd: string;
   weekendEnabled: boolean;
+  islandEnabled: boolean;
+  islandReminderEnabled: boolean;
+  islandAwayEnabled: boolean;
+  islandHeadDownEnabled: boolean;
+  islandBreakEnabled: boolean;
+  islandPersistentStatusEnabled: boolean;
+  islandAllowWithMainWindow: boolean;
+  islandPermanentCloseEnabled: boolean;
+}
+
+export interface BehaviorHistoryEvent {
+  id: string;
+  eventType: BehaviorEventType;
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number;
+  action: string | null;
 }
 
 export interface DailyStatistics {

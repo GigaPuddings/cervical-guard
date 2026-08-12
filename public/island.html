@@ -45,6 +45,7 @@
     .signal.away { color: #f2ddb9; background: #765827; }
     .signal.head { color: #ffe9c4; background: #815a22; }
     .signal.standing { color: #dbeaff; background: #315f91; }
+    .signal.break { color: #dbeaff; background: #315f91; }
     .signal svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
     .signal svg[hidden] { display: none; }
     .copy { min-width: 0; }
@@ -63,8 +64,17 @@
     button.primary { color: #173620; border-color: #c4dfca; background: #dff0e2; }
     button.icon { width: 27px; font-size: 14px; }
     button:disabled { opacity: .45; cursor: default; }
-    body.mode-away .actions, body.mode-returned .actions, body.mode-behavior .actions { display: none; }
-    body.mode-away .island, body.mode-returned .island, body.mode-behavior .island { grid-template-columns: 34px minmax(0, 1fr); }
+    .break-action { display: none; width: 68px; }
+    .island-close { position: absolute; z-index: 5; right: 6px; top: 4px; display: none; width: 20px; height: 20px; border: 0; border-radius: 7px; color: #90a097; background: transparent; font-size: 13px; }
+    body.ready:not(.mode-reminder):not(.mode-returned):not(.mode-behavior) .island-close { display: block; }
+    .close-menu { position: absolute; z-index: 8; right: 7px; top: 27px; display: none; width: 146px; padding: 5px; border: 1px solid rgba(255,255,255,.10); border-radius: 11px; background: rgba(18,27,21,.99); box-shadow: 0 10px 28px rgba(0,0,0,.32); }
+    body.menu-open .close-menu { display: grid; gap: 3px; }
+    .close-menu button { width: 100%; height: 27px; padding: 0 8px; border: 0; text-align: left; }
+    .close-menu button.danger { color: #f2b2b2; }
+    body.mode-break .reminder-action { display: none; }
+    body.mode-break .break-action { display: inline-block; }
+    body.mode-away .actions, body.mode-returned .actions, body.mode-behavior .actions, body.mode-status .actions { display: none; }
+    body.mode-away .island, body.mode-returned .island, body.mode-behavior .island, body.mode-status .island { grid-template-columns: 34px minmax(0, 1fr); }
 
     .detail { display: none; min-width: 0; height: 100%; padding: 12px 13px; }
     body.mode-detail .signal, body.mode-detail .copy, body.mode-detail .actions { display: none; }
@@ -93,12 +103,20 @@
 </head>
 <body>
   <section class="island" role="dialog" aria-modal="false" aria-labelledby="title">
+    <button class="island-close" id="island-close" title="关闭灵动岛" aria-label="关闭灵动岛">×</button>
+    <div class="close-menu" id="close-menu">
+      <button data-mute-minutes="5">关闭 5 分钟</button>
+      <button data-mute-minutes="15">关闭 15 分钟</button>
+      <button data-mute-minutes="60">关闭 1 小时</button>
+      <button class="danger" id="permanent-close" hidden>彻底关闭</button>
+    </div>
     <div class="signal" id="signal" aria-hidden="true">
       <svg id="icon-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
       <svg id="icon-away" viewBox="0 0 24 24" hidden><circle cx="10" cy="8" r="4"></circle><path d="M3 21v-1a7 7 0 0 1 11.3-5.5"></path><path d="M17 17l4 4m0-4-4 4"></path></svg>
       <svg id="icon-back" viewBox="0 0 24 24" hidden><circle cx="10" cy="8" r="4"></circle><path d="M3 21v-1a7 7 0 0 1 11.3-5.5"></path><path d="m16 19 2 2 4-4"></path></svg>
       <svg id="icon-head" viewBox="0 0 24 24" hidden><circle cx="12" cy="7" r="4"></circle><path d="M5 21v-2a7 7 0 0 1 14 0v2"></path><path d="m9 12 3 3 3-3"></path></svg>
       <svg id="icon-standing" viewBox="0 0 24 24" hidden><circle cx="12" cy="4" r="2"></circle><path d="m9 22 1-7-2-4 1-4h6l1 4-2 4 1 7"></path></svg>
+      <svg id="icon-break" viewBox="0 0 24 24" hidden><path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5Z"></path><path d="M17 10h1a3 3 0 0 1 0 6h-2"></path><path d="M7 3v2m4-2v2m4-2v2"></path></svg>
     </div>
     <div class="copy">
       <div class="meta-line">
@@ -110,9 +128,10 @@
       <h1 id="title">该舒展一下了</h1>
     </div>
     <div class="actions">
-      <button class="primary" data-command="start_break">休息</button>
-      <button data-command="snooze_reminder" data-minutes="10">稍后</button>
-      <button class="icon" title="忽略本次" aria-label="忽略本次" data-command="dismiss_reminder">×</button>
+      <button class="primary reminder-action" data-command="start_break">休息</button>
+      <button class="reminder-action" data-command="snooze_reminder" data-minutes="10">稍后</button>
+      <button class="icon reminder-action" title="忽略本次" aria-label="忽略本次" data-command="dismiss_reminder">×</button>
+      <button class="primary break-action" data-command="end_break">结束休息</button>
     </div>
     <div class="detail" id="detail">
       <div class="detail-head">
@@ -142,13 +161,17 @@
       const title = document.querySelector('#title');
       const weatherMini = document.querySelector('#weather-mini');
       const weatherText = document.querySelector('#weather-text');
-      const buttons = [...document.querySelectorAll('button')];
+      const buttons = [...document.querySelectorAll('[data-command]')];
+      const closeButton = document.querySelector('#island-close');
+      const closeMenu = document.querySelector('#close-menu');
+      const permanentClose = document.querySelector('#permanent-close');
       const icons = {
         bell: document.querySelector('#icon-bell'),
         away: document.querySelector('#icon-away'),
         back: document.querySelector('#icon-back'),
         head: document.querySelector('#icon-head'),
         standing: document.querySelector('#icon-standing'),
+        break: document.querySelector('#icon-break'),
       };
       let mode = 'idle';
       let hideTimer = 0;
@@ -157,6 +180,8 @@
       let lastSnapshot = null;
       let weatherSummary = null;
       let metaBase = '健康提醒';
+      let permanentCloseAllowed = false;
+      let transitionVersion = 0;
 
       const duration = (seconds) => {
         const value = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -176,6 +201,7 @@
         signal.classList.toggle('away', name === 'away');
         signal.classList.toggle('head', name === 'head');
         signal.classList.toggle('standing', name === 'standing');
+        signal.classList.toggle('break', name === 'break');
       };
       const renderMeta = (value) => {
         metaBase = value;
@@ -212,18 +238,46 @@
         body.classList.toggle('peek-through', active);
       };
       const enterMode = (next) => {
-        clearTimers(); mode = next;
+        clearTimers(); transitionVersion += 1; mode = next;
         const keepPeekThrough = body.classList.contains('peek-through');
         body.className = `mode-${next}`;
         if (keepPeekThrough) body.classList.add('peek-through');
         requestAnimationFrame(() => body.classList.add('ready'));
       };
+      const setMenu = async (open) => {
+        if (open && api) {
+          try {
+            const snapshot = await api.core.invoke('get_app_snapshot');
+            permanentCloseAllowed = Boolean(snapshot.settings && snapshot.settings.islandPermanentCloseEnabled);
+            permanentClose.hidden = !permanentCloseAllowed;
+          } catch { /* 保留上次设置 */ }
+        }
+        body.classList.toggle('menu-open', open);
+        if (api) {
+          try { await api.core.invoke('set_island_menu_open', { open }); } catch { /* 窗口关闭时忽略 */ }
+        }
+      };
+      closeButton.addEventListener('click', (event) => { event.stopPropagation(); void setMenu(!body.classList.contains('menu-open')); });
+      closeMenu.addEventListener('click', (event) => event.stopPropagation());
+      closeMenu.querySelectorAll('[data-mute-minutes]').forEach((button) => button.addEventListener('click', async () => {
+        if (!api) return;
+        await setMenu(false);
+        await api.core.invoke('mute_island', { minutes: Number(button.dataset.muteMinutes), permanent: false });
+      }));
+      permanentClose.addEventListener('click', async () => {
+        if (!api || !permanentCloseAllowed) return;
+        await setMenu(false);
+        await api.core.invoke('mute_island', { permanent: true });
+      });
       const hide = async (animated = true) => {
-        clearTimers(); mode = 'idle';
+        clearTimers();
+        const version = ++transitionVersion;
+        mode = 'idle';
         if (animated) {
           body.classList.add('closing');
           await new Promise((resolve) => setTimeout(resolve, 170));
         }
+        if (version !== transitionVersion || mode !== 'idle') return;
         body.className = '';
         if (api) await api.window.getCurrentWindow().hide();
       };
@@ -234,6 +288,17 @@
         renderMeta(`已连续 ${duration(reminder.durationSeconds)}`);
         title.textContent = reminder.title || '该舒展一下了';
         enterMode('reminder');
+      };
+      const renderBreak = (snapshot) => {
+        if (!snapshot || snapshot.lifecycle !== 'break') return;
+        lastSnapshot = snapshot;
+        setIcon('break');
+        const timeUp = Number(snapshot.breakRemainingSeconds) <= 0;
+        renderMeta(timeUp ? '休息时间到' : `休息剩余 ${duration(snapshot.breakRemainingSeconds)}`);
+        title.textContent = timeUp ? '准备好了就继续吧' : '起来走动，放松一下肩颈';
+        const action = document.querySelector('.break-action');
+        action.textContent = timeUp ? '完成休息' : '结束休息';
+        if (mode !== 'break') enterMode('break');
       };
       const renderAway = () => {
         setIcon('away');
@@ -274,6 +339,16 @@
         enterMode('behavior');
         hideTimer = setTimeout(() => void dismissBehavior(), 6000);
       };
+      const renderStatus = (snapshot) => {
+        if (!snapshot || !snapshot.settings || !snapshot.settings.islandPersistentStatusEnabled) return;
+        lastSnapshot = snapshot;
+        if (snapshot.behavior === 'head_down') setIcon('head');
+        else if (snapshot.behavior === 'no_person') setIcon('away');
+        else setIcon('bell');
+        renderMeta(`连续坐姿 ${duration(snapshot.seatedSeconds)}`);
+        title.textContent = stateLabel(snapshot);
+        if (mode !== 'status') enterMode('status');
+      };
       const stateLabel = (snapshot) => {
         if (snapshot.lifecycle === 'paused') return '检测已暂停';
         if (snapshot.lifecycle === 'break') return '休息进行中';
@@ -297,6 +372,8 @@
       const fillDetail = (snapshot) => {
         if (!snapshot) return;
         lastSnapshot = snapshot;
+        permanentCloseAllowed = Boolean(snapshot.settings && snapshot.settings.islandPermanentCloseEnabled);
+        permanentClose.hidden = !permanentCloseAllowed;
         const now = new Date();
         document.querySelector('#d-date').textContent = `${now.getMonth() + 1}月${now.getDate()}日`;
         document.querySelector('#d-state').textContent = stateLabel(snapshot);
@@ -318,9 +395,12 @@
       };
       const collapseDetail = async () => {
         if (mode !== 'detail') return;
-        clearTimers(); mode = 'idle'; body.classList.add('closing');
+        clearTimers();
+        const version = ++transitionVersion;
+        body.classList.add('closing');
         await new Promise((resolve) => setTimeout(resolve, 170));
-        if (mode !== 'idle') return;
+        if (version !== transitionVersion || mode !== 'detail' || !body.classList.contains('closing')) return;
+        mode = 'idle';
         body.className = '';
         if (api) {
           try { await api.core.invoke('collapse_island_detail'); }
@@ -337,7 +417,11 @@
         buttons.forEach((item) => { item.disabled = true; });
         try {
           const minutes = button.dataset.minutes ? Number(button.dataset.minutes) : undefined;
-          await api.core.invoke(button.dataset.command, minutes === undefined ? undefined : { minutes });
+          const snapshot = await api.core.invoke(button.dataset.command, minutes === undefined ? undefined : { minutes });
+          if (button.dataset.command === 'start_break') {
+            renderBreak(snapshot);
+            return;
+          }
           await hide(true);
         } finally {
           buttons.forEach((item) => { item.disabled = false; });
@@ -357,6 +441,8 @@
         else if (location.hash === '#returned') renderReturned();
         else if (location.hash === '#head') renderBehavior({ behavior: 'head_down' });
         else if (location.hash === '#standing') renderBehavior({ behavior: 'standing_break' });
+        else if (location.hash === '#break') renderBreak({ lifecycle: 'break', breakRemainingSeconds: 178 });
+        else if (location.hash === '#break-done') renderBreak({ lifecycle: 'break', breakRemainingSeconds: 0 });
         else renderReminder({ durationSeconds: 1530, title: '该舒展一下了' });
         return;
       }
@@ -365,9 +451,11 @@
       void api.event.listen('island://away', () => renderAway());
       void api.event.listen('island://returned', () => renderReturned());
       void api.event.listen('island://behavior', (event) => renderBehavior(event.payload));
+      void api.event.listen('island://status', (event) => renderStatus(event.payload));
+      void api.event.listen('island://break', (event) => renderBreak(event.payload));
       void api.event.listen('island://detail', (event) => {
         clearTimeout(collapseTimer);
-        if (mode === 'detail') fillDetail(event.payload);
+        if (mode === 'detail' && !body.classList.contains('closing')) fillDetail(event.payload);
         else renderDetail(event.payload);
       });
       void api.event.listen('island://hover-left', scheduleCollapse);
@@ -376,7 +464,11 @@
 
       void api.core.invoke('get_app_snapshot').then((snapshot) => {
         lastSnapshot = snapshot;
-        if (snapshot.currentReminder) renderReminder(snapshot.currentReminder);
+        permanentCloseAllowed = Boolean(snapshot.settings && snapshot.settings.islandPermanentCloseEnabled);
+        permanentClose.hidden = !permanentCloseAllowed;
+        if (snapshot.lifecycle === 'break') renderBreak(snapshot);
+        else if (snapshot.currentReminder) renderReminder(snapshot.currentReminder);
+        else if (snapshot.settings && snapshot.settings.islandPersistentStatusEnabled) renderStatus(snapshot);
         else setTimeout(() => { if (mode === 'idle') void hide(false); }, 500);
       }).catch(() => void hide(false));
     })();

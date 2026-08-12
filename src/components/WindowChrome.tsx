@@ -12,9 +12,17 @@ export function WindowChrome() {
     const window = getCurrentWindow();
     let active = true;
     let dispose: (() => void) | undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      // 局部弹层可以先消费 Escape；只有未被处理的 Escape 才关闭内容窗口。
+      // reminder-island 不加载此组件，同时显式排除以防未来复用。
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing || window.label === "reminder-island") return;
+      event.preventDefault();
+      void window.close();
+    };
     const refresh = () => void window.isMaximized().then((value) => {
       if (active) setMaximized(value);
     }).catch(() => undefined);
+    document.addEventListener("keydown", closeOnEscape);
     refresh();
     void window.onResized(refresh).then((unlisten) => {
       if (active) dispose = unlisten;
@@ -22,6 +30,7 @@ export function WindowChrome() {
     });
     return () => {
       active = false;
+      document.removeEventListener("keydown", closeOnEscape);
       dispose?.();
     };
   }, []);

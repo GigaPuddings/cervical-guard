@@ -93,6 +93,8 @@ export function SelectField<T extends string | number>({
             event.preventDefault();
             openAndFocus(-1);
           } else if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
             setOpen(false);
           }
         }}
@@ -114,6 +116,7 @@ export function SelectField<T extends string | number>({
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.preventDefault();
+              event.stopPropagation();
               setOpen(false);
               triggerRef.current?.focus();
             } else if (event.key === "ArrowDown") {

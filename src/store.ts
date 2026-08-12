@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { AppPage, AppSnapshot, DailyStatistics } from "./types";
+import { snapshotSchema } from "./schemas";
+import type { AppPage, AppSnapshot, BehaviorHistoryEvent, DailyStatistics } from "./types";
 
 const SNAPSHOT_CACHE_KEY = "cervical-guard-last-snapshot";
 
@@ -7,8 +8,9 @@ function loadCachedSnapshot(): AppSnapshot | null {
   try {
     const raw = window.localStorage.getItem(SNAPSHOT_CACHE_KEY);
     if (!raw) return null;
-    const cached = JSON.parse(raw) as AppSnapshot;
-    if (cached.schemaVersion !== 2 || !cached.settings || !cached.today) return null;
+    const parsed = snapshotSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) return null;
+    const cached = parsed.data;
     return {
       ...cached,
       awaySeconds: cached.awaySeconds ?? 0,
@@ -36,11 +38,13 @@ interface AppStore {
   snapshot: AppSnapshot | null;
   page: AppPage;
   statistics: DailyStatistics[];
+  behaviorHistory: BehaviorHistoryEvent[];
   busy: boolean;
   error: string | null;
   setSnapshot: (snapshot: AppSnapshot) => void;
   setPage: (page: AppPage) => void;
   setStatistics: (statistics: DailyStatistics[]) => void;
+  setBehaviorHistory: (events: BehaviorHistoryEvent[]) => void;
   setBusy: (busy: boolean) => void;
   setError: (error: string | null) => void;
 }
@@ -49,6 +53,7 @@ export const useAppStore = create<AppStore>((set) => ({
   snapshot: loadCachedSnapshot(),
   page: "today",
   statistics: [],
+  behaviorHistory: [],
   busy: false,
   error: null,
   setSnapshot: (snapshot) => {
@@ -57,6 +62,7 @@ export const useAppStore = create<AppStore>((set) => ({
   },
   setPage: (page) => set({ page }),
   setStatistics: (statistics) => set({ statistics }),
+  setBehaviorHistory: (behaviorHistory) => set({ behaviorHistory }),
   setBusy: (busy) => set({ busy }),
   setError: (error) => set({ error, busy: false }),
 }));

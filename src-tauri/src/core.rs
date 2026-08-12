@@ -13,7 +13,7 @@ use crate::{
 
 /// 连续缺失达到该时长后，才把“不确定/丢点”升级为真正离座。
 /// 在确认窗口内暂停坐姿计时，但不发布离座状态，也不累计离座统计。
-const PERSON_ABSENCE_CONFIRMATION_SECS: u64 = 20;
+const DEFAULT_PERSON_ABSENCE_CONFIRMATION_SECS: u64 = 3;
 
 pub struct RuntimeState {
     snapshot: AppSnapshot,
@@ -31,6 +31,14 @@ pub struct RuntimeState {
 }
 
 impl RuntimeState {
+    fn person_absence_confirmation(&self) -> Duration {
+        let seconds = match self.snapshot.settings.sensitivity.as_str() {
+            "high" => 2,
+            "low" => 5,
+            _ => DEFAULT_PERSON_ABSENCE_CONFIRMATION_SECS,
+        };
+        Duration::from_secs(seconds)
+    }
     pub fn load(database: &Database) -> Self {
         let settings = database.load_settings();
         let meta = database.load_meta();
@@ -603,8 +611,7 @@ impl RuntimeState {
             self.head_candidate_since = None;
             // 单帧或短时关键点丢失只视为“不确定”：计时立即暂停，但对外仍保留
             // 上一个已确认的在场状态，避免深度低头/遮挡触发离座灵动岛。
-            if now.duration_since(missing) >= Duration::from_secs(PERSON_ABSENCE_CONFIRMATION_SECS)
-            {
+            if now.duration_since(missing) >= self.person_absence_confirmation() {
                 if self.snapshot.person_present && self.snapshot.settings.statistics_enabled {
                     self.snapshot.today.away_count =
                         self.snapshot.today.away_count.saturating_add(1);
@@ -842,7 +849,9 @@ mod tests {
         state.snapshot.behavior = BehaviorState::SittingNormal;
         state.person_missing_since = Some(
             Instant::now()
-                - Duration::from_secs(PERSON_ABSENCE_CONFIRMATION_SECS.saturating_sub(1)),
+                - state
+                    .person_absence_confirmation()
+                    .saturating_sub(Duration::from_secs(1)),
         );
 
         let mut missing = observation(PostureState::Unknown, 0.0);
@@ -881,7 +890,7 @@ mod tests {
         state.snapshot.person_present = true;
         state.snapshot.behavior = BehaviorState::SittingNormal;
         state.person_missing_since =
-            Some(Instant::now() - Duration::from_secs(PERSON_ABSENCE_CONFIRMATION_SECS + 1));
+            Some(Instant::now() - state.person_absence_confirmation() - Duration::from_secs(1));
 
         let mut missing = observation(PostureState::Unknown, 0.0);
         missing.person.present = false;
@@ -897,6 +906,17 @@ mod tests {
 
         state.ingest(missing).unwrap();
         assert_eq!(state.snapshot.today.away_count, 1);
+    }
+
+    #[test]
+    fn absence_confirmation_follows_detection_sensitivity() {
+        let mut state = state();
+        state.snapshot.settings.sensitivity = "high".into();
+        assert_eq!(state.person_absence_confirmation(), Duration::from_secs(2));
+        state.snapshot.settings.sensitivity = "balanced".into();
+        assert_eq!(state.person_absence_confirmation(), Duration::from_secs(3));
+        state.snapshot.settings.sensitivity = "low".into();
+        assert_eq!(state.person_absence_confirmation(), Duration::from_secs(5));
     }
 
     #[test]

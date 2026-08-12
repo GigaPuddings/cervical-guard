@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 use core::RuntimeState;
 use database::Database;
 use model::{
-    AppSettings, AppSnapshot, BehaviorState, CalibrationResult, DailyStatistics,
-    MonitoringLifecycle, MonitoringMode, PermissionState, VisionObservation,
+    AppSettings, AppSnapshot, BehaviorHistoryEvent, BehaviorState, CalibrationResult,
+    DailyStatistics, MonitoringLifecycle, MonitoringMode, PermissionState, VisionObservation,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -24,6 +24,7 @@ const ISLAND_COMPACT_WIDTH: f64 = 360.0;
 const ISLAND_COMPACT_HEIGHT: f64 = 76.0;
 const ISLAND_DETAIL_WIDTH: f64 = 360.0;
 const ISLAND_DETAIL_HEIGHT: f64 = 176.0;
+const ISLAND_MENU_HEIGHT: f64 = 166.0;
 /// 屏幕顶部触发悬停展开的热区（逻辑像素）：以岛中心为圆心的半宽与高度。
 /// 高度覆盖整个紧凑窗口 + 上方余量，避免光标快速划过窄热区时来不及展开。
 const ISLAND_HOT_ZONE_HALF_WIDTH: f64 = 210.0;
@@ -34,6 +35,9 @@ const ISLAND_EXPAND_GRACE_MS: u64 = 1200;
 /// 收起后冷却期（毫秒）：防止收起后立即被轮询循环重新展开。
 /// 远短于宽限期，仅阻断 collapse→expand 的瞬态循环（防抖也会额外延迟）。
 const ISLAND_COLLAPSE_COOLDOWN_MS: u64 = 200;
+/// 已确认离座后，需要连续检测到人物一段时间才发布“已返回”。
+/// 这能过滤摄像头噪声造成的单帧误检，避免离座状态卡片自行消失。
+const ISLAND_RETURN_CONFIRMATION: Duration = Duration::from_secs(2);
 /// 检测到低头后，状态灵动岛的展示时长。
 const BEHAVIOR_NOTICE_DURATION: Duration = Duration::from_secs(6);
 /// 紧凑提醒中三个按钮的逻辑像素命中矩形。窗口其余区域保持原生鼠标穿透。
@@ -43,6 +47,8 @@ const ISLAND_ACTION_RECTS: [(f64, f64, f64, f64); 3] = [
     (281.0, 24.0, 319.0, 52.0),
     (323.0, 24.0, 350.0, 52.0),
 ];
+/// 休息灵动岛只有一个结束按钮，命中区域与页面右侧按钮保持一致。
+const BREAK_ACTION_RECT: (f64, f64, f64, f64) = (282.0, 24.0, 350.0, 52.0);
 
 fn island_action_hit(logical_x: f64, logical_y: f64) -> bool {
     ISLAND_ACTION_RECTS
@@ -52,12 +58,19 @@ fn island_action_hit(logical_x: f64, logical_y: f64) -> bool {
         })
 }
 
+fn break_action_hit(logical_x: f64, logical_y: f64) -> bool {
+    let (left, top, right, bottom) = BREAK_ACTION_RECT;
+    logical_x >= left && logical_x <= right && logical_y >= top && logical_y <= bottom
+}
+
 /// 灵动岛当前展示的界面状态（由 Rust 侧各循环协同维护）。
 pub struct IslandUiState {
     /// 悬停详情卡片是否处于展开状态。
     detail_expanded: bool,
     /// “用户已离开”提示是否正展示在灵动岛上。
     away_notice: bool,
+    /// 离座提示展示期间，首次重新检测到人物的时间。
+    away_return_candidate_since: Option<Instant>,
     /// 低头状态卡片的有效期。状态卡片没有操作按钮，到期后自动关闭。
     behavior_notice_until: Option<Instant>,
     /// 详情卡片上次收起时间，用于防止收起后立即被轮询循环重新展开（闪现循环）。
@@ -66,6 +79,14 @@ pub struct IslandUiState {
     /// 否则提醒状态刚被清空，仍停在按钮上的光标会立刻触发详情窗口，
     /// 与前端关闭动画竞争并造成窗口跳动。
     hover_suppressed_until_exit: bool,
+    /// 进入休息前主窗口是否可见且未最小化。
+    restore_main_after_break: bool,
+    /// 临时关闭截止时间；None 表示未临时关闭。
+    muted_until: Option<Instant>,
+    /// 本次运行内彻底关闭。持久开关仍由 AppSettings 控制是否允许该操作。
+    muted_permanently: bool,
+    menu_open: bool,
+    active_break_event: Option<(String, Instant)>,
 }
 
 impl Default for IslandUiState {
@@ -73,18 +94,47 @@ impl Default for IslandUiState {
         Self {
             detail_expanded: false,
             away_notice: false,
+            away_return_candidate_since: None,
             behavior_notice_until: None,
             last_collapsed_at: None,
             hover_suppressed_until_exit: false,
+            restore_main_after_break: false,
+            muted_until: None,
+            muted_permanently: false,
+            menu_open: false,
+            active_break_event: None,
         }
     }
 }
 
 impl IslandUiState {
+    fn island_available(&mut self, settings: &AppSettings) -> bool {
+        if !settings.island_enabled || self.muted_permanently {
+            return false;
+        }
+        if self
+            .muted_until
+            .is_some_and(|deadline| Instant::now() < deadline)
+        {
+            return false;
+        }
+        self.muted_until = None;
+        true
+    }
+    fn remember_main_visibility_for_break(&mut self, visible: bool) {
+        self.restore_main_after_break = visible;
+    }
+
+    fn take_main_restore_after_break(&mut self) -> bool {
+        std::mem::take(&mut self.restore_main_after_break)
+    }
+
     fn suppress_hover_until_cursor_exit(&mut self) {
         self.detail_expanded = false;
         self.away_notice = false;
+        self.away_return_candidate_since = None;
         self.behavior_notice_until = None;
+        self.menu_open = false;
         self.last_collapsed_at = Some(Instant::now());
         self.hover_suppressed_until_exit = true;
     }
@@ -105,11 +155,60 @@ impl IslandUiState {
         self.behavior_notice_until
             .is_some_and(|deadline| Instant::now() < deadline)
     }
+
+    fn blocks_persistent_status(&self) -> bool {
+        self.detail_expanded || self.away_notice || self.menu_open || self.behavior_notice_active()
+    }
+
+    /// 离座提示只在连续确认人物返回后结束。返回 false 表示继续保留离座卡片。
+    fn confirm_return_after_away(&mut self, person_confirmed: bool, now: Instant) -> bool {
+        if !self.away_notice {
+            self.away_return_candidate_since = None;
+            return false;
+        }
+        if !person_confirmed {
+            self.away_return_candidate_since = None;
+            return false;
+        }
+        let started = *self.away_return_candidate_since.get_or_insert(now);
+        if now.duration_since(started) < ISLAND_RETURN_CONFIRMATION {
+            return false;
+        }
+        self.away_notice = false;
+        self.away_return_candidate_since = None;
+        true
+    }
 }
 
 fn reminder_sound_enabled(settings: &AppSettings) -> bool {
     // 会议模式的产品承诺是“安静通知”，优先级高于声音开关。
     settings.sound_enabled && !settings.meeting_mode
+}
+
+fn island_feature_enabled(app: &AppHandle, feature: fn(&AppSettings) -> bool) -> bool {
+    let Some(context) = app.try_state::<AppContext>() else {
+        return false;
+    };
+    let settings = match context.core.lock() {
+        Ok(core) => core.settings().clone(),
+        Err(_) => return false,
+    };
+    context
+        .island_ui
+        .lock()
+        .is_ok_and(|mut ui| ui.island_available(&settings) && feature(&settings))
+}
+
+fn island_may_overlay_content(app: &AppHandle) -> bool {
+    app.try_state::<AppContext>()
+        .and_then(|context| {
+            context
+                .core
+                .lock()
+                .ok()
+                .map(|core| core.settings().island_allow_with_main_window)
+        })
+        .unwrap_or(false)
 }
 
 #[cfg(target_os = "windows")]
@@ -225,18 +324,27 @@ fn set_reminder_island_visible(
 
 /// 显示并聚焦主窗口。窗口在后台隐藏或最小化时都恢复到可交互状态。
 fn show_main_window(app: &AppHandle) {
-    if let Some(context) = app.try_state::<AppContext>() {
+    let break_active = if let Some(context) = app.try_state::<AppContext>() {
         if let Ok(mut ui) = context.island_ui.lock() {
             ui.suppress_hover_until_cursor_exit();
         }
-    }
+        context
+            .core
+            .lock()
+            .ok()
+            .is_some_and(|mut core| core.snapshot().lifecycle == MonitoringLifecycle::Break)
+    } else {
+        false
+    };
     let Some(window) = app.get_webview_window("main") else {
         eprintln!("[window] main window not found");
         return;
     };
     let app_handle = app.clone();
     let _ = app.run_on_main_thread(move || {
-        let _ = set_reminder_island_visible(&app_handle, false, false);
+        if !break_active {
+            let _ = set_reminder_island_visible(&app_handle, false, false);
+        }
         if let Err(error) = window.show() {
             eprintln!("[window] show main window failed: {error}");
             return;
@@ -270,10 +378,14 @@ fn present_reminder_island(app: &AppHandle, reminder: model::ReminderPayload, so
     }
     let app_handle = app.clone();
     let _ = app.run_on_main_thread(move || {
-        // 只有所有内容窗口（包括主页面和休息页）都隐藏/最小化后才使用
+        if !island_feature_enabled(&app_handle, |settings| settings.island_reminder_enabled) {
+            let _ = set_reminder_island_visible(&app_handle, false, false);
+            return;
+        }
+        // 只有所有内容窗口都隐藏/最小化后才使用
         // 独立的屏幕级灵动岛；内容窗口可见时只更新页面自身状态，不渲染
         // 任何页面内“伪灵动岛”。
-        if !all_content_windows_hidden(&app_handle) {
+        if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
             let _ = set_reminder_island_visible(&app_handle, false, false);
             return;
         }
@@ -295,6 +407,40 @@ fn present_reminder_island(app: &AppHandle, reminder: model::ReminderPayload, so
     });
 }
 
+/// 进入休息时隐藏主窗口，再用可交互的紧凑灵动岛展示倒计时；
+/// 灵动岛会一直保留到用户明确调用 `end_break`。
+fn present_break_island(app: &AppHandle, snapshot: &AppSnapshot) {
+    let app_handle = app.clone();
+    let payload = snapshot.clone();
+    let _ = app.run_on_main_thread(move || {
+        if !island_feature_enabled(&app_handle, |settings| settings.island_break_enabled) {
+            let _ = set_reminder_island_visible(&app_handle, false, false);
+            return;
+        }
+        if let Some(context) = app_handle.try_state::<AppContext>() {
+            if let Ok(mut ui) = context.island_ui.lock() {
+                ui.detail_expanded = false;
+                ui.away_notice = false;
+                ui.behavior_notice_until = None;
+                ui.hover_suppressed_until_exit = false;
+            }
+        }
+        if !island_may_overlay_content(&app_handle) {
+            if let Some(main) = app_handle.get_webview_window("main") {
+                if let Err(error) = main.hide() {
+                    eprintln!("进入休息时隐藏主窗口失败: {error}");
+                }
+            }
+        }
+        resize_island(&app_handle, ISLAND_COMPACT_WIDTH, ISLAND_COMPACT_HEIGHT);
+        if let Err(error) = set_reminder_island_visible(&app_handle, true, false) {
+            eprintln!("显示休息灵动岛失败: {error}");
+            return;
+        }
+        let _ = app_handle.emit_to("reminder-island", "island://break", payload);
+    });
+}
+
 /// 展示一次姿态状态变化。它与需要用户操作的正式提醒不同：始终鼠标穿透，
 /// 即使主界面可见也会短暂展示，并在 6 秒后由静态页面自动关闭。
 fn present_behavior_notice(app: &AppHandle, snapshot: &AppSnapshot) {
@@ -305,6 +451,12 @@ fn present_behavior_notice(app: &AppHandle, snapshot: &AppSnapshot) {
     let app_handle = app.clone();
     let payload = snapshot.clone();
     let _ = app.run_on_main_thread(move || {
+        if !island_feature_enabled(&app_handle, |settings| settings.island_head_down_enabled) {
+            return;
+        }
+        if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
+            return;
+        }
         if let Some(context) = app_handle.try_state::<AppContext>() {
             let reminder_active = context
                 .core
@@ -339,7 +491,10 @@ fn present_away_notice(app: &AppHandle, snapshot: &AppSnapshot) {
     let app_handle = app.clone();
     let payload = snapshot.clone();
     let _ = app.run_on_main_thread(move || {
-        if !all_content_windows_hidden(&app_handle) {
+        if !island_feature_enabled(&app_handle, |settings| settings.island_away_enabled) {
+            return;
+        }
+        if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
             let _ = set_reminder_island_visible(&app_handle, false, false);
             return;
         }
@@ -363,7 +518,12 @@ fn present_island_detail(app: &AppHandle, snapshot: &AppSnapshot) {
     let app_handle = app.clone();
     let payload = snapshot.clone();
     let schedule_result = app.run_on_main_thread(move || {
-        if !all_content_windows_hidden(&app_handle) {
+        if !island_feature_enabled(&app_handle, |settings| {
+            settings.island_persistent_status_enabled
+        }) {
+            return;
+        }
+        if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
             let _ = set_reminder_island_visible(&app_handle, false, false);
             return;
         }
@@ -379,12 +539,49 @@ fn present_island_detail(app: &AppHandle, snapshot: &AppSnapshot) {
     }
 }
 
+/// 持续检测状态使用紧凑形态常驻；提醒、休息和行为提示在同一个窗口中覆盖它，
+/// 因而不会出现多个顶部浮层竞争。是否可与主窗口共存仍由统一窗口策略决定。
+fn present_persistent_status(app: &AppHandle, snapshot: &AppSnapshot) {
+    let app_handle = app.clone();
+    let payload = snapshot.clone();
+    let _ = app.run_on_main_thread(move || {
+        if !island_feature_enabled(&app_handle, |settings| {
+            settings.island_persistent_status_enabled
+        }) {
+            return;
+        }
+        if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
+            let _ = set_reminder_island_visible(&app_handle, false, false);
+            return;
+        }
+        // 详情、离座、行为提示或关闭菜单展示期间不能被周期性状态刷新改回
+        // 76px 紧凑尺寸；否则 DOM 仍是详情页，原生窗口却已收窄，形成裁切残影。
+        let status_blocked = app_handle
+            .try_state::<AppContext>()
+            .and_then(|context| {
+                context
+                    .island_ui
+                    .lock()
+                    .ok()
+                    .map(|ui| ui.blocks_persistent_status())
+            })
+            .unwrap_or(true);
+        if status_blocked {
+            return;
+        }
+        resize_island(&app_handle, ISLAND_COMPACT_WIDTH, ISLAND_COMPACT_HEIGHT);
+        if set_reminder_island_visible(&app_handle, true, false).is_ok() {
+            let _ = app_handle.emit_to("reminder-island", "island://status", payload);
+        }
+    });
+}
+
 /// 前端在详情卡片收起动画结束后调用：恢复紧凑尺寸，并按需隐藏窗口。
 #[tauri::command]
 fn collapse_island_detail(app: AppHandle, context: State<'_, AppContext>) -> Result<(), String> {
     eprintln!("[island] collapse_island_detail: CALLED");
-    let (has_reminder, away_notice) = {
-        let core = context
+    let (snapshot, has_reminder, break_active, away_notice) = {
+        let mut core = context
             .core
             .lock()
             .map_err(|_| "状态锁已损坏".to_string())?;
@@ -392,7 +589,13 @@ fn collapse_island_detail(app: AppHandle, context: State<'_, AppContext>) -> Res
             .island_ui
             .lock()
             .map_err(|_| "状态锁已损坏".to_string())?;
-        (core.current_reminder().is_some(), ui.away_notice)
+        let snapshot = core.snapshot();
+        (
+            snapshot.clone(),
+            core.current_reminder().is_some(),
+            snapshot.lifecycle == MonitoringLifecycle::Break,
+            ui.away_notice,
+        )
     };
     {
         let mut ui = context
@@ -408,7 +611,14 @@ fn collapse_island_detail(app: AppHandle, context: State<'_, AppContext>) -> Res
         eprintln!("[island] collapse_island_detail: main thread, resizing to compact");
         resize_island(&app_handle, ISLAND_COMPACT_WIDTH, ISLAND_COMPACT_HEIGHT);
         // 提醒或离开提示仍在时保留窗口（前端已切回对应卡片），否则隐藏。
-        if !has_reminder && !away_notice {
+        if snapshot.settings.island_persistent_status_enabled
+            && snapshot.lifecycle == MonitoringLifecycle::Monitoring
+            && !has_reminder
+            && !away_notice
+        {
+            let _ = set_reminder_island_visible(&app_handle, true, false);
+            let _ = app_handle.emit_to("reminder-island", "island://status", snapshot);
+        } else if !has_reminder && !break_active && !away_notice {
             eprintln!("[island] collapse_island_detail: hiding window (no reminder/away)");
             if let Some(window) = app_handle.get_webview_window("reminder-island") {
                 let r = window.hide();
@@ -433,6 +643,11 @@ fn hide_island_window(app: &AppHandle) {
 /// 并要求光标先离开顶部热区，避免卡片消失后立即误展开详情。
 #[tauri::command]
 fn dismiss_behavior_notice(app: AppHandle, context: State<'_, AppContext>) -> Result<(), String> {
+    let snapshot = context
+        .core
+        .lock()
+        .map_err(|_| "状态锁已损坏".to_string())?
+        .snapshot();
     {
         let mut ui = context
             .island_ui
@@ -440,7 +655,13 @@ fn dismiss_behavior_notice(app: AppHandle, context: State<'_, AppContext>) -> Re
             .map_err(|_| "状态锁已损坏".to_string())?;
         ui.suppress_hover_until_cursor_exit();
     }
-    hide_island_window(&app);
+    if snapshot.settings.island_persistent_status_enabled
+        && snapshot.lifecycle == MonitoringLifecycle::Monitoring
+    {
+        present_persistent_status(&app, &snapshot);
+    } else {
+        hide_island_window(&app);
+    }
     Ok(())
 }
 
@@ -586,6 +807,17 @@ fn pause_monitoring(
     core.pause(minutes);
     let snapshot = core.snapshot();
     persist(&context, &core)?;
+    {
+        let database = context
+            .database
+            .lock()
+            .map_err(|_| "数据库锁已损坏".to_string())?;
+        database.record_event(
+            "proactive_pause",
+            minutes.unwrap_or(0).saturating_mul(60),
+            Some(if minutes.is_some() { "timed" } else { "manual" }),
+        )?;
+    }
     suppress_island_hover_until_cursor_exit(&context)?;
     Ok(snapshot)
 }
@@ -597,25 +829,45 @@ fn resume_monitoring(context: State<'_, AppContext>) -> Result<AppSnapshot, Stri
 
 #[tauri::command]
 fn start_break(app: AppHandle, context: State<'_, AppContext>) -> Result<AppSnapshot, String> {
+    // 从主窗口开始休息时，结束后恢复主窗口；从后台提醒
+    // 灵动岛开始时不弹出主窗口。最小化状态按后台入口处理。
+    let restore_main_after_break = app.get_webview_window("main").is_some_and(|window| {
+        window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false)
+    });
     let mut core = context
         .core
         .lock()
         .map_err(|_| "状态锁已损坏".to_string())?;
-    let duration = core.settings().break_minutes * 60;
+    let event_type = if core.current_reminder().is_some() {
+        "break"
+    } else if core.snapshot().seated_seconds < core.settings().sedentary_seconds {
+        "early_break"
+    } else {
+        "proactive_break"
+    };
     core.start_break();
     {
         let database = context
             .database
             .lock()
             .map_err(|_| "数据库锁已损坏".to_string())?;
-        database.record_event("break", duration, Some("started"))?;
+        let event_id = database.start_event(event_type, Some("started"))?;
+        context
+            .island_ui
+            .lock()
+            .map_err(|_| "状态锁已损坏".to_string())?
+            .active_break_event = Some((event_id, Instant::now()));
     }
     let snapshot = core.snapshot();
     persist(&context, &core)?;
-    suppress_island_hover_until_cursor_exit(&context)?;
     drop(core);
+    context
+        .island_ui
+        .lock()
+        .map_err(|_| "状态锁已损坏".to_string())?
+        .remember_main_visibility_for_break(restore_main_after_break);
     let _ = app.emit("monitoring://snapshot", &snapshot);
-    show_main_window(&app);
+    present_break_island(&app, &snapshot);
     Ok(snapshot)
 }
 
@@ -628,11 +880,35 @@ fn end_break(app: AppHandle, context: State<'_, AppContext>) -> Result<AppSnapsh
     core.end_break();
     let snapshot = core.snapshot();
     persist(&context, &core)?;
-    suppress_island_hover_until_cursor_exit(&context)?;
     drop(core);
+    let active_event = context
+        .island_ui
+        .lock()
+        .map_err(|_| "状态锁已损坏".to_string())?
+        .active_break_event
+        .take();
+    if let Some((event_id, started_at)) = active_event {
+        context
+            .database
+            .lock()
+            .map_err(|_| "数据库锁已损坏".to_string())?
+            .finish_event(&event_id, started_at.elapsed().as_secs(), Some("completed"))?;
+    }
+    let restore_main_after_break = {
+        let mut ui = context
+            .island_ui
+            .lock()
+            .map_err(|_| "状态锁已损坏".to_string())?;
+        let restore = ui.take_main_restore_after_break();
+        ui.suppress_hover_until_cursor_exit();
+        restore
+    };
     let _ = app.emit("monitoring://snapshot", &snapshot);
-    hide_island_window(&app);
-    show_main_window(&app);
+    if restore_main_after_break {
+        show_main_window(&app);
+    } else {
+        hide_island_window(&app);
+    }
     Ok(snapshot)
 }
 
@@ -707,7 +983,15 @@ fn update_settings(
         };
         result.map_err(|error| format!("无法更新开机启动设置：{error}"))?;
     }
-    snapshot_after(&context, |core| core.update_settings(settings))
+    let snapshot = snapshot_after(&context, |core| core.update_settings(settings))?;
+    if !snapshot.settings.island_enabled
+        || (!snapshot.settings.island_persistent_status_enabled
+            && snapshot.current_reminder.is_none()
+            && snapshot.lifecycle != MonitoringLifecycle::Break)
+    {
+        hide_island_window(&app);
+    }
+    Ok(snapshot)
 }
 
 #[tauri::command]
@@ -720,6 +1004,89 @@ fn get_statistics(
         .lock()
         .map_err(|_| "数据库锁已损坏".to_string())?;
     database.statistics(days)
+}
+
+#[tauri::command]
+fn get_behavior_history(
+    context: State<'_, AppContext>,
+    days: u32,
+) -> Result<Vec<BehaviorHistoryEvent>, String> {
+    context
+        .database
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_string())?
+        .behavior_history(days)
+}
+
+#[tauri::command]
+fn set_island_menu_open(
+    window: tauri::WebviewWindow,
+    context: State<'_, AppContext>,
+    open: bool,
+) -> Result<(), String> {
+    context
+        .island_ui
+        .lock()
+        .map_err(|_| "状态锁已损坏".to_string())?
+        .menu_open = open;
+    window
+        .set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+            ISLAND_COMPACT_WIDTH,
+            if open {
+                ISLAND_MENU_HEIGHT
+            } else {
+                ISLAND_COMPACT_HEIGHT
+            },
+        )))
+        .map_err(|error| error.to_string())?;
+    window
+        .set_ignore_cursor_events(!open)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn mute_island(
+    app: AppHandle,
+    context: State<'_, AppContext>,
+    minutes: Option<u64>,
+    permanent: bool,
+) -> Result<AppSnapshot, String> {
+    if permanent {
+        let mut core = context
+            .core
+            .lock()
+            .map_err(|_| "状态锁已损坏".to_string())?;
+        if !core.settings().island_permanent_close_enabled {
+            return Err("请先在偏好设置中允许彻底关闭灵动岛".into());
+        }
+        let mut settings = core.settings().clone();
+        settings.island_enabled = false;
+        core.update_settings(settings)?;
+        let snapshot = core.snapshot();
+        persist(&context, &core)?;
+        drop(core);
+        hide_island_window(&app);
+        return Ok(snapshot);
+    }
+    let duration = minutes.unwrap_or(10).clamp(1, 120);
+    {
+        let mut ui = context
+            .island_ui
+            .lock()
+            .map_err(|_| "状态锁已损坏".to_string())?;
+        ui.muted_until = Some(Instant::now() + Duration::from_secs(duration * 60));
+        ui.menu_open = false;
+        ui.detail_expanded = false;
+        ui.away_notice = false;
+        ui.behavior_notice_until = None;
+    }
+    hide_island_window(&app);
+    let snapshot = context
+        .core
+        .lock()
+        .map_err(|_| "状态锁已损坏".to_string())?
+        .snapshot();
+    Ok(snapshot)
 }
 
 #[tauri::command]
@@ -745,6 +1112,16 @@ fn export_statistics(context: State<'_, AppContext>) -> Result<String, String> {
             item.dismissed_count,
             item.away_seconds,
             item.away_count,
+        ));
+    }
+    csv.push_str("\n行为时间,行为类型,持续秒数,操作\n");
+    for event in database.export_events(366)? {
+        csv.push_str(&format!(
+            "{},{},{},{}\n",
+            event.started_at,
+            event.event_type,
+            event.duration_seconds,
+            event.action.unwrap_or_default(),
         ));
     }
     Ok(csv)
@@ -908,6 +1285,12 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(1));
                 let mut last_behavior = BehaviorState::Unknown;
+                let mut behavior_started_at = Instant::now();
+                let mut behavior_started_wall = chrono::Utc::now().to_rfc3339();
+                let mut last_break_count = handle
+                    .try_state::<AppContext>()
+                    .and_then(|context| context.core.lock().ok().map(|core| core.today().break_count))
+                    .unwrap_or(0);
                 loop {
                     interval.tick().await;
                     let Some(context) = handle.try_state::<AppContext>() else {
@@ -926,7 +1309,41 @@ pub fn run() {
                         let sound_enabled = reminder_sound_enabled(&snapshot.settings);
                         present_reminder_island(&handle, reminder, sound_enabled);
                     }
+                    if snapshot.lifecycle == MonitoringLifecycle::Break {
+                        let _ = handle.emit_to("reminder-island", "island://break", &snapshot);
+                    }
                     let behavior_changed = snapshot.behavior != last_behavior;
+                    if behavior_changed {
+                        let completed_type = match last_behavior {
+                            BehaviorState::NoPerson => Some("away"),
+                            BehaviorState::HeadDown => Some("head_down"),
+                            _ => None,
+                        };
+                        if let Some(event_type) = completed_type {
+                            if let Ok(database) = context.database.lock() {
+                                let _ = database.record_completed_event(
+                                    event_type,
+                                    &behavior_started_wall,
+                                    behavior_started_at.elapsed().as_secs(),
+                                    Some(if event_type == "away" { "returned" } else { "recovered" }),
+                                );
+                            }
+                        }
+                        behavior_started_at = Instant::now();
+                        behavior_started_wall = chrono::Utc::now().to_rfc3339();
+                    }
+                    if snapshot.today.break_count > last_break_count
+                        && snapshot.lifecycle != MonitoringLifecycle::Break
+                    {
+                        if let Ok(database) = context.database.lock() {
+                            let _ = database.record_event(
+                                "break",
+                                snapshot.away_seconds,
+                                Some("observed"),
+                            );
+                        }
+                    }
+                    last_break_count = snapshot.today.break_count;
                     last_behavior = snapshot.behavior;
                     if behavior_changed
                         && snapshot.monitoring_mode == MonitoringMode::Camera
@@ -935,9 +1352,23 @@ pub fn run() {
                     {
                         present_behavior_notice(&handle, &snapshot);
                     }
+                    let passive_notice_active = context
+                        .island_ui
+                        .lock()
+                        .map(|ui| ui.away_notice || ui.behavior_notice_active())
+                        .unwrap_or(true);
+                    if snapshot.settings.island_persistent_status_enabled
+                        && snapshot.current_reminder.is_none()
+                        && snapshot.lifecycle == MonitoringLifecycle::Monitoring
+                        && !passive_notice_active
+                        && !matches!(snapshot.behavior, BehaviorState::HeadDown | BehaviorState::NoPerson)
+                    {
+                        present_persistent_status(&handle, &snapshot);
+                    }
                     // —— 离开检测提示 ——
                     // 灵动岛仅在所有内容窗口均隐藏或最小化时展示。
                     let content_windows_hidden = all_content_windows_hidden(&handle);
+                    let island_content_allowed = content_windows_hidden || island_may_overlay_content(&handle);
                     let camera_tracking = matches!(snapshot.lifecycle, MonitoringLifecycle::Monitoring)
                         && snapshot.monitoring_mode == MonitoringMode::Camera;
                     let confirmed_away = camera_tracking
@@ -948,20 +1379,33 @@ pub fn run() {
                         Ok(ui) => ui,
                         Err(_) => continue,
                     };
-                    if snapshot.current_reminder.is_some() {
+                    if !ui.island_available(&snapshot.settings) || !snapshot.settings.island_away_enabled {
+                        if ui.away_notice {
+                            ui.away_notice = false;
+                            drop(ui);
+                            hide_island_window(&handle);
+                        }
+                    } else if snapshot.current_reminder.is_some() {
                         // 提醒展示期间离开提示让位。
                         ui.away_notice = false;
                         ui.behavior_notice_until = None;
-                    } else if camera_tracking && content_windows_hidden {
+                    } else if camera_tracking && island_content_allowed {
                         // 使用“已确认离座”的稳定状态，而不是单帧 present 跳变。
                         // 因此即使用户先离座、随后才最小化主窗口，也能显示正确状态。
                         if confirmed_away && !ui.away_notice {
                             ui.away_notice = true;
+                            ui.away_return_candidate_since = None;
                             ui.detail_expanded = false;
                             drop(ui);
                             present_away_notice(&handle, &snapshot);
-                        } else if snapshot.person_present && ui.away_notice {
-                            ui.away_notice = false;
+                        } else if ui.confirm_return_after_away(
+                            snapshot.person_present
+                                && matches!(
+                                    snapshot.behavior,
+                                    BehaviorState::SittingNormal | BehaviorState::HeadDown
+                                ),
+                            Instant::now(),
+                        ) {
                             drop(ui);
                             let _ = handle.emit_to("reminder-island", "island://returned", &snapshot);
                         }
@@ -1001,8 +1445,14 @@ pub fn run() {
                         .lock()
                         .map(|ui| ui.behavior_notice_active())
                         .unwrap_or(false);
+                    let break_active = context
+                        .core
+                        .lock()
+                        .ok()
+                        .is_some_and(|mut core| core.snapshot().lifecycle == MonitoringLifecycle::Break);
                     let content_windows_hidden = all_content_windows_hidden(&hover_handle);
-                    if !content_windows_hidden && !behavior_notice_active {
+                    let island_content_allowed = content_windows_hidden || island_may_overlay_content(&hover_handle);
+                    if !island_content_allowed && !behavior_notice_active && !break_active {
                         if content_windows_were_hidden || window.is_visible().unwrap_or(false) {
                             if let Ok(mut ui) = context.island_ui.lock() {
                                 ui.detail_expanded = false;
@@ -1062,6 +1512,45 @@ pub fn run() {
                         .lock()
                         .ok()
                         .is_some_and(|core| core.current_reminder().is_some());
+                    let (menu_open, muted) = context.island_ui.lock()
+                        .map(|ui| (ui.menu_open, ui.muted_permanently || ui.muted_until.is_some_and(|deadline| Instant::now() < deadline)))
+                        .unwrap_or((false, true));
+                    let island_enabled = context.core.lock().ok()
+                        .is_some_and(|core| core.settings().island_enabled);
+                    if muted || !island_enabled {
+                        hide_island_window(&hover_handle);
+                        continue;
+                    }
+                    if menu_open {
+                        let _ = window.set_ignore_cursor_events(false);
+                        action_buttons_capturing = true;
+                        update_island_peek_state(&hover_handle, &mut pointer_peeking, None);
+                        continue;
+                    }
+                    let over_close = pointer_in_island.is_some_and(|(x, y)| x >= 330.0 && y <= 26.0);
+                    if over_close {
+                        let _ = window.set_ignore_cursor_events(false);
+                        action_buttons_capturing = true;
+                        update_island_peek_state(&hover_handle, &mut pointer_peeking, None);
+                        continue;
+                    }
+                    if break_active {
+                        let over_action = pointer_in_island
+                            .is_some_and(|(x, y)| break_action_hit(x, y));
+                        if over_action != action_buttons_capturing {
+                            let _ = window.set_ignore_cursor_events(!over_action);
+                            action_buttons_capturing = over_action;
+                        }
+                        update_island_peek_state(
+                            &hover_handle,
+                            &mut pointer_peeking,
+                            pointer_in_island.filter(|_| !over_action),
+                        );
+                        hover_inside = false;
+                        expanded_at = None;
+                        hot_zone_hits = 0;
+                        continue;
+                    }
                     if behavior_notice_active && !reminder_active {
                         if action_buttons_capturing {
                             let _ = window.set_ignore_cursor_events(true);
@@ -1228,12 +1717,12 @@ pub fn run() {
                         let snapshot = core.snapshot();
                         drop(core);
                         let eligible = snapshot.current_reminder.is_none()
+                            && snapshot.settings.island_persistent_status_enabled
                             && matches!(
                                 snapshot.lifecycle,
                                 MonitoringLifecycle::Monitoring
                                     | MonitoringLifecycle::Degraded
                                     | MonitoringLifecycle::Paused
-                                    | MonitoringLifecycle::Break
                             );
                         eprintln!("[island] inside=true: eligible={eligible} lifecycle={:?} has_reminder={} detail_expanded={}",
                             snapshot.lifecycle, snapshot.current_reminder.is_some(), detail_expanded);
@@ -1320,6 +1809,7 @@ pub fn run() {
             dismiss_reminder,
             update_settings,
             get_statistics,
+            get_behavior_history,
             export_statistics,
             delete_local_data,
             list_cameras,
@@ -1327,6 +1817,8 @@ pub fn run() {
             stop_vision,
             collapse_island_detail,
             dismiss_behavior_notice,
+            set_island_menu_open,
+            mute_island,
         ])
         .run(tauri::generate_context!())
         .expect("健康提醒应用启动失败");
@@ -1335,7 +1827,8 @@ pub fn run() {
 #[cfg(test)]
 mod island_ui_tests {
     use super::{
-        guard_protocol_response, island_action_hit, reminder_sound_enabled, IslandUiState,
+        break_action_hit, guard_protocol_response, island_action_hit, reminder_sound_enabled,
+        IslandUiState, ISLAND_RETURN_CONFIRMATION,
     };
     use crate::model::AppSettings;
 
@@ -1348,6 +1841,10 @@ mod island_ui_tests {
             "text/html; charset=utf-8"
         );
         assert!(!response.body().is_empty());
+        let html = std::str::from_utf8(response.body()).expect("灵动岛必须是 UTF-8 HTML");
+        assert!(html.contains("island://break"));
+        assert!(html.contains("data-command=\"end_break\""));
+        assert!(html.contains("transitionVersion"));
     }
 
     #[test]
@@ -1358,6 +1855,26 @@ mod island_ui_tests {
         assert!(!island_action_hit(120.0, 38.0));
         assert!(!island_action_hit(279.0, 38.0));
         assert!(!island_action_hit(250.0, 12.0));
+    }
+
+    #[test]
+    fn only_the_break_end_button_captures_pointer_input() {
+        assert!(break_action_hit(300.0, 38.0));
+        assert!(break_action_hit(345.0, 38.0));
+        assert!(!break_action_hit(250.0, 38.0));
+        assert!(!break_action_hit(300.0, 12.0));
+    }
+
+    #[test]
+    fn break_completion_restores_main_only_when_it_was_visible_before_break() {
+        let mut ui = IslandUiState::default();
+
+        ui.remember_main_visibility_for_break(true);
+        assert!(ui.take_main_restore_after_break());
+        assert!(!ui.take_main_restore_after_break());
+
+        ui.remember_main_visibility_for_break(false);
+        assert!(!ui.take_main_restore_after_break());
     }
 
     #[test]
@@ -1382,6 +1899,39 @@ mod island_ui_tests {
 
         // 后续再次进入时不再受上一轮按钮操作影响。
         assert!(!ui.consume_hover_suppression(true));
+    }
+
+    #[test]
+    fn persistent_status_cannot_resize_over_an_active_island_surface() {
+        let mut ui = IslandUiState::default();
+        assert!(!ui.blocks_persistent_status());
+
+        ui.detail_expanded = true;
+        assert!(ui.blocks_persistent_status());
+        ui.detail_expanded = false;
+
+        ui.away_notice = true;
+        assert!(ui.blocks_persistent_status());
+        ui.away_notice = false;
+
+        ui.menu_open = true;
+        assert!(ui.blocks_persistent_status());
+    }
+
+    #[test]
+    fn away_notice_requires_continuous_confirmed_return_before_closing() {
+        let mut ui = IslandUiState::default();
+        ui.away_notice = true;
+        let now = std::time::Instant::now();
+
+        assert!(!ui.confirm_return_after_away(true, now));
+        assert!(!ui.confirm_return_after_away(false, now + ISLAND_RETURN_CONFIRMATION));
+        assert!(ui.away_notice);
+
+        let restarted = now + ISLAND_RETURN_CONFIRMATION + std::time::Duration::from_millis(1);
+        assert!(!ui.confirm_return_after_away(true, restarted));
+        assert!(ui.confirm_return_after_away(true, restarted + ISLAND_RETURN_CONFIRMATION));
+        assert!(!ui.away_notice);
     }
 
     #[test]

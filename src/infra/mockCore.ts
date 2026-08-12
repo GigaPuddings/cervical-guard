@@ -2,6 +2,7 @@ import type {
   AppSettings,
   AppSnapshot,
   CalibrationResult,
+  BehaviorHistoryEvent,
   CameraDevice,
   DailyStatistics,
   ReminderPayload,
@@ -36,6 +37,14 @@ const defaultSettings: AppSettings = {
   quietStart: "12:00",
   quietEnd: "13:00",
   weekendEnabled: false,
+  islandEnabled: true,
+  islandReminderEnabled: true,
+  islandAwayEnabled: true,
+  islandHeadDownEnabled: true,
+  islandBreakEnabled: true,
+  islandPersistentStatusEnabled: false,
+  islandAllowWithMainWindow: false,
+  islandPermanentCloseEnabled: false,
 };
 
 const blankDay = (date = today()): DailyStatistics => ({
@@ -289,6 +298,8 @@ class MockCore {
         break;
       case "get_statistics":
         return this.demoStatistics(args?.days as number) as T;
+      case "get_behavior_history":
+        return this.demoBehaviorHistory() as T;
       case "export_statistics":
         return this.csv() as T;
       case "delete_local_data":
@@ -297,6 +308,8 @@ class MockCore {
         this.snapshot.headDownSeconds = 0;
         this.snapshot.awaySeconds = 0;
         this.lastSedentaryReminderAt = null;
+        break;
+      case "mute_island":
         break;
       case "list_cameras":
         return [{ id: "0", label: "模拟摄像头" }] as T;
@@ -374,6 +387,16 @@ class MockCore {
         ].join(","),
       ),
     ].join("\n");
+  }
+
+  private demoBehaviorHistory(): BehaviorHistoryEvent[] {
+    const at = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+    return [
+      { id: "demo-1", eventType: "proactive_break", startedAt: at(18), endedAt: at(13), durationSeconds: 300, action: "completed" },
+      { id: "demo-2", eventType: "away", startedAt: at(64), endedAt: at(58), durationSeconds: 360, action: "returned" },
+      { id: "demo-3", eventType: "head_down", startedAt: at(92), endedAt: at(87), durationSeconds: 300, action: "recovered" },
+      { id: "demo-4", eventType: "proactive_pause", startedAt: at(150), endedAt: null, durationSeconds: 1800, action: "30_minutes" },
+    ];
   }
 
   triggerDemoReminder(): void {
