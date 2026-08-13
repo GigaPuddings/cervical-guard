@@ -336,22 +336,26 @@ impl RuntimeState {
         if head_due {
             self.last_head_reminder = Some(now);
         }
+        let english = self.snapshot.settings.language == "en-US";
         let (kind, title, message) = match (sedentary_due, head_due) {
-            (true, true) => (
+            (true, true) if english => (
                 ReminderKind::Combined,
-                "该舒展一下了",
-                "你已经连续坐了一段时间，也有持续低头的迹象。建议站起来活动 2～5 分钟。",
+                "Time to stretch",
+                "You have been sitting and looking down for a while. Stand up and move for 2–5 minutes.",
             ),
-            (true, false) => (
+            (true, false) if english => (
                 ReminderKind::Sedentary,
-                "起来走一走吧",
-                "你已经连续坐了一段时间，建议站起来活动 2～5 分钟。",
+                "Take a short walk",
+                "You have been sitting for a while. Stand up and move for 2–5 minutes.",
             ),
-            (false, true) => (
+            (false, true) if english => (
                 ReminderKind::HeadDown,
-                "试着抬起头",
-                "检测到你已经低头一段时间，可以抬高视线并放松颈肩。",
+                "Lift your head",
+                "You have been looking down for a while. Raise your gaze and relax your neck and shoulders.",
             ),
+            (true, true) => (ReminderKind::Combined, "该舒展一下了", "你已经连续坐了一段时间，也有持续低头的迹象。建议站起来活动 2～5 分钟。"),
+            (true, false) => (ReminderKind::Sedentary, "起来走一走吧", "你已经连续坐了一段时间，建议站起来活动 2～5 分钟。"),
+            (false, true) => (ReminderKind::HeadDown, "试着抬起头", "检测到你已经低头一段时间，可以抬高视线并放松颈肩。"),
             (false, false) => unreachable!(),
         };
         let strong = self.snapshot.head_down_seconds

@@ -3,9 +3,10 @@ export function formatDuration(totalSeconds: number): string {
   const hours = Math.floor(safe / 3600);
   const minutes = Math.floor((safe % 3600) / 60);
   const seconds = safe % 60;
-  if (hours > 0) return `${hours}小时 ${minutes}分`;
-  if (minutes > 0) return `${minutes}分 ${seconds.toString().padStart(2, "0")}秒`;
-  return `${seconds}秒`;
+  const english = typeof document !== "undefined" && document.documentElement.lang === "en-US";
+  if (hours > 0) return english ? `${hours}h ${minutes}m` : `${hours}小时 ${minutes}分`;
+  if (minutes > 0) return english ? `${minutes}m ${seconds.toString().padStart(2, "0")}s` : `${minutes}分 ${seconds.toString().padStart(2, "0")}秒`;
+  return english ? `${seconds}s` : `${seconds}秒`;
 }
 
 export function compactDuration(totalSeconds: number): string {

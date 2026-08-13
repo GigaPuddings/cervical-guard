@@ -1,6 +1,9 @@
-export function Brand({ compact = false }: { compact?: boolean }) {
+import { copy, type Language } from "../i18n";
+
+export function Brand({ compact = false, language = "zh-CN" }: { compact?: boolean; language?: Language }) {
+  const t = copy[language];
   return (
-    <div className="inline-flex items-center gap-2.5" aria-label="健康提醒">
+    <div className="inline-flex items-center gap-2.5" aria-label={t.appName}>
       <span className="grid size-10 place-items-center rounded-[13px] bg-[linear-gradient(145deg,#43845a,#285f3e)] text-inverse shadow-control">
         <svg aria-hidden="true" viewBox="0 0 64 64" className="size-7" fill="none">
           <path d="M31 53C27 46 27 40 31 34C38 24 38 17 32 10" stroke="#F7FAF5" strokeWidth="5.4" strokeLinecap="round" />
@@ -11,8 +14,8 @@ export function Brand({ compact = false }: { compact?: boolean }) {
       </span>
       {!compact && (
         <span className="flex flex-col leading-none">
-          <strong className="text-base tracking-[.12em]">健康提醒</strong>
-          <small className="mt-1.5 text-[8px] tracking-[.2em] text-muted">姿态与久坐</small>
+          <strong className="text-base tracking-[.08em]">{t.appName}</strong>
+          <small className="mt-1.5 text-[8px] tracking-[.14em] text-muted">{t.appSubtitle}</small>
         </span>
       )}
     </div>

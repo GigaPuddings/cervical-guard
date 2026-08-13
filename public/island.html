@@ -182,15 +182,40 @@
       let metaBase = '健康提醒';
       let permanentCloseAllowed = false;
       let transitionVersion = 0;
+      let language = 'zh-CN';
+      const tr = (zh, en) => language === 'en-US' ? en : zh;
+      const applyLanguage = (snapshot) => {
+        const next = snapshot && snapshot.settings && snapshot.settings.language === 'en-US' ? 'en-US' : 'zh-CN';
+        language = next;
+        document.documentElement.lang = next;
+        document.title = tr('健康提醒', 'Health Reminder');
+        const labels = [
+          ['[data-mute-minutes="5"]', '关闭 5 分钟', 'Close for 5 minutes'],
+          ['[data-mute-minutes="15"]', '关闭 15 分钟', 'Close for 15 minutes'],
+          ['[data-mute-minutes="60"]', '关闭 1 小时', 'Close for 1 hour'],
+          ['#permanent-close', '彻底关闭', 'Close permanently'],
+          ['[data-command="start_break"]', '休息', 'Break'],
+          ['[data-command="snooze_reminder"]', '稍后', 'Later'],
+          ['[data-command="end_break"]', '结束休息', 'End break'],
+          ['.detail-time small', '连续坐姿', 'Continuous sitting'],
+          ['.detail-next small', '下一次提醒', 'Next reminder'],
+          ['.detail-stat:nth-child(1) small', '今日坐姿', 'Sitting today'],
+          ['.detail-stat:nth-child(2) small', '已完成休息', 'Completed breaks'],
+          ['.detail-stat:nth-child(3) small', '离座活动', 'Away activity'],
+        ];
+        labels.forEach(([selector, zh, en]) => { const node = document.querySelector(selector); if (node) node.textContent = tr(zh, en); });
+        closeButton.title = closeButton.ariaLabel = tr('关闭灵动岛', 'Close Dynamic Island');
+        document.querySelector('[data-command="dismiss_reminder"]').title = document.querySelector('[data-command="dismiss_reminder"]').ariaLabel = tr('忽略本次', 'Dismiss');
+      };
 
       const duration = (seconds) => {
         const value = Math.max(0, Math.floor(Number(seconds) || 0));
-        if (value < 60) return `${value}秒`;
+        if (value < 60) return language === 'en-US' ? `${value}s` : `${value}秒`;
         const minutes = Math.floor(value / 60);
-        if (minutes < 60) return `${minutes}分钟`;
+        if (minutes < 60) return language === 'en-US' ? `${minutes}m` : `${minutes}分钟`;
         const hours = Math.floor(minutes / 60);
         const rest = minutes % 60;
-        return rest ? `${hours}时${rest}分` : `${hours}小时`;
+        return language === 'en-US' ? (rest ? `${hours}h ${rest}m` : `${hours}h`) : (rest ? `${hours}时${rest}分` : `${hours}小时`);
       };
       const clearTimers = () => {
         clearTimeout(hideTimer); clearTimeout(collapseTimer); clearInterval(refreshTimer);
@@ -285,31 +310,32 @@
       const renderReminder = (reminder) => {
         if (!reminder) return;
         setIcon('bell');
-        renderMeta(`已连续 ${duration(reminder.durationSeconds)}`);
-        title.textContent = reminder.title || '该舒展一下了';
+        renderMeta(`${tr('已连续', 'Continuous')} ${duration(reminder.durationSeconds)}`);
+        title.textContent = reminder.title || tr('该舒展一下了', 'Time to stretch');
         enterMode('reminder');
       };
       const renderBreak = (snapshot) => {
         if (!snapshot || snapshot.lifecycle !== 'break') return;
+        applyLanguage(snapshot);
         lastSnapshot = snapshot;
         setIcon('break');
         const timeUp = Number(snapshot.breakRemainingSeconds) <= 0;
-        renderMeta(timeUp ? '休息时间到' : `休息剩余 ${duration(snapshot.breakRemainingSeconds)}`);
-        title.textContent = timeUp ? '准备好了就继续吧' : '起来走动，放松一下肩颈';
+        renderMeta(timeUp ? tr('休息时间到', 'Break time complete') : `${tr('休息剩余', 'Break remaining')} ${duration(snapshot.breakRemainingSeconds)}`);
+        title.textContent = timeUp ? tr('准备好了就继续吧', "Continue when you're ready") : tr('起来走动，放松一下肩颈', 'Walk around and relax your neck and shoulders');
         const action = document.querySelector('.break-action');
-        action.textContent = timeUp ? '完成休息' : '结束休息';
+        action.textContent = timeUp ? tr('完成休息', 'Complete break') : tr('结束休息', 'End break');
         if (mode !== 'break') enterMode('break');
       };
       const renderAway = () => {
         setIcon('away');
-        renderMeta('坐姿计时已暂停');
-        title.textContent = '你已离开座位';
+        renderMeta(tr('坐姿计时已暂停', 'Sitting timer paused'));
+        title.textContent = tr('你已离开座位', 'You left your seat');
         enterMode('away');
       };
       const renderReturned = () => {
         setIcon('back');
-        renderMeta('已恢复本地监测');
-        title.textContent = '欢迎回来';
+        renderMeta(tr('已恢复本地监测', 'Local monitoring resumed'));
+        title.textContent = tr('欢迎回来', 'Welcome back');
         enterMode('returned');
         hideTimer = setTimeout(() => void hide(true), 2200);
       };
@@ -324,15 +350,16 @@
         catch { await api.window.getCurrentWindow().hide(); }
       };
       const renderBehavior = (snapshot) => {
+        applyLanguage(snapshot);
         const behavior = snapshot && snapshot.behavior;
         if (behavior === 'head_down') {
           setIcon('head');
-          renderMeta('姿态已持续确认');
-          title.textContent = '检测到低头，请抬高视线';
+          renderMeta(tr('姿态已持续确认', 'Posture confirmed'));
+          title.textContent = tr('检测到低头，请抬高视线', 'Head-down posture detected. Raise your gaze.');
         } else if (behavior === 'standing_break') {
           setIcon('standing');
-          renderMeta('坐姿计时已暂停');
-          title.textContent = '你站起来了，活动一下吧';
+          renderMeta(tr('坐姿计时已暂停', 'Sitting timer paused'));
+          title.textContent = tr('你站起来了，活动一下吧', 'You stood up. Take a moment to move.');
         } else {
           return;
         }
@@ -341,22 +368,24 @@
       };
       const renderStatus = (snapshot) => {
         if (!snapshot || !snapshot.settings || !snapshot.settings.islandPersistentStatusEnabled) return;
+        applyLanguage(snapshot);
         lastSnapshot = snapshot;
         if (snapshot.behavior === 'head_down') setIcon('head');
         else if (snapshot.behavior === 'no_person') setIcon('away');
         else setIcon('bell');
-        renderMeta(`连续坐姿 ${duration(snapshot.seatedSeconds)}`);
+        renderMeta(`${tr('连续坐姿', 'Continuous sitting')} ${duration(snapshot.seatedSeconds)}`);
         title.textContent = stateLabel(snapshot);
         if (mode !== 'status') enterMode('status');
       };
       const stateLabel = (snapshot) => {
-        if (snapshot.lifecycle === 'paused') return '检测已暂停';
-        if (snapshot.lifecycle === 'break') return '休息进行中';
+        if (snapshot.lifecycle === 'paused') return tr('检测已暂停', 'Monitoring paused');
+        if (snapshot.lifecycle === 'break') return tr('休息进行中', 'Break in progress');
         const labels = {
           no_person: '已离座 · 计时暂停', present: '正在确认坐姿', sitting_normal: '姿态自然 · 正在计时',
           head_down: '持续低头中', standing_break: '站立活动中', unknown: '等待稳定画面',
         };
-        return labels[snapshot.behavior] || '本地监测中';
+        const englishLabels = { no_person: 'Away · timer paused', present: 'Confirming posture', sitting_normal: 'Natural posture · timing', head_down: 'Head-down posture', standing_break: 'Standing activity', unknown: 'Waiting for stable frames' };
+        return language === 'en-US' ? (englishLabels[snapshot.behavior] || 'Monitoring locally') : (labels[snapshot.behavior] || '本地监测中');
       };
       const nextLabel = (snapshot) => {
         if (snapshot.lifecycle === 'break') return `休息剩余 ${duration(snapshot.breakRemainingSeconds)}`;
@@ -371,6 +400,7 @@
       };
       const fillDetail = (snapshot) => {
         if (!snapshot) return;
+        applyLanguage(snapshot);
         lastSnapshot = snapshot;
         permanentCloseAllowed = Boolean(snapshot.settings && snapshot.settings.islandPermanentCloseEnabled);
         permanentClose.hidden = !permanentCloseAllowed;
@@ -380,7 +410,7 @@
         document.querySelector('#d-seated').textContent = duration(snapshot.seatedSeconds);
         document.querySelector('#d-next').textContent = nextLabel(snapshot);
         document.querySelector('#d-today').textContent = duration(snapshot.today.seatedSeconds);
-        document.querySelector('#d-breaks').textContent = `${snapshot.today.breakCount} 次`;
+        document.querySelector('#d-breaks').textContent = language === 'en-US' ? `${snapshot.today.breakCount} times` : `${snapshot.today.breakCount} 次`;
         document.querySelector('#d-away').textContent = duration(snapshot.today.awaySeconds || 0);
         renderWeatherDetail();
       };
@@ -463,6 +493,7 @@
       void api.event.listen('weather://summary', (event) => updateWeather(event.payload));
 
       void api.core.invoke('get_app_snapshot').then((snapshot) => {
+        applyLanguage(snapshot);
         lastSnapshot = snapshot;
         permanentCloseAllowed = Boolean(snapshot.settings && snapshot.settings.islandPermanentCloseEnabled);
         permanentClose.hidden = !permanentCloseAllowed;

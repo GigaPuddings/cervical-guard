@@ -211,6 +211,25 @@ fn island_may_overlay_content(app: &AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+fn island_surface_needed(
+    settings: &AppSettings,
+    reminder_active: bool,
+    break_active: bool,
+    behavior_notice_active: bool,
+    away_notice: bool,
+    menu_open: bool,
+    muted: bool,
+) -> bool {
+    settings.island_enabled
+        && !muted
+        && ((reminder_active && settings.island_reminder_enabled)
+            || (break_active && settings.island_break_enabled)
+            || (behavior_notice_active && settings.island_head_down_enabled)
+            || (away_notice && settings.island_away_enabled)
+            || settings.island_persistent_status_enabled
+            || menu_open)
+}
+
 #[cfg(target_os = "windows")]
 fn play_notification_sound() {
     #[link(name = "user32")]
@@ -252,13 +271,8 @@ fn island_origin(app: &AppHandle, width: f64) -> (f64, f64) {
 fn resize_island(app: &AppHandle, width: f64, height: f64) {
     if let Some(window) = app.get_webview_window("reminder-island") {
         let (x, y) = island_origin(app, width);
-        let size_result =
-            window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)));
-        let pos_result =
-            window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
-        eprintln!("[island] resize_island: pos=({x},{y}) size={width}x{height} set_size={size_result:?} set_pos={pos_result:?}");
-    } else {
-        eprintln!("[island] resize_island: window NOT FOUND");
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(width, height)));
+        let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
     }
 }
 
@@ -290,6 +304,12 @@ fn set_reminder_island_visible(
         } else {
             window.hide()?;
         }
+        return Ok(());
+    }
+
+    // 隐藏一个尚未创建的灵动岛时无需创建 WebView。窗口只在某项灵动岛功能
+    // 真正需要展示时按需创建，未启用功能不会注册页面事件或占用 WebView。
+    if !visible {
         return Ok(());
     }
 
@@ -579,7 +599,6 @@ fn present_persistent_status(app: &AppHandle, snapshot: &AppSnapshot) {
 /// 前端在详情卡片收起动画结束后调用：恢复紧凑尺寸，并按需隐藏窗口。
 #[tauri::command]
 fn collapse_island_detail(app: AppHandle, context: State<'_, AppContext>) -> Result<(), String> {
-    eprintln!("[island] collapse_island_detail: CALLED");
     let (snapshot, has_reminder, break_active, away_notice) = {
         let mut core = context
             .core
@@ -604,11 +623,9 @@ fn collapse_island_detail(app: AppHandle, context: State<'_, AppContext>) -> Res
             .map_err(|_| "状态锁已损坏".to_string())?;
         ui.detail_expanded = false;
         ui.last_collapsed_at = Some(Instant::now());
-        eprintln!("[island] collapse_island_detail: detail_expanded=false, cooldown set");
     }
     let app_handle = app.clone();
     let _ = app.run_on_main_thread(move || {
-        eprintln!("[island] collapse_island_detail: main thread, resizing to compact");
         resize_island(&app_handle, ISLAND_COMPACT_WIDTH, ISLAND_COMPACT_HEIGHT);
         // 提醒或离开提示仍在时保留窗口（前端已切回对应卡片），否则隐藏。
         if snapshot.settings.island_persistent_status_enabled
@@ -619,13 +636,9 @@ fn collapse_island_detail(app: AppHandle, context: State<'_, AppContext>) -> Res
             let _ = set_reminder_island_visible(&app_handle, true, false);
             let _ = app_handle.emit_to("reminder-island", "island://status", snapshot);
         } else if !has_reminder && !break_active && !away_notice {
-            eprintln!("[island] collapse_island_detail: hiding window (no reminder/away)");
             if let Some(window) = app_handle.get_webview_window("reminder-island") {
-                let r = window.hide();
-                eprintln!("[island] collapse_island_detail: window.hide() = {r:?}");
+                let _ = window.hide();
             }
-        } else {
-            eprintln!("[island] collapse_island_detail: keeping window (has_reminder={has_reminder} away_notice={away_notice})");
         }
     });
     Ok(())
@@ -672,7 +685,6 @@ fn update_island_peek_state(
     current: &mut Option<(f64, f64)>,
     next: Option<(f64, f64)>,
 ) {
-    let active_changed = current.is_some() != next.is_some();
     let unchanged = match (*current, next) {
         (None, None) => true,
         (Some((old_x, old_y)), Some((x, y))) => (old_x - x).powi(2) + (old_y - y).powi(2) < 4.0,
@@ -687,9 +699,6 @@ fn update_island_peek_state(
         None => serde_json::json!({ "active": false, "x": 0.0, "y": 0.0 }),
     };
     let _ = app.emit_to("reminder-island", "island://peek-through", payload);
-    if active_changed {
-        eprintln!("[island] peek-through: active={}", next.is_some());
-    }
 }
 
 fn persist(context: &AppContext, core: &RuntimeState) -> Result<(), String> {
@@ -1247,6 +1256,8 @@ pub fn run() {
             guard_protocol_response(request.uri().path())
         })
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main_window(app);
@@ -1289,7 +1300,13 @@ pub fn run() {
                 let mut behavior_started_wall = chrono::Utc::now().to_rfc3339();
                 let mut last_break_count = handle
                     .try_state::<AppContext>()
-                    .and_then(|context| context.core.lock().ok().map(|core| core.today().break_count))
+                    .and_then(|context| {
+                        context
+                            .core
+                            .lock()
+                            .ok()
+                            .map(|core| core.today().break_count)
+                    })
                     .unwrap_or(0);
                 loop {
                     interval.tick().await;
@@ -1325,7 +1342,11 @@ pub fn run() {
                                     event_type,
                                     &behavior_started_wall,
                                     behavior_started_at.elapsed().as_secs(),
-                                    Some(if event_type == "away" { "returned" } else { "recovered" }),
+                                    Some(if event_type == "away" {
+                                        "returned"
+                                    } else {
+                                        "recovered"
+                                    }),
                                 );
                             }
                         }
@@ -1361,16 +1382,21 @@ pub fn run() {
                         && snapshot.current_reminder.is_none()
                         && snapshot.lifecycle == MonitoringLifecycle::Monitoring
                         && !passive_notice_active
-                        && !matches!(snapshot.behavior, BehaviorState::HeadDown | BehaviorState::NoPerson)
+                        && !matches!(
+                            snapshot.behavior,
+                            BehaviorState::HeadDown | BehaviorState::NoPerson
+                        )
                     {
                         present_persistent_status(&handle, &snapshot);
                     }
                     // —— 离开检测提示 ——
                     // 灵动岛仅在所有内容窗口均隐藏或最小化时展示。
                     let content_windows_hidden = all_content_windows_hidden(&handle);
-                    let island_content_allowed = content_windows_hidden || island_may_overlay_content(&handle);
-                    let camera_tracking = matches!(snapshot.lifecycle, MonitoringLifecycle::Monitoring)
-                        && snapshot.monitoring_mode == MonitoringMode::Camera;
+                    let island_content_allowed =
+                        content_windows_hidden || island_may_overlay_content(&handle);
+                    let camera_tracking =
+                        matches!(snapshot.lifecycle, MonitoringLifecycle::Monitoring)
+                            && snapshot.monitoring_mode == MonitoringMode::Camera;
                     let confirmed_away = camera_tracking
                         && !snapshot.person_present
                         && matches!(snapshot.behavior, model::BehaviorState::NoPerson)
@@ -1379,7 +1405,9 @@ pub fn run() {
                         Ok(ui) => ui,
                         Err(_) => continue,
                     };
-                    if !ui.island_available(&snapshot.settings) || !snapshot.settings.island_away_enabled {
+                    if !ui.island_available(&snapshot.settings)
+                        || !snapshot.settings.island_away_enabled
+                    {
                         if ui.away_notice {
                             ui.away_notice = false;
                             drop(ui);
@@ -1407,7 +1435,8 @@ pub fn run() {
                             Instant::now(),
                         ) {
                             drop(ui);
-                            let _ = handle.emit_to("reminder-island", "island://returned", &snapshot);
+                            let _ =
+                                handle.emit_to("reminder-island", "island://returned", &snapshot);
                         }
                     } else if ui.away_notice {
                         // 内容窗口可见或监测中断时，离开提示随之收起。
@@ -1424,34 +1453,88 @@ pub fn run() {
             // 离开展开区域时通知前端延迟收起。窗口隐藏时 DOM 事件不可用，因此由 Rust 侧检测。
             let hover_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_millis(120));
+                let mut idle = true;
                 let mut hover_inside = false;
                 let mut expanded_at: Option<Instant> = None;
                 let mut hot_zone_hits: u32 = 0; // 展开防抖：连续命中计数
-                let mut was_in_hot_zone = false;
                 let mut content_windows_were_hidden = false;
                 let mut action_buttons_capturing = false;
                 let mut pointer_peeking: Option<(f64, f64)> = None;
                 loop {
-                    interval.tick().await;
+                    tokio::time::sleep(if idle {
+                        Duration::from_secs(1)
+                    } else {
+                        Duration::from_millis(120)
+                    })
+                    .await;
                     let Some(context) = hover_handle.try_state::<AppContext>() else {
                         continue;
                     };
+                    let snapshot = match context.core.lock() {
+                        Ok(mut core) => core.snapshot(),
+                        Err(_) => continue,
+                    };
+                    let (behavior_notice_active, away_notice, menu_open, muted) = context
+                        .island_ui
+                        .lock()
+                        .map(|ui| {
+                            (
+                                ui.behavior_notice_active(),
+                                ui.away_notice,
+                                ui.menu_open,
+                                ui.muted_permanently
+                                    || ui
+                                        .muted_until
+                                        .is_some_and(|deadline| Instant::now() < deadline),
+                            )
+                        })
+                        .unwrap_or((false, false, false, true));
+                    let break_active = snapshot.lifecycle == MonitoringLifecycle::Break;
+                    let reminder_active = snapshot.current_reminder.is_some();
+                    let settings = &snapshot.settings;
+                    let surface_needed = island_surface_needed(
+                        settings,
+                        reminder_active,
+                        break_active,
+                        behavior_notice_active,
+                        away_notice,
+                        menu_open,
+                        muted,
+                    );
+                    if !surface_needed {
+                        idle = true;
+                        if let Some(window) = hover_handle.get_webview_window("reminder-island") {
+                            if window.is_visible().unwrap_or(false) {
+                                hide_island_window(&hover_handle);
+                            }
+                        }
+                        action_buttons_capturing = false;
+                        pointer_peeking = None;
+                        hover_inside = false;
+                        expanded_at = None;
+                        hot_zone_hits = 0;
+                        content_windows_were_hidden = false;
+                        continue;
+                    }
+                    idle = false;
+                    let content_windows_hidden = all_content_windows_hidden(&hover_handle);
+                    let island_content_allowed =
+                        content_windows_hidden || island_may_overlay_content(&hover_handle);
+                    if hover_handle.get_webview_window("reminder-island").is_none() {
+                        if island_content_allowed {
+                            if let Some(reminder) = snapshot.current_reminder.clone() {
+                                present_reminder_island(&hover_handle, reminder, false);
+                            } else if break_active {
+                                present_break_island(&hover_handle, &snapshot);
+                            } else if settings.island_persistent_status_enabled {
+                                present_persistent_status(&hover_handle, &snapshot);
+                            }
+                        }
+                        continue;
+                    }
                     let Some(window) = hover_handle.get_webview_window("reminder-island") else {
                         continue;
                     };
-                    let behavior_notice_active = context
-                        .island_ui
-                        .lock()
-                        .map(|ui| ui.behavior_notice_active())
-                        .unwrap_or(false);
-                    let break_active = context
-                        .core
-                        .lock()
-                        .ok()
-                        .is_some_and(|mut core| core.snapshot().lifecycle == MonitoringLifecycle::Break);
-                    let content_windows_hidden = all_content_windows_hidden(&hover_handle);
-                    let island_content_allowed = content_windows_hidden || island_may_overlay_content(&hover_handle);
                     if !island_content_allowed && !behavior_notice_active && !break_active {
                         if content_windows_were_hidden || window.is_visible().unwrap_or(false) {
                             if let Ok(mut ui) = context.island_ui.lock() {
@@ -1466,7 +1549,6 @@ pub fn run() {
                         hover_inside = false;
                         expanded_at = None;
                         hot_zone_hits = 0;
-                        was_in_hot_zone = false;
                         continue;
                     }
                     if !content_windows_were_hidden {
@@ -1507,27 +1589,14 @@ pub fn run() {
                     } else {
                         None
                     };
-                    let reminder_active = context
-                        .core
-                        .lock()
-                        .ok()
-                        .is_some_and(|core| core.current_reminder().is_some());
-                    let (menu_open, muted) = context.island_ui.lock()
-                        .map(|ui| (ui.menu_open, ui.muted_permanently || ui.muted_until.is_some_and(|deadline| Instant::now() < deadline)))
-                        .unwrap_or((false, true));
-                    let island_enabled = context.core.lock().ok()
-                        .is_some_and(|core| core.settings().island_enabled);
-                    if muted || !island_enabled {
-                        hide_island_window(&hover_handle);
-                        continue;
-                    }
                     if menu_open {
                         let _ = window.set_ignore_cursor_events(false);
                         action_buttons_capturing = true;
                         update_island_peek_state(&hover_handle, &mut pointer_peeking, None);
                         continue;
                     }
-                    let over_close = pointer_in_island.is_some_and(|(x, y)| x >= 330.0 && y <= 26.0);
+                    let over_close =
+                        pointer_in_island.is_some_and(|(x, y)| x >= 330.0 && y <= 26.0);
                     if over_close {
                         let _ = window.set_ignore_cursor_events(false);
                         action_buttons_capturing = true;
@@ -1535,8 +1604,8 @@ pub fn run() {
                         continue;
                     }
                     if break_active {
-                        let over_action = pointer_in_island
-                            .is_some_and(|(x, y)| break_action_hit(x, y));
+                        let over_action =
+                            pointer_in_island.is_some_and(|(x, y)| break_action_hit(x, y));
                         if over_action != action_buttons_capturing {
                             let _ = window.set_ignore_cursor_events(!over_action);
                             action_buttons_capturing = over_action;
@@ -1567,8 +1636,8 @@ pub fn run() {
                         continue;
                     }
                     if reminder_active {
-                        let over_action = pointer_in_island
-                            .is_some_and(|(x, y)| island_action_hit(x, y));
+                        let over_action =
+                            pointer_in_island.is_some_and(|(x, y)| island_action_hit(x, y));
                         if over_action != action_buttons_capturing {
                             let _ = window.set_ignore_cursor_events(!over_action);
                             action_buttons_capturing = over_action;
@@ -1604,13 +1673,17 @@ pub fn run() {
                         let (center_x, top) = match window.outer_position() {
                             Ok(pos) => {
                                 // 以窗口中心为热区中心，热区顶部延伸到窗口上方 32px。
-                                let win_w = window.outer_size().map(|s| s.width as f64).unwrap_or(ISLAND_COMPACT_WIDTH * scale);
+                                let win_w = window
+                                    .outer_size()
+                                    .map(|s| s.width as f64)
+                                    .unwrap_or(ISLAND_COMPACT_WIDTH * scale);
                                 (pos.x as f64 + win_w / 2.0, pos.y as f64 - 32.0 * scale)
                             }
                             _ => match hover_handle.primary_monitor() {
-                                Ok(Some(monitor)) => {
-                                    (monitor.position().x as f64 + monitor.size().width as f64 / 2.0, monitor.position().y as f64)
-                                }
+                                Ok(Some(monitor)) => (
+                                    monitor.position().x as f64 + monitor.size().width as f64 / 2.0,
+                                    monitor.position().y as f64,
+                                ),
                                 _ => (0.0, 0.0),
                             },
                         };
@@ -1618,12 +1691,8 @@ pub fn run() {
                         let bottom = top + ISLAND_HOT_ZONE_HEIGHT * scale;
                         let x = cursor.x as f64;
                         let y = cursor.y as f64;
-                        let hit = x >= center_x - half && x <= center_x + half && y >= top && y <= bottom;
-                        if hit != was_in_hot_zone {
-                            eprintln!("[island] poll: cursor=({x:.0},{y:.0}) zone=[{:.0}..{:.0}, {:.0}..{:.0}] hit={hit} detail_expanded={detail_expanded} hover_inside={hover_inside}",
-                                center_x - half, center_x + half, top, bottom);
-                            was_in_hot_zone = hit;
-                        }
+                        let hit =
+                            x >= center_x - half && x <= center_x + half && y >= top && y <= bottom;
                         hit
                     };
                     // 提醒按钮刚执行完时，光标仍在按钮/顶部热区内。此时等待它
@@ -1676,7 +1745,6 @@ pub fn run() {
                             hot_zone_hits = 0;
                         }
                         if in_hot_zone && hot_zone_hits < 2 {
-                            eprintln!("[island] debounce: hot_zone_hits={hot_zone_hits}, waiting for confirmation");
                             inside = false;
                         }
                     } else {
@@ -1694,14 +1762,12 @@ pub fn run() {
                         // 但 hover_inside 仍为 true，导致无法重新展开。
                         if inside && !detail_expanded {
                             hover_inside = false;
-                            eprintln!("[island] state mismatch: inside=true but detail_expanded=false, resetting hover_inside");
                             continue;
                         }
                         continue;
                     }
                     // 离开时若仍在宽限期内，跳过本轮不触发收起。
                     if !inside && in_grace {
-                        eprintln!("[island] inside->false but in_grace, skipping collapse");
                         // 保留上一次的“仍在热区”状态。这样宽限期结束后，若光标
                         // 依然在外部，inside != hover_inside，轮询会补发 hover-left。
                         // 若此处提前写成 false，后续两者会一直相等，详情窗口将
@@ -1709,13 +1775,7 @@ pub fn run() {
                         continue;
                     }
                     hover_inside = inside;
-                    eprintln!("[island] STATE CHANGE: inside={inside} in_grace={in_grace}");
                     if inside {
-                        let Ok(mut core) = context.core.lock() else {
-                            continue;
-                        };
-                        let snapshot = core.snapshot();
-                        drop(core);
                         let eligible = snapshot.current_reminder.is_none()
                             && snapshot.settings.island_persistent_status_enabled
                             && matches!(
@@ -1724,19 +1784,16 @@ pub fn run() {
                                     | MonitoringLifecycle::Degraded
                                     | MonitoringLifecycle::Paused
                             );
-                        eprintln!("[island] inside=true: eligible={eligible} lifecycle={:?} has_reminder={} detail_expanded={}",
-                            snapshot.lifecycle, snapshot.current_reminder.is_some(), detail_expanded);
                         let Ok(mut ui) = context.island_ui.lock() else {
                             continue;
                         };
                         if eligible && !ui.away_notice {
                             // 收起冷却期：刚收起后的一小段时间内不重新展开，
                             // 防止 collapse_island_detail → 轮询立即检测到光标在热区 → 重新展开 的闪现循环。
-                            let in_collapse_cooldown = ui
-                                .last_collapsed_at
-                                .is_some_and(|t| t.elapsed() < Duration::from_millis(ISLAND_COLLAPSE_COOLDOWN_MS));
+                            let in_collapse_cooldown = ui.last_collapsed_at.is_some_and(|t| {
+                                t.elapsed() < Duration::from_millis(ISLAND_COLLAPSE_COOLDOWN_MS)
+                            });
                             if in_collapse_cooldown {
-                                eprintln!("[island] in_collapse_cooldown, skipping expand");
                                 drop(ui);
                                 continue;
                             }
@@ -1745,12 +1802,10 @@ pub fn run() {
                             ui.last_collapsed_at = None;
                             drop(ui);
                             if newly_expanded {
-                                eprintln!("[island] EXPANDING: calling present_island_detail");
                                 expanded_at = Some(Instant::now());
                                 present_island_detail(&hover_handle, &snapshot);
                             } else {
                                 // 展开期间光标重新进入：仅刷新数据并取消前端的收起计时。
-                                eprintln!("[island] RE-ENTER: emitting island://detail to cancel pending collapse");
                                 let _ = hover_handle.emit_to(
                                     "reminder-island",
                                     "island://detail",
@@ -1759,7 +1814,6 @@ pub fn run() {
                             }
                         }
                     } else {
-                        eprintln!("[island] LEAVE: emitting island://hover-left");
                         expanded_at = None;
                         let _ = hover_handle.emit_to("reminder-island", "island://hover-left", ());
                     }
@@ -1827,8 +1881,8 @@ pub fn run() {
 #[cfg(test)]
 mod island_ui_tests {
     use super::{
-        break_action_hit, guard_protocol_response, island_action_hit, reminder_sound_enabled,
-        IslandUiState, ISLAND_RETURN_CONFIRMATION,
+        break_action_hit, guard_protocol_response, island_action_hit, island_surface_needed,
+        reminder_sound_enabled, IslandUiState, ISLAND_RETURN_CONFIRMATION,
     };
     use crate::model::AppSettings;
 
@@ -1916,6 +1970,25 @@ mod island_ui_tests {
 
         ui.menu_open = true;
         assert!(ui.blocks_persistent_status());
+    }
+
+    #[test]
+    fn hover_polling_stays_idle_when_no_island_surface_is_enabled() {
+        let mut settings = AppSettings::default();
+        settings.island_persistent_status_enabled = false;
+        assert!(!island_surface_needed(
+            &settings, false, false, false, false, false, false
+        ));
+
+        settings.island_persistent_status_enabled = true;
+        assert!(island_surface_needed(
+            &settings, false, false, false, false, false, false
+        ));
+
+        settings.island_enabled = false;
+        assert!(!island_surface_needed(
+            &settings, true, true, true, true, true, false
+        ));
     }
 
     #[test]

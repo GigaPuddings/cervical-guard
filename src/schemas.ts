@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const settingsSchema = z.object({
   schemaVersion: z.literal(2),
+  language: z.enum(["zh-CN", "en-US"]).default("zh-CN"),
   cameraEnabled: z.boolean(),
   cameraId: z.string(),
   sensitivity: z.enum(["low", "balanced", "high"]),

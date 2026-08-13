@@ -7,6 +7,7 @@ import { coreClient } from "./infra/client";
 import { useAppStore } from "./store";
 import { initializeTheme } from "./theme";
 import "./styles.css";
+import { languageOf } from "./i18n";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root element");
@@ -36,10 +37,14 @@ const mount = async () => {
 };
 
 if (useAppStore.getState().snapshot) {
+  document.documentElement.lang = languageOf(useAppStore.getState().snapshot?.settings.language);
   void mount();
 } else {
   void coreClient.getSnapshot()
-    .then(useAppStore.getState().setSnapshot)
+    .then((snapshot) => {
+      document.documentElement.lang = languageOf(snapshot.settings.language);
+      useAppStore.getState().setSnapshot(snapshot);
+    })
     .catch((reason: unknown) => useAppStore.getState().setError(reason instanceof Error ? reason.message : String(reason)))
     .finally(() => void mount());
 }

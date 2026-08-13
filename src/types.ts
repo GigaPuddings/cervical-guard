@@ -52,6 +52,7 @@ export interface ReminderPayload {
 
 export interface AppSettings {
   schemaVersion: typeof SCHEMA_VERSION;
+  language: "zh-CN" | "en-US";
   cameraEnabled: boolean;
   cameraId: string;
   sensitivity: "low" | "balanced" | "high";

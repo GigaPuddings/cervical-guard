@@ -10,11 +10,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "tauri": "tauri",
-    "check": "pnpm test && pnpm build && cargo test --manifest-path src-tauri/Cargo.toml"
+    "check": "pnpm test && pnpm build && cargo test --manifest-path src-tauri/Cargo.toml",
+    "tag": "pnpm check && node scripts/release-tag.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-notification": "2.3.3",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "lucide-react": "^0.536.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

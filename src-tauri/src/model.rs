@@ -129,6 +129,8 @@ impl VisionObservation {
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub schema_version: u8,
+    #[serde(default = "default_language")]
+    pub language: String,
     pub camera_enabled: bool,
     pub camera_id: String,
     pub sensitivity: String,
@@ -176,6 +178,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
+            language: default_language(),
             camera_enabled: true,
             camera_id: "default".into(),
             sensitivity: "balanced".into(),
@@ -215,6 +218,9 @@ impl AppSettings {
     pub fn validate(&self) -> Result<(), String> {
         if self.schema_version != SCHEMA_VERSION {
             return Err("设置协议版本不兼容".into());
+        }
+        if !matches!(self.language.as_str(), "zh-CN" | "en-US") {
+            return Err("不支持的界面语言".into());
         }
         if !(1..=120).contains(&self.sedentary_minutes)
             || !(5..=14_400).contains(&self.sedentary_seconds)
@@ -271,6 +277,10 @@ impl AppSettings {
 
 fn default_sedentary_seconds() -> u64 {
     45 * 60
+}
+
+fn default_language() -> String {
+    "zh-CN".into()
 }
 
 fn default_enabled() -> bool {

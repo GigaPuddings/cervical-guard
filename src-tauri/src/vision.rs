@@ -326,10 +326,9 @@ fn ensure_camera_permission() -> Result<(), String> {
             Err("当前应用未声明摄像头能力。请重新安装完整版本后重试。".to_string())
         }
         Ok(_) => Ok(()),
-        Err(error) => {
-            eprintln!("[vision] Windows 摄像头权限预检失败，继续尝试打开设备: {error}");
-            Ok(())
-        }
+        // Windows API 查询本身失败时交给 Media Foundation 实际打开结果分类；
+        // 这不是用户可处理的错误，不在生产控制台制造噪声。
+        Err(_) => Ok(()),
     }
 }
 

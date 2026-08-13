@@ -12,6 +12,8 @@ import { useAppStore } from "./store";
 import type { AppSettings, AppSnapshot, CalibrationResult, VisionObservation } from "./types";
 import { downloadText } from "./utils";
 import { useVisionMonitor } from "./vision/useVisionMonitor";
+import { languageOf, localizeBackendMessage, type Language } from "./i18n";
+import { useRuntimeI18n } from "./runtimeI18n";
 
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "操作暂时无法完成";
@@ -21,10 +23,13 @@ export function App() {
   const { snapshot, page, statistics, behaviorHistory, busy, error, setSnapshot, setPage, setStatistics, setBehaviorHistory, setBusy, setError } = useAppStore();
   const [showIntro, setShowIntro] = useState(false);
   const [cameraFailure, setCameraFailure] = useState<string | null>(null);
+  const [cameraSetupError, setCameraSetupError] = useState<string | null>(null);
   const ingesting = useRef(false);
   const snapshotEpoch = useRef(0);
   const lastReminderId = useRef<string | null>(null);
   const fallbackStarted = useRef(false);
+  const language = languageOf(snapshot?.settings.language);
+  useRuntimeI18n(language);
 
   const run = useCallback(async (operation: () => Promise<AppSnapshot>) => {
     const epoch = ++snapshotEpoch.current;
@@ -129,6 +134,12 @@ export function App() {
     onObservation,
   });
 
+  useEffect(() => {
+    if (!snapshot) return;
+    document.documentElement.lang = language;
+    document.title = language === "en-US" ? "Health Reminder · Posture & Sitting" : "健康提醒 · 姿态与久坐";
+  }, [snapshot?.settings.language]);
+
   // 摄像头管线恢复就绪后，清除上一轮残留的失败提示（如休息切换期间的瞬时错误）。
   useEffect(() => {
     if (cameraActive && vision.status === "ready") setCameraFailure(null);
@@ -150,8 +161,19 @@ export function App() {
   }
 
   const startCameraOnboarding = async () => {
-    setShowIntro(false);
-    await run(() => coreClient.finishOnboarding("camera", "prompt"));
+    setBusy(true);
+    setCameraSetupError(null);
+    try {
+      // 生产环境先完成系统权限和设备能力预检。失败时保留首次欢迎页，
+      // 避免用户进入校准后才发现摄像头不可用。
+      await coreClient.listCameras();
+      setShowIntro(false);
+      await run(() => coreClient.finishOnboarding("camera", "prompt"));
+    } catch (reason) {
+      setCameraSetupError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
   };
   const startTimerOnboarding = async (permission: AppSnapshot["permission"] = "prompt") => {
     setShowIntro(false);
@@ -164,6 +186,11 @@ export function App() {
   const saveSettings = async (settings: AppSettings) => {
     const next = await run(() => coreClient.updateSettings(settings));
     return Boolean(next);
+  };
+  const changeLanguage = async (language: Language) => {
+    document.documentElement.lang = language;
+    window.localStorage.setItem("cervical-guard-language", language);
+    await saveSettings({ ...snapshot.settings, language });
   };
   const exportStatistics = async () => {
     try {
@@ -185,7 +212,7 @@ export function App() {
   };
 
   if (showIntro || snapshot.lifecycle === "unavailable") {
-    return <Onboarding busy={busy} onCamera={() => void startCameraOnboarding()} onTimer={() => void startTimerOnboarding("prompt")} />;
+    return <Onboarding busy={busy} language={language} cameraError={localizeBackendMessage(cameraSetupError, language)} onLanguage={(language) => void changeLanguage(language)} onCamera={() => void startCameraOnboarding()} onTimer={() => void startTimerOnboarding("prompt")} />;
   }
 
   if (snapshot.lifecycle === "calibrating") {
@@ -214,7 +241,7 @@ export function App() {
         previewError={vision.previewError}
         onRetryPreview={vision.retryPreview}
         landmarks={vision.landmarks}
-        error={cameraFailure ?? error}
+        error={localizeBackendMessage(cameraFailure ?? error, language)}
         onPage={setPage}
         onPause={(minutes) => void run(() => coreClient.pauseMonitoring(minutes))}
         onResume={() => void run(() => coreClient.resumeMonitoring())}

@@ -13,6 +13,8 @@
     "core:window:allow-start-dragging",
     "core:window:allow-unmaximize",
     "notification:default",
-    "autostart:default"
+    "autostart:default",
+    "updater:default",
+    "process:default"
   ]
 }

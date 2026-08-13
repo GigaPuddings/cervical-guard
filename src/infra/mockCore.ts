@@ -14,6 +14,7 @@ const today = (): string => new Date().toISOString().slice(0, 10);
 
 const defaultSettings: AppSettings = {
   schemaVersion: 2,
+  language: "zh-CN",
   cameraEnabled: true,
   cameraId: "default",
   sensitivity: "balanced",
