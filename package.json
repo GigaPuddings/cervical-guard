@@ -11,6 +11,9 @@
     "test:release": "node --test scripts/*.node-test.mjs",
     "test:watch": "vitest",
     "tauri": "tauri",
+    "commit": "node scripts/commit.mjs",
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "prepare": "node scripts/install-hooks.mjs",
     "check": "pnpm test && pnpm test:release && pnpm build && cargo test --manifest-path src-tauri/Cargo.toml",
     "tag": "node scripts/release-tag.mjs",
     "release:withdraw": "node scripts/withdraw-release.mjs"

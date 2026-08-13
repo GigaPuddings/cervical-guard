@@ -119,6 +119,9 @@ if (capture("git", ["status", "--porcelain"])) throw new Error("Publishing stopp
 
 inherit("git", ["fetch", "origin", "--tags"]);
 if (remoteTagVersions().includes(version)) throw new Error(`Tag ${tag} already exists on origin.`);
+console.log("\nGenerated release notes preview:\n");
+inherit(process.execPath, ["scripts/generate-release-notes.mjs", "--tag", tag]);
+console.log("");
 inherit("git", ["push", "origin", `HEAD:${branch}`]);
 const commit = capture("git", ["rev-parse", "HEAD"]);
 let localTagCommit = null;
