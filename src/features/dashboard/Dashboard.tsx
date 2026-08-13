@@ -266,7 +266,7 @@ function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks,
             ) : (
               <div className="grid size-full -translate-y-2 place-content-center justify-items-center gap-2 text-muted">
                 <ScanFace size={82} strokeWidth={1.15} />
-                {!isCamera && <button className="relative z-10 rounded-lg border border-inverse/20 bg-panel-strong/35 px-3 py-1.5 text-[9px] font-bold text-inverse hover:bg-panel-strong/55" onClick={onEnableCamera}>开启姿势检测</button>}
+                {!isCamera && <button type="button" className="relative z-20 min-h-9 rounded-lg border border-inverse/20 bg-panel-strong/45 px-4 py-2 text-[10px] font-bold text-inverse shadow-control hover:bg-panel-strong/65" onClick={onEnableCamera}>开启姿势检测</button>}
               </div>
             )}
             {isCamera && isVisionLoading && (
@@ -279,7 +279,7 @@ function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks,
                 {previewError && <button className="mt-1 rounded-lg border border-inverse/20 px-3 py-1.5 text-[9px] font-bold text-inverse hover:bg-inverse/10" onClick={onRetryPreview}>重试预览</button>}
               </div>
             )}
-            <div className={cn("absolute inset-x-0 bottom-0 bg-gradient-to-t from-panel-strong/80 to-transparent px-4 pt-8 text-inverse", snapshot.lifecycle === "paused" ? "pb-6 text-center" : "pb-3")}>
+            <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-panel-strong/80 to-transparent px-4 pt-8 text-inverse", snapshot.lifecycle === "paused" ? "pb-6 text-center" : "pb-3")}>
               <strong className="block text-[11px]">{snapshot.lifecycle === "paused" ? "摄像头未启用" : isCamera ? (visionStatus === "ready" ? (imgLoaded ? "正在实时检测" : "正在连接视频流") : "正在连接检测") : "定时提醒模式"}</strong>
               <small className={cn("block truncate text-[8px] text-inverse/60", snapshot.lifecycle === "paused" ? "mt-2" : "mt-1")}>{snapshot.lifecycle === "paused" ? "恢复后继续本地姿态识别" : isCamera ? qualityLabel(snapshot.frameQuality) : "仅根据启用时间提供久坐提醒"}</small>
             </div>

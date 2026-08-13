@@ -222,8 +222,9 @@ export function App() {
     setBusy(true);
     setError(null);
     try {
-      await coreClient.listCameras();
       calibrationOrigin.current = "dashboard";
+      // 先切到校准页，再由校准页异步枚举摄像头。Windows 驱动查询偶尔较慢，
+      // 若在入口处等待会让按钮长时间没有任何视觉反馈。
       const next = await run(() => coreClient.startCalibration());
       if (next) setPage("today");
     } catch (reason) {
@@ -237,13 +238,14 @@ export function App() {
     setCameraSetupError(null);
     setError(null);
     try {
-      await coreClient.listCameras();
       // 已有有效校准时直接从临时定时降级恢复摄像头；首次使用才进入校准。
       let next: AppSnapshot | null;
       if (snapshot.calibrated && snapshot.permission === "granted") {
         next = await run(() => coreClient.startMonitoring("camera"));
       } else {
         calibrationOrigin.current = "dashboard";
+        // 校准页自身负责设备和权限检测，因此这里必须先完成页面切换，不能让
+        // 同步设备枚举把“开启姿势检测”表现成无法点击。
         next = await run(() => coreClient.startCalibration());
       }
       if (next) setPage("today");

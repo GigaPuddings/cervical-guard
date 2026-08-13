@@ -1292,8 +1292,13 @@ fn delete_local_data(context: State<'_, AppContext>) -> Result<AppSnapshot, Stri
 }
 
 #[tauri::command]
-fn list_cameras(context: State<'_, AppContext>) -> Result<Vec<vision::CameraDevice>, String> {
-    context.vision.list_cameras()
+async fn list_cameras(context: State<'_, AppContext>) -> Result<Vec<vision::CameraDevice>, String> {
+    // Windows 某些摄像头驱动在枚举设备/检查权限时会阻塞数秒。放入阻塞线程池，
+    // 避免查询期间冻结 WebView 主线程，造成入口按钮“无法点击”的错觉。
+    let service = Arc::clone(&context.vision);
+    tauri::async_runtime::spawn_blocking(move || service.list_cameras())
+        .await
+        .map_err(|error| format!("摄像头设备查询线程异常:{error}"))?
 }
 
 /// 启动摄像头与姿态检测管线；预览帧通过 `vision://preview` 事件推送。
