@@ -32,10 +32,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Verify version consistency
+        id: version
         shell: pwsh
         run: |
           $package = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $tag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart('v') } else { $package }
+          $releaseTag = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "v$package" }
+          $tag = $releaseTag.TrimStart('v')
           $tauriConfig = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
           $tauri = $tauriConfig.version
           if ($tauriConfig.productName -notmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]*$') {
@@ -46,6 +48,7 @@ jobs:
           if ($tag -and ($tag -ne $package -or $tag -ne $tauri -or $tag -ne $cargoVersion)) {
             throw "Tag ($tag), package.json ($package), tauri.conf.json ($tauri), and Cargo.toml ($cargoVersion) must match."
           }
+          "release_tag=$releaseTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Test application
         run: pnpm check
@@ -55,7 +58,7 @@ jobs:
         shell: pwsh
         run: |
           $notes = Join-Path $env:RUNNER_TEMP "release-notes.md"
-          node scripts/generate-release-notes.mjs --tag "${{ github.ref_name }}" --output $notes
+          node scripts/generate-release-notes.mjs --tag "${{ steps.version.outputs.release_tag }}" --output $notes
           $delimiter = "RELEASE_NOTES_$([guid]::NewGuid().ToString('N'))"
           "body<<$delimiter" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Get-Content -LiteralPath $notes -Raw | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
@@ -74,3 +77,15 @@ jobs:
           releaseDraft: false
           prerelease: false
           updaterJsonPreferNsis: true
+
+      - name: Stabilize updater download URLs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $manifestDir = Join-Path $env:RUNNER_TEMP "updater-manifest"
+          New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
+          $manifest = Join-Path $manifestDir "latest.json"
+          gh release download "${{ steps.version.outputs.release_tag }}" --pattern latest.json --dir $manifestDir --clobber
+          node scripts/stabilize-updater-manifest.mjs --input $manifest --repository "${{ github.repository }}" --tag "${{ steps.version.outputs.release_tag }}"
+          gh release upload "${{ steps.version.outputs.release_tag }}" $manifest --clobber
