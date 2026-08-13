@@ -3,8 +3,8 @@ import { copy, type Language } from "../i18n";
 export function Brand({ compact = false, language = "zh-CN" }: { compact?: boolean; language?: Language }) {
   const t = copy[language];
   return (
-    <div className="inline-flex items-center gap-2.5" aria-label={t.appName}>
-      <span className="grid size-10 place-items-center rounded-[13px] bg-[linear-gradient(145deg,#43845a,#285f3e)] text-inverse shadow-control">
+    <div className="inline-flex items-center gap-3" aria-label={t.appName}>
+      <span className="grid size-11 place-items-center rounded-[14px] bg-[linear-gradient(145deg,#43845a,#285f3e)] text-inverse shadow-control 2xl:size-12">
         <svg aria-hidden="true" viewBox="0 0 64 64" className="size-7" fill="none">
           <path d="M31 53C27 46 27 40 31 34C38 24 38 17 32 10" stroke="#F7FAF5" strokeWidth="5.4" strokeLinecap="round" />
           <path d="M35 22C38.5 15.5 44.5 12.5 51.5 13.5C48.5 20 43 23 35 22Z" fill="#E4EFDF" />
@@ -14,8 +14,8 @@ export function Brand({ compact = false, language = "zh-CN" }: { compact?: boole
       </span>
       {!compact && (
         <span className="flex flex-col leading-none">
-          <strong className="text-base tracking-[.08em]">{t.appName}</strong>
-          <small className="mt-1.5 text-[8px] tracking-[.14em] text-muted">{t.appSubtitle}</small>
+          <strong className="text-lg tracking-[.06em] 2xl:text-xl">{t.appName}</strong>
+          <small className="mt-1.5 text-[10px] tracking-[.12em] text-muted 2xl:text-[11px]">{t.appSubtitle}</small>
         </span>
       )}
     </div>

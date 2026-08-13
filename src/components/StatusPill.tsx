@@ -23,7 +23,7 @@ export function StatusPill({ snapshot }: { snapshot: AppSnapshot }) {
           ? CameraOff
           : ShieldCheck;
   return (
-    <span className="flex min-w-0 items-center gap-2 text-[10px] font-bold text-muted">
+    <span className="flex min-w-0 items-center gap-2 text-xs font-bold text-muted">
       <span className={`size-2 shrink-0 rounded-full ${snapshot.lifecycle === "paused" ? "bg-subtle" : snapshot.lifecycle === "monitoring" ? "bg-accent" : "bg-warning"}`} />
       <Icon className="shrink-0" size={14} />
       <span className="truncate">{labels[snapshot.lifecycle]}</span>

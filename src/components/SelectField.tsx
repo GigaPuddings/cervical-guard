@@ -72,7 +72,7 @@ export function SelectField<T extends string | number>({
         ref={triggerRef}
         type="button"
         className={cn(
-          "group flex h-10 w-full items-center justify-between gap-3 rounded-xl border border-edge bg-field px-3.5 text-left text-[11px] font-semibold text-foreground shadow-[0_1px_2px_rgba(30,55,37,.04)] outline-none transition",
+          "group flex h-11 w-full items-center justify-between gap-3 rounded-xl border border-edge bg-field px-4 text-left text-[13px] font-semibold text-foreground shadow-[0_1px_2px_rgba(30,55,37,.04)] outline-none transition 2xl:h-12 2xl:text-sm",
           "hover:border-accent-soft-strong hover:bg-panel focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20",
           open && "border-accent bg-panel ring-2 ring-accent/15",
           disabled && "cursor-not-allowed bg-neutral-soft text-subtle opacity-65",
@@ -145,7 +145,7 @@ export function SelectField<T extends string | number>({
                 aria-selected={isSelected}
                 tabIndex={index === activeIndex ? 0 : -1}
                 className={cn(
-                  "flex min-h-9 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[11px] text-muted outline-none transition",
+                  "flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[13px] text-muted outline-none transition 2xl:min-h-11 2xl:text-sm",
                   "hover:bg-panel-muted hover:text-foreground focus-visible:bg-accent-soft focus-visible:text-accent-strong",
                   isSelected && "bg-accent-soft font-bold text-accent-strong",
                 )}

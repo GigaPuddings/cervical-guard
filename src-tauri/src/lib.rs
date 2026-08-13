@@ -86,6 +86,9 @@ pub struct IslandUiState {
     muted_until: Option<Instant>,
     /// 本次运行内彻底关闭。持久开关仍由 AppSettings 控制是否允许该操作。
     muted_permanently: bool,
+    /// 启动恢复出的 Paused 只是安全的初始状态，不应被当成本次用户操作弹出。
+    /// 只有本次运行里用户主动暂停后，才允许展示暂停状态灵动岛。
+    pause_status_requested: bool,
     menu_open: bool,
     active_break_event: Option<(String, Instant)>,
 }
@@ -102,6 +105,7 @@ impl Default for IslandUiState {
             restore_main_after_break: false,
             muted_until: None,
             muted_permanently: false,
+            pause_status_requested: false,
             menu_open: false,
             active_break_event: None,
         }
@@ -161,6 +165,19 @@ impl IslandUiState {
         self.detail_expanded || self.away_notice || self.menu_open || self.behavior_notice_active()
     }
 
+    fn request_pause_status(&mut self) {
+        self.pause_status_requested = true;
+    }
+
+    fn clear_pause_status_request(&mut self) {
+        self.pause_status_requested = false;
+    }
+
+    fn status_enabled(&self, settings: &AppSettings, lifecycle: MonitoringLifecycle) -> bool {
+        island_status_enabled(settings, lifecycle)
+            && (lifecycle != MonitoringLifecycle::Paused || self.pause_status_requested)
+    }
+
     /// 离座提示只在连续确认人物返回后结束。返回 false 表示继续保留离座卡片。
     fn confirm_return_after_away(&mut self, person_confirmed: bool, now: Instant) -> bool {
         if !self.away_notice {
@@ -200,6 +217,30 @@ fn island_feature_enabled(app: &AppHandle, feature: impl FnOnce(&AppSettings) ->
         .is_ok_and(|mut ui| ui.island_available(&settings) && feature(&settings))
 }
 
+fn island_status_feature_enabled(app: &AppHandle, lifecycle: MonitoringLifecycle) -> bool {
+    let Some(context) = app.try_state::<AppContext>() else {
+        return false;
+    };
+    let settings = match context.core.lock() {
+        Ok(core) => core.settings().clone(),
+        Err(_) => return false,
+    };
+    context.island_ui.lock().is_ok_and(|mut ui| {
+        ui.island_available(&settings) && ui.status_enabled(&settings, lifecycle)
+    })
+}
+
+fn island_status_enabled_for_context(
+    context: &AppContext,
+    settings: &AppSettings,
+    lifecycle: MonitoringLifecycle,
+) -> bool {
+    context
+        .island_ui
+        .lock()
+        .is_ok_and(|mut ui| ui.island_available(settings) && ui.status_enabled(settings, lifecycle))
+}
+
 fn island_may_overlay_content(app: &AppHandle) -> bool {
     app.try_state::<AppContext>()
         .and_then(|context| {
@@ -214,7 +255,7 @@ fn island_may_overlay_content(app: &AppHandle) -> bool {
 
 fn island_surface_needed(
     settings: &AppSettings,
-    lifecycle: MonitoringLifecycle,
+    status_enabled: bool,
     reminder_active: bool,
     break_active: bool,
     behavior_notice_active: bool,
@@ -228,7 +269,7 @@ fn island_surface_needed(
             || (break_active && settings.island_break_enabled)
             || (behavior_notice_active && settings.island_head_down_enabled)
             || (away_notice && settings.island_away_enabled)
-            || island_status_enabled(settings, lifecycle)
+            || status_enabled
             || menu_open)
 }
 
@@ -574,9 +615,7 @@ fn present_island_detail(app: &AppHandle, snapshot: &AppSnapshot) {
     let app_handle = app.clone();
     let payload = snapshot.clone();
     let schedule_result = app.run_on_main_thread(move || {
-        if !island_feature_enabled(&app_handle, |settings| {
-            island_status_enabled(settings, payload.lifecycle)
-        }) {
+        if !island_status_feature_enabled(&app_handle, payload.lifecycle) {
             return;
         }
         if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
@@ -601,9 +640,7 @@ fn present_persistent_status(app: &AppHandle, snapshot: &AppSnapshot) {
     let app_handle = app.clone();
     let payload = snapshot.clone();
     let _ = app.run_on_main_thread(move || {
-        if !island_feature_enabled(&app_handle, |settings| {
-            island_status_enabled(settings, payload.lifecycle)
-        }) {
+        if !island_status_feature_enabled(&app_handle, payload.lifecycle) {
             return;
         }
         if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
@@ -660,14 +697,13 @@ fn collapse_island_detail(app: AppHandle, context: State<'_, AppContext>) -> Res
         ui.detail_expanded = false;
         ui.last_collapsed_at = Some(Instant::now());
     }
+    let status_enabled =
+        island_status_enabled_for_context(&context, &snapshot.settings, snapshot.lifecycle);
     let app_handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         resize_island(&app_handle, ISLAND_COMPACT_WIDTH, ISLAND_COMPACT_HEIGHT);
         // 提醒或离开提示仍在时保留窗口（前端已切回对应卡片），否则隐藏。
-        if island_status_enabled(&snapshot.settings, snapshot.lifecycle)
-            && !has_reminder
-            && !away_notice
-        {
+        if status_enabled && !has_reminder && !away_notice {
             let _ = set_reminder_island_visible(&app_handle, true, false);
             let _ = app_handle.emit_to("reminder-island", "island://status", snapshot);
         } else if !has_reminder && !break_active && !away_notice {
@@ -703,7 +739,7 @@ fn dismiss_behavior_notice(app: AppHandle, context: State<'_, AppContext>) -> Re
             .map_err(|_| "状态锁已损坏".to_string())?;
         ui.suppress_hover_until_cursor_exit();
     }
-    if island_status_enabled(&snapshot.settings, snapshot.lifecycle) {
+    if island_status_enabled_for_context(&context, &snapshot.settings, snapshot.lifecycle) {
         present_persistent_status(&app, &snapshot);
     } else {
         hide_island_window(&app);
@@ -868,13 +904,24 @@ fn pause_monitoring(
             Some(if minutes.is_some() { "timed" } else { "manual" }),
         )?;
     }
+    context
+        .island_ui
+        .lock()
+        .map_err(|_| "状态锁已损坏".to_string())?
+        .request_pause_status();
     suppress_island_hover_until_cursor_exit(&context)?;
     Ok(snapshot)
 }
 
 #[tauri::command]
 fn resume_monitoring(context: State<'_, AppContext>) -> Result<AppSnapshot, String> {
-    snapshot_after(&context, RuntimeState::resume)
+    let snapshot = snapshot_after(&context, RuntimeState::resume)?;
+    context
+        .island_ui
+        .lock()
+        .map_err(|_| "状态锁已损坏".to_string())?
+        .clear_pause_status_request();
+    Ok(snapshot)
 }
 
 #[tauri::command]
@@ -1035,7 +1082,7 @@ fn update_settings(
     }
     let snapshot = snapshot_after(&context, |core| core.update_settings(settings))?;
     if !snapshot.settings.island_enabled
-        || (!island_status_enabled(&snapshot.settings, snapshot.lifecycle)
+        || (!island_status_enabled_for_context(&context, &snapshot.settings, snapshot.lifecycle)
             && snapshot.current_reminder.is_none()
             && snapshot.lifecycle != MonitoringLifecycle::Break)
     {
@@ -1444,8 +1491,14 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                                 | model::MonitoringLifecycle::Degraded
                         ) {
                             core.pause(None);
+                            if let Ok(mut ui) = context.island_ui.lock() {
+                                ui.request_pause_status();
+                            }
                         } else {
                             let _ = core.resume();
+                            if let Ok(mut ui) = context.island_ui.lock() {
+                                ui.clear_pause_status_request();
+                            }
                         }
                         let updated = core.snapshot();
                         let _ = persist(&context, &core);
@@ -1612,7 +1665,12 @@ pub fn run() {
                         .lock()
                         .map(|ui| ui.away_notice || ui.behavior_notice_active())
                         .unwrap_or(true);
-                    if island_status_enabled(&snapshot.settings, snapshot.lifecycle)
+                    let status_enabled = island_status_enabled_for_context(
+                        &context,
+                        &snapshot.settings,
+                        snapshot.lifecycle,
+                    );
+                    if status_enabled
                         && snapshot.current_reminder.is_none()
                         && !passive_notice_active
                         && (snapshot.lifecycle == MonitoringLifecycle::Paused
@@ -1729,7 +1787,7 @@ pub fn run() {
                     let settings = &snapshot.settings;
                     let surface_needed = island_surface_needed(
                         settings,
-                        snapshot.lifecycle,
+                        island_status_enabled_for_context(&context, settings, snapshot.lifecycle),
                         reminder_active,
                         break_active,
                         behavior_notice_active,
@@ -1763,7 +1821,11 @@ pub fn run() {
                                 present_reminder_island(&hover_handle, reminder, false);
                             } else if break_active {
                                 present_break_island(&hover_handle, &snapshot);
-                            } else if island_status_enabled(settings, snapshot.lifecycle) {
+                            } else if island_status_enabled_for_context(
+                                &context,
+                                settings,
+                                snapshot.lifecycle,
+                            ) {
                                 present_persistent_status(&hover_handle, &snapshot);
                             }
                         }
@@ -2023,7 +2085,11 @@ pub fn run() {
                     hover_inside = inside;
                     if inside {
                         let eligible = snapshot.current_reminder.is_none()
-                            && island_status_enabled(&snapshot.settings, snapshot.lifecycle);
+                            && island_status_enabled_for_context(
+                                &context,
+                                &snapshot.settings,
+                                snapshot.lifecycle,
+                            );
                         let Ok(mut ui) = context.island_ui.lock() else {
                             continue;
                         };
@@ -2260,59 +2326,24 @@ mod island_ui_tests {
         settings.island_persistent_status_enabled = false;
         settings.island_paused_status_enabled = false;
         assert!(!island_surface_needed(
-            &settings,
-            MonitoringLifecycle::Monitoring,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false
+            &settings, false, false, false, false, false, false, false
         ));
 
         settings.island_persistent_status_enabled = true;
         settings.island_paused_status_enabled = true;
         assert!(island_surface_needed(
-            &settings,
-            MonitoringLifecycle::Monitoring,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false
+            &settings, true, false, false, false, false, false, false
         ));
         assert!(island_surface_needed(
-            &settings,
-            MonitoringLifecycle::Paused,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false
+            &settings, true, false, false, false, false, false, false
         ));
         assert!(!island_surface_needed(
-            &settings,
-            MonitoringLifecycle::Calibrating,
-            false,
-            false,
-            false,
-            false,
-            false,
-            false
+            &settings, false, false, false, false, false, false, false
         ));
 
         settings.island_enabled = false;
         assert!(!island_surface_needed(
-            &settings,
-            MonitoringLifecycle::Monitoring,
-            true,
-            true,
-            true,
-            true,
-            true,
-            false
+            &settings, true, true, true, true, true, true, false
         ));
     }
 
@@ -2346,6 +2377,18 @@ mod island_ui_tests {
             &settings,
             MonitoringLifecycle::Break
         ));
+    }
+
+    #[test]
+    fn restored_pause_waits_for_a_user_pause_before_showing_status() {
+        let settings = AppSettings::default();
+        let mut ui = IslandUiState::default();
+
+        assert!(!ui.status_enabled(&settings, MonitoringLifecycle::Paused));
+        ui.request_pause_status();
+        assert!(ui.status_enabled(&settings, MonitoringLifecycle::Paused));
+        ui.clear_pause_status_request();
+        assert!(!ui.status_enabled(&settings, MonitoringLifecycle::Paused));
     }
 
     #[test]

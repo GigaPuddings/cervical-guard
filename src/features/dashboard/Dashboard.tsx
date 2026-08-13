@@ -84,9 +84,9 @@ export function Dashboard(props: DashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false);
   return (
-    <main className="grid h-full min-h-0 overflow-hidden bg-canvas text-foreground md:grid-cols-[216px_minmax(0,1fr)]">
+    <main className="grid h-full min-h-0 overflow-hidden bg-canvas text-foreground md:grid-cols-[232px_minmax(0,1fr)] 2xl:grid-cols-[260px_minmax(0,1fr)]">
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-30 flex w-[216px] flex-col border-r border-edge bg-sidebar/90 px-4 py-6 backdrop-blur-xl transition-transform md:static md:translate-x-0",
+        "fixed inset-y-0 left-0 z-30 flex w-[232px] flex-col border-r border-edge bg-sidebar/90 px-5 py-6 backdrop-blur-xl transition-transform md:static md:translate-x-0 2xl:w-[260px] 2xl:px-6 2xl:py-8",
         sidebarOpen ? "translate-x-0" : "-translate-x-full",
       )}>
         <div className="flex items-center justify-between px-2">
@@ -121,12 +121,12 @@ export function Dashboard(props: DashboardProps) {
         </div>
 
         <nav className="mt-7 grid gap-1" aria-label="主导航">
-          <span className="px-3 pb-2 text-[10px] font-bold tracking-[.18em] text-muted">空间</span>
+          <span className="px-3 pb-2 text-xs font-bold tracking-[.16em] text-muted">空间</span>
           {navItems.map(({ page: target, label, icon: Icon }) => (
             <button
               key={target}
               className={cn(
-                "relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-muted transition-colors hover:bg-accent-soft hover:text-accent-strong",
+                "relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-muted transition-colors hover:bg-accent-soft hover:text-accent-strong 2xl:h-12 2xl:text-base",
                 page === target && "bg-accent-soft text-accent-strong",
               )}
               onClick={() => { onPage(target); setSidebarOpen(false); }}
@@ -140,7 +140,7 @@ export function Dashboard(props: DashboardProps) {
         <div className="mt-auto rounded-2xl border border-edge bg-panel-muted p-3">
           <div className="flex items-center gap-3">
             <span className="grid size-9 place-items-center rounded-xl bg-panel text-accent"><LockKeyhole size={17} /></span>
-            <div className="min-w-0"><strong className="block text-xs">本地隐私模式</strong><small className="mt-0.5 block truncate text-[9px] text-muted">画面不保存、不上传</small></div>
+            <div className="min-w-0"><strong className="block text-sm">本地隐私模式</strong><small className="mt-0.5 block truncate text-[11px] text-muted">画面不保存、不上传</small></div>
           </div>
         </div>
         <div className="mt-3 grid gap-0.5 px-2">
@@ -149,7 +149,7 @@ export function Dashboard(props: DashboardProps) {
             {props.updater.updateAvailable && <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-[8px] font-extrabold text-warning"><i className="size-1.5 rounded-full bg-warning" />{updaterCopy.badge}</span>}
           </button>
           <button className="flex h-9 items-center gap-2 text-xs font-semibold text-muted hover:text-accent" onClick={props.onHelp}><CircleHelp size={16} /> {language === "en-US" ? "Help" : "使用帮助"}</button>
-          <p className="mt-1 text-[8px] text-subtle">{language === "en-US" ? `Health Reminder v${packageJson.version} · Behavior reminder` : `健康提醒 v${packageJson.version} · 行为提醒工具`}</p>
+          <p className="mt-1 text-[10px] text-subtle">{language === "en-US" ? `Health Reminder v${packageJson.version} · Behavior reminder` : `健康提醒 v${packageJson.version} · 行为提醒工具`}</p>
         </div>
       </aside>
 
@@ -383,8 +383,8 @@ function PrivacyPage({ snapshot, onExport, onDeleteData }: { snapshot: AppSnapsh
 
 function Toggle({ checked, onChange, label, description }: { checked: boolean; onChange: (checked: boolean) => void; label: string; description: string }) {
   return (
-    <label className="relative flex min-h-[50px] cursor-pointer items-center gap-3 border-b border-edge-soft py-1.5">
-      <div className="flex flex-1 flex-col gap-1"><strong className="text-xs">{label}</strong><small className="text-[9px] text-muted">{description}</small></div>
+    <label className="relative flex min-h-[60px] cursor-pointer items-center gap-4 border-b border-edge-soft py-2">
+      <div className="flex flex-1 flex-col gap-1"><strong className="text-sm leading-5 2xl:text-base">{label}</strong><small className="text-[11px] leading-4 text-muted 2xl:text-[13px]">{description}</small></div>
       <input className="peer sr-only" type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
       <span className="relative h-[22px] w-[38px] shrink-0 rounded-full bg-edge transition after:absolute after:left-[3px] after:top-[3px] after:size-4 after:rounded-full after:bg-panel after:shadow-sm after:transition after:content-[''] peer-checked:bg-accent peer-checked:after:translate-x-4" />
     </label>
@@ -393,10 +393,10 @@ function Toggle({ checked, onChange, label, description }: { checked: boolean; o
 
 const primaryButtonClass = "inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl bg-accent px-5 text-sm font-bold text-inverse shadow-control transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50";
 const settingsPanelClass = "rounded-[18px] border border-edge bg-panel p-6 shadow-panel";
-const sectionTitleClass = "mb-1 flex items-center gap-3 border-b border-edge-soft pb-4 [&_h2]:mb-1 [&_h2]:text-[17px] [&_p]:m-0 [&_p]:text-[10px] [&_p]:text-muted";
-const fieldGridClass = "grid grid-cols-1 gap-3 border-b border-edge-soft py-4 sm:grid-cols-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-2 [&_label>span]:text-[10px] [&_label>span]:font-bold [&_label>span]:text-muted [&_input]:h-10 [&_input]:w-full [&_input]:rounded-lg [&_input]:border [&_input]:border-edge [&_input]:bg-field [&_input]:px-3 [&_input]:text-[11px] disabled:[&_input]:cursor-not-allowed";
-const selectFieldClass = "flex min-w-0 flex-col gap-2 [&>span]:text-[10px] [&>span]:font-bold [&>span]:text-muted";
-const eyebrowClass = "text-[10px] font-extrabold tracking-[.15em] text-accent";
+const sectionTitleClass = "mb-1 flex items-center gap-4 border-b border-edge-soft pb-5 [&_h2]:mb-1 [&_h2]:text-[22px] [&_h2]:font-black [&_p]:m-0 [&_p]:text-xs [&_p]:leading-5 [&_p]:text-muted 2xl:[&_h2]:text-[24px] 2xl:[&_p]:text-[13px]";
+const fieldGridClass = "grid grid-cols-1 gap-4 border-b border-edge-soft py-5 sm:grid-cols-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-2.5 [&_label>span]:text-xs [&_label>span]:font-bold [&_label>span]:text-muted [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-edge [&_input]:bg-field [&_input]:px-4 [&_input]:text-[13px] disabled:[&_input]:cursor-not-allowed";
+const selectFieldClass = "flex min-w-0 flex-col gap-2.5 [&>span]:text-xs [&>span]:font-bold [&>span]:text-muted";
+const eyebrowClass = "text-xs font-extrabold tracking-[.14em] text-accent";
 
 function intervalLabel(seconds: number): string {
   if (seconds < 60) return `${seconds} 秒`;
@@ -544,21 +544,21 @@ function SettingsPage({ snapshot, error, onSave, onExport, onDeleteData, onRecal
   const ActiveIcon = activeMeta.icon;
 
   return (
-    <div className="relative mx-auto grid h-full min-h-0 w-full max-w-[1400px] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden px-[clamp(16px,3vw,42px)] py-[clamp(12px,2.2vh,24px)]">
-      <header className="flex min-h-[52px] items-center justify-between gap-4">
-        <div className="min-w-0"><span className={eyebrowClass}>偏好与隐私</span><h1 className="mb-0.5 mt-1 truncate text-[clamp(22px,2.2vw,30px)] font-black leading-tight tracking-[-.035em]">让提醒适合你的节奏</h1><p className="m-0 truncate text-[10px] text-muted">切换分类不会丢失修改；保存后立即作用于当前监测。</p></div>
-        <div className="flex shrink-0 items-center gap-3">{changed && <span className="hidden items-center gap-1.5 text-[9px] font-bold text-warning sm:flex"><i className="size-1.5 rounded-full bg-warning" />有未保存的更改</span>}{saveButton}</div>
+    <div className="relative mx-auto grid h-full min-h-0 w-full max-w-[1680px] grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden px-[clamp(18px,3vw,56px)] py-[clamp(16px,2.4vh,32px)]">
+      <header className="flex min-h-[68px] items-center justify-between gap-6">
+        <div className="min-w-0"><span className={eyebrowClass}>偏好与隐私</span><h1 className="mb-1 mt-1.5 truncate text-[clamp(28px,2.2vw,38px)] font-black leading-tight tracking-[-.035em]">让提醒适合你的节奏</h1><p className="m-0 truncate text-xs leading-5 text-muted 2xl:text-sm">切换分类不会丢失修改；保存后立即作用于当前监测。</p></div>
+        <div className="flex shrink-0 items-center gap-3">{changed && <span className="hidden items-center gap-1.5 text-xs font-bold text-warning sm:flex"><i className="size-1.5 rounded-full bg-warning" />有未保存的更改</span>}{saveButton}</div>
       </header>
 
-      <div className="grid min-h-0 grid-cols-[64px_minmax(0,1fr)] gap-3 min-[1080px]:grid-cols-[168px_minmax(0,1fr)]">
-        <nav className="flex min-h-0 flex-col gap-1 rounded-[16px] border border-edge bg-panel-muted p-1.5" role="tablist" aria-label="偏好设置分类" aria-orientation="vertical">
-          <span className="hidden px-3 pb-1 pt-2 text-[8px] font-extrabold tracking-[.16em] text-subtle min-[1080px]:block">设置分类</span>
-          {settingsTabs.map(({ id, label, icon: Icon }) => <button key={id} id={`settings-tab-${id}`} title={label} className={cn("relative flex h-[52px] min-w-0 flex-col items-center justify-center gap-1 rounded-[11px] px-1 text-[8px] font-bold text-muted transition hover:bg-panel hover:text-foreground min-[1080px]:h-12 min-[1080px]:flex-row min-[1080px]:justify-start min-[1080px]:gap-2.5 min-[1080px]:px-3 min-[1080px]:text-[10px]", activeTab === id && "bg-panel text-accent shadow-control before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-accent")} role="tab" aria-selected={activeTab === id} aria-controls={`settings-panel-${id}`} tabIndex={activeTab === id ? 0 : -1} onClick={() => setActiveTab(id)}><Icon className="shrink-0" size={16} /><span className="max-w-full truncate">{label}</span><ChevronRight className="ml-auto hidden text-subtle min-[1080px]:block" size={13} /></button>)}
-          <div className="mt-auto hidden rounded-xl border border-edge-soft bg-panel/70 p-3 min-[1080px]:block"><strong className="block text-[9px]">统一保存</strong><p className="mb-0 mt-1 text-[8px] leading-3.5 text-muted">切换分类不会丢失当前修改。</p></div>
+      <div className="grid min-h-0 grid-cols-[88px_minmax(0,1fr)] gap-4 min-[1040px]:grid-cols-[200px_minmax(0,1fr)] 2xl:grid-cols-[240px_minmax(0,1fr)] 2xl:gap-6">
+        <nav className="flex min-h-0 flex-col gap-1.5 rounded-[18px] border border-edge bg-panel-muted p-2" role="tablist" aria-label="偏好设置分类" aria-orientation="vertical">
+          <span className="hidden px-3 pb-1 pt-2 text-xs font-extrabold tracking-[.14em] text-subtle min-[1040px]:block">设置分类</span>
+          {settingsTabs.map(({ id, label, icon: Icon }) => <button key={id} id={`settings-tab-${id}`} title={label} className={cn("relative flex h-[64px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl px-2 text-[11px] font-bold text-muted transition hover:bg-panel hover:text-foreground min-[1040px]:h-14 min-[1040px]:flex-row min-[1040px]:justify-start min-[1040px]:gap-3 min-[1040px]:px-4 min-[1040px]:text-sm 2xl:h-16 2xl:text-base", activeTab === id && "bg-panel text-accent shadow-control before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-accent")} role="tab" aria-selected={activeTab === id} aria-controls={`settings-panel-${id}`} tabIndex={activeTab === id ? 0 : -1} onClick={() => setActiveTab(id)}><Icon className="shrink-0" size={19} /><span className="max-w-full truncate">{label}</span><ChevronRight className="ml-auto hidden text-subtle min-[1040px]:block" size={15} /></button>)}
+          <div className="mt-auto hidden rounded-xl border border-edge-soft bg-panel/70 p-4 min-[1040px]:block"><strong className="block text-xs">统一保存</strong><p className="mb-0 mt-1 text-[11px] leading-4 text-muted">切换分类不会丢失当前修改。</p></div>
         </nav>
 
-        <section className={cn(settingsPanelClass, "min-h-0 overflow-hidden p-[clamp(14px,2vw,22px)]")} id={`settings-panel-${activeTab}`} role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`}>
-        <div className={sectionTitleClass}><span className={cn("grid size-10 place-items-center rounded-xl", activeMeta.tone)}><ActiveIcon size={20} /></span><div className="min-w-0"><h2>{activeMeta.label}</h2><p className="truncate">{activeMeta.description}</p></div></div>
+        <section className={cn(settingsPanelClass, "min-h-0 overflow-y-auto p-[clamp(20px,2.2vw,36px)]")} id={`settings-panel-${activeTab}`} role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`}>
+        <div className={sectionTitleClass}><span className={cn("grid size-12 place-items-center rounded-[15px] 2xl:size-14", activeMeta.tone)}><ActiveIcon size={24} /></span><div className="min-w-0"><h2>{activeMeta.label}</h2><p>{activeMeta.description}</p></div></div>
 
         {activeTab === "detection" && <div>
           <Toggle checked={draft.cameraEnabled} onChange={(value) => set("cameraEnabled", value)} label="使用摄像头进行姿态检测" description="关闭后自动切换到普通定时久坐提醒" />
@@ -566,7 +566,7 @@ function SettingsPage({ snapshot, error, onSave, onExport, onDeleteData, onRecal
             <div className={selectFieldClass}><span>检测灵敏度</span><SelectField value={draft.sensitivity} options={[{ value: "low", label: "较低 · 减少误报" }, { value: "balanced", label: "平衡 · 推荐" }, { value: "high", label: "较高 · 更早识别" }]} ariaLabel="检测灵敏度" onChange={(value) => set("sensitivity", value)} /></div>
             <div className={selectFieldClass}><span>低头提醒阈值</span><SelectField value={draft.headDownMinutes} options={[1, 2, 3, 5, 10].map((value) => ({ value, label: `${value} 分钟` }))} ariaLabel="低头提醒阈值" onChange={(value) => set("headDownMinutes", value)} /></div>
           </div>
-          <button className="inline-flex items-center gap-2 pt-3 text-[11px] font-bold text-accent hover:text-accent-strong" onClick={onRecalibrate}><RotateCcw size={16} /> 重新校准正常坐姿</button>
+          <button className="inline-flex items-center gap-2 pt-4 text-sm font-bold text-accent hover:text-accent-strong" onClick={onRecalibrate}><RotateCcw size={18} /> 重新校准正常坐姿</button>
         </div>}
 
         {activeTab === "reminder" && <div className="grid min-h-0 gap-x-5 md:grid-cols-2">
