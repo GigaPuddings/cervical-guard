@@ -56,7 +56,7 @@ const zhToEn: Record<string, string> = {
   "午间静默开始": "Quiet period starts", "午间静默结束": "Quiet period ends", "持续行为重复提醒": "Repeat ongoing behavior reminders", "遵守同类提醒冷却时间": "Respects reminder cooldown", "会议模式": "Meeting mode", "仅显示安静通知": "Show quiet notifications only", "通知声音": "Notification sound", "会议模式下仍保持静音": "Remains silent in meeting mode",
   "启用灵动岛": "Enable Dynamic Island", "总开关；关闭后保留下面的行为偏好": "Master switch; behavior preferences are retained", "久坐提醒": "Sitting reminder", "显示休息、稍后和忽略操作": "Show break, snooze, and dismiss actions",
   "离座状态": "Away status", "确认无人后保持显示计时暂停": "Show paused timing after absence is confirmed", "低头状态": "Head-down status", "持续确认低头后显示提示": "Show after head-down posture is confirmed", "休息倒计时": "Break countdown", "休息期间显示倒计时与操作": "Show countdown and controls during breaks",
-  "持续检测状态": "Persistent detection status", "检测中常驻紧凑状态，悬停查看详情": "Keep a compact status while monitoring; hover for details", "暂停状态": "Paused status", "暂停检测时显示恢复时间与暂停状态": "Show the pause state and resume time while monitoring is paused", "鼠标穿透效果": "Pointer peek-through effect", "鼠标经过时显示局部透视放大镜；关闭后完全隐藏": "Show the local peek-through lens under the pointer; hide it completely when disabled", "与普通窗口同时显示": "Show with main window", "主窗口可见时也显示灵动岛": "Show Dynamic Island while the main window is visible", "允许从灵动岛彻底关闭": "Allow permanent close from Dynamic Island", "开启后关闭菜单才显示彻底关闭选项": "Adds a permanent-close option to its menu",
+  "持续检测状态": "Persistent detection status", "检测中常驻紧凑状态，悬停查看详情": "Keep a compact status while monitoring; hover for details", "暂停状态": "Paused status", "暂停检测时显示恢复时间与暂停状态": "Show the pause state and resume time while monitoring is paused", "鼠标放大镜效果": "Pointer magnifier", "鼠标经过灵动岛时显示局部放大镜；关闭后仅隐藏放大镜": "Show a local magnifier while hovering over Dynamic Island; disabling it only hides the magnifier", "与普通窗口同时显示": "Show with main window", "主窗口可见时也显示灵动岛": "Show Dynamic Island while the main window is visible", "允许从灵动岛彻底关闭": "Allow permanent close from Dynamic Island", "开启后关闭菜单才显示彻底关闭选项": "Adds a permanent-close option to its menu",
   "工作开始": "Work starts", "工作结束": "Work ends", "关闭窗口后在后台运行": "Run in background after closing", "隐藏后继续低功耗监测": "Continue low-power monitoring while hidden", "开机自动启动": "Start at login", "登录系统后自动守护工作节奏": "Start automatically after sign-in", "周末启用": "Enable on weekends", "周六和周日也执行工作时段规则": "Apply work-hour rules on weekends",
   "摄像头画面仅在本机内存中处理。": "Camera frames are processed only in local memory.", "保存本地行为统计": "Save local behavior statistics", "关闭后停止累计，已有数据不自动删除": "Turning off stops collection without deleting existing data", "本地数据管理": "Local data management",
   "导出内容仅包含日期、时长、次数与结构化行为历史，不含图片。": "Exports include dates, durations, counts, and structured history—never images.", "导出 CSV": "Export CSV", "删除全部统计与行为历史": "Delete statistics and history", "健康提醒用于日常行为提醒，不用于疾病诊断或替代医生建议。": "Health Reminder supports daily habits and does not diagnose disease or replace medical advice.",
@@ -70,18 +70,24 @@ const zhToEn: Record<string, string> = {
   "关注地点": "Saved places", "还没有地点": "No places yet", "输入城市名称并搜索添加": "Search for a city to add it", "点击地点会设为今日概览和灵动岛的首选天气。": "Selecting a place makes it the preferred weather for Today and Dynamic Island.", "添加第一个城市": "Add your first city", "天气详情、今日概览和休息建议会共用你选择的首选地点。": "Weather details, Today, and break advice share your preferred place.",
   "天气加载失败": "Weather failed to load", "离线缓存": "Offline cache", "体感": "Feels like", "云量": "Cloud cover", "湿度": "Humidity", "紫外线": "UV index", "今日降水量": "Rain today", "降水概率": "Rain chance", "结合天气的休息建议": "Weather-aware break advice", "今日环境范围": "Today's range", "雨": "Rain", "UV 峰值": "Peak UV", "模型预报仅供生活参考，不参与医疗判断或自动修改提醒。": "Forecasts are for daily reference only and do not affect medical judgment or reminder settings.",
   "晴": "Clear", "大部晴朗": "Mostly clear", "局部多云": "Partly cloudy", "阴": "Overcast", "有雾": "Foggy", "毛毛雨": "Drizzle", "有雨": "Rain", "有雪": "Snow", "阵雨": "Showers", "阵雪": "Snow showers", "雷暴": "Thunderstorm", "天气变化中": "Changing weather",
-  "尚未启用": "Not enabled", "正在启动": "Starting", "正在校准": "Calibrating", "检测进行中": "Monitoring", "检测已暂停": "Monitoring paused", "休息中": "On break",
+  "尚未启用": "Not enabled", "正在启动": "Starting", "正在校准": "Calibrating", "检测进行中": "Monitoring", "检测已暂停": "Monitoring paused", "休息中": "On break", "定时中": "Timer", "开启姿势检测": "Enable posture detection",
   "休息时间到": "Break time complete", "准备好了就继续吧": "Continue when you're ready", "起来走动，放松一下肩颈": "Walk around and relax your neck and shoulders", "休息": "Break", "稍后": "Later", "暂停一小时": "Pause for one hour", "忽略本次": "Dismiss this reminder",
 };
 
 const enToZh = Object.fromEntries(Object.entries(zhToEn).map(([zh, en]) => [en, zh]));
 
-function translateDynamic(value: string, language: Language): string {
+export function translateDynamic(value: string, language: Language): string {
   if (language === "zh-CN") return (enToZh[value] ?? value)
     .replace(/^Continuous:\s+/, "已连续 ")
     .replace(/^Break remaining:\s+/, "休息剩余 ")
     .replace(/^Remaining:\s+/, "剩余 ")
-    .replace(/^Today · /, "今天 · ");
+    .replace(/^Today · /, "今天 · ")
+    .replace(/^Longest session:\s+/, "最长连续 ")
+    .replace(/\s+gentle reminders$/, " 次温和提醒")
+    .replace(/\s+reminders$/, " 次提醒")
+    .replace(/\s+away events$/, " 次离座")
+    .replace(/\s+times$/, " 次")
+    .replace(/^Device:\s*/, "设备：");
   const exact = zhToEn[value];
   if (exact) return exact;
   return value

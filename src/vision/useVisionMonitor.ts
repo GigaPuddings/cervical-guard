@@ -4,6 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { coreClient } from "../infra/client";
 import type { CameraDevice, LandmarkPoint, VisionFrame, VisionObservation } from "../types";
+import { PREVIEW_START_TIMEOUT_MS, shouldReportPreviewFailure } from "./previewPolicy";
 
 export type VisionStatus = "idle" | "requesting" | "loading_model" | "ready" | "error";
 
@@ -38,11 +39,6 @@ interface VisionMonitor {
 const MOCK_FRAME_INTERVAL_MS = 240;
 /** React 状态更新节流间隔(≈12 FPS),回调全速触发。 */
 const UI_UPDATE_INTERVAL_MS = 80;
-/** 连续失败达到约 1.5 秒后才提示，容许相机首帧和切换设备的启动时间。 */
-const PREVIEW_FAILURE_LIMIT = 12;
-/** 姿态管线已就绪但仍未收到预览首帧时，给出可重试的独立提示。 */
-const PREVIEW_START_TIMEOUT_MS = 4_000;
-
 function messageOf(reason: unknown): string {
   if (typeof reason === "string" && reason) return reason;
   if (reason instanceof Error && reason.message) return reason.message;
@@ -92,7 +88,7 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
     img.onerror = () => {
       if (!active) return;
       previewFailures.current += 1;
-      if (previewFailures.current < PREVIEW_FAILURE_LIMIT) return;
+      if (!shouldReportPreviewFailure(previewFailures.current)) return;
       setPreviewReady(false);
       setPreviewError("视频预览暂时未取得画面，但本地姿态分析仍会继续。请重试预览。");
     };

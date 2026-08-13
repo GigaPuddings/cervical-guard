@@ -299,6 +299,7 @@ export function App() {
         previewError={vision.previewError}
         onRetryPreview={vision.retryPreview}
         onHelp={() => setHelpOpen(true)}
+        onLanguage={(nextLanguage) => void changeLanguage(nextLanguage)}
         updater={updater}
         landmarks={vision.landmarks}
         error={localizeBackendMessage(snapshot.lifecycle === "paused" ? null : cameraFailure ?? error, language)}
