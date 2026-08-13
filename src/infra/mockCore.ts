@@ -193,31 +193,38 @@ class MockCore {
       case "finish_onboarding": {
         const mode = args?.mode as "camera" | "timer";
         this.snapshot.monitoringMode = mode;
+        this.snapshot.settings.cameraEnabled = mode === "camera";
         this.snapshot.permission = args?.permission as AppSnapshot["permission"];
         this.snapshot.lifecycle = mode === "camera" ? "calibrating" : "degraded";
         localStorage.setItem("cervical-guard-onboarded", "true");
+        localStorage.setItem("cervical-guard-settings", JSON.stringify(this.snapshot.settings));
         break;
       }
       case "save_calibration": {
         const result = args?.result as CalibrationResult;
         this.snapshot.calibrated = true;
         this.snapshot.calibrationBaseline = result.baseline;
+        this.snapshot.permission = "granted";
+        this.snapshot.monitoringMode = "camera";
+        this.snapshot.settings.cameraEnabled = true;
         this.snapshot.settings.cameraId = result.cameraId;
         this.snapshot.lifecycle = "monitoring";
+        this.snapshot.behavior = "unknown";
         this.snapshot.sessionStartedAt = new Date().toISOString();
         localStorage.setItem("cervical-guard-calibrated", "true");
         localStorage.setItem("cervical-guard-baseline", String(result.baseline));
+        localStorage.setItem("cervical-guard-settings", JSON.stringify(this.snapshot.settings));
         break;
       }
       case "start_monitoring":
         this.snapshot.monitoringMode = args?.mode as "camera" | "timer";
+        if (this.snapshot.monitoringMode === "camera") this.snapshot.settings.cameraEnabled = true;
         this.snapshot.lifecycle = this.snapshot.monitoringMode === "camera" ? "monitoring" : "degraded";
         this.snapshot.sessionStartedAt ??= new Date().toISOString();
         break;
       case "start_calibration":
         this.snapshot.lifecycle = "calibrating";
         this.snapshot.monitoringMode = "camera";
-        this.snapshot.calibrated = false;
         break;
       case "ingest_observation": {
         const observation = args?.observation as VisionObservation;
@@ -245,7 +252,8 @@ class MockCore {
             : null;
         break;
       case "resume_monitoring":
-        this.snapshot.lifecycle = "monitoring";
+        this.snapshot.monitoringMode = this.snapshot.settings.cameraEnabled && this.snapshot.calibrated && this.snapshot.permission === "granted" ? "camera" : "timer";
+        this.snapshot.lifecycle = this.snapshot.monitoringMode === "camera" ? "monitoring" : "degraded";
         this.snapshot.pausedUntil = null;
         break;
       case "start_break":

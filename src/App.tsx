@@ -31,6 +31,7 @@ export function App() {
   const snapshotEpoch = useRef(0);
   const lastReminderId = useRef<string | null>(null);
   const fallbackStarted = useRef(false);
+  const calibrationOrigin = useRef<"onboarding" | "dashboard">("onboarding");
   const language = languageOf(snapshot?.settings.language);
   const updater = useAppUpdater(language);
   useRuntimeI18n(language);
@@ -177,6 +178,7 @@ export function App() {
       // 生产环境先完成系统权限和设备能力预检。失败时保留首次欢迎页，
       // 避免用户进入校准后才发现摄像头不可用。
       await coreClient.listCameras();
+      calibrationOrigin.current = "onboarding";
       setShowIntro(false);
       await run(() => coreClient.finishOnboarding("camera", "prompt"));
     } catch (reason) {
@@ -217,8 +219,52 @@ export function App() {
     setBehaviorHistory([]);
   };
   const recalibrate = async () => {
-    await run(() => coreClient.startCalibration());
-    setPage("today");
+    setBusy(true);
+    setError(null);
+    try {
+      await coreClient.listCameras();
+      calibrationOrigin.current = "dashboard";
+      const next = await run(() => coreClient.startCalibration());
+      if (next) setPage("today");
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const enableCameraDetection = async () => {
+    setBusy(true);
+    setCameraSetupError(null);
+    setError(null);
+    try {
+      await coreClient.listCameras();
+      // 已有有效校准时直接从临时定时降级恢复摄像头；首次使用才进入校准。
+      let next: AppSnapshot | null;
+      if (snapshot.calibrated && snapshot.permission === "granted") {
+        next = await run(() => coreClient.startMonitoring("camera"));
+      } else {
+        calibrationOrigin.current = "dashboard";
+        next = await run(() => coreClient.startCalibration());
+      }
+      if (next) setPage("today");
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const leaveCalibration = async () => {
+    if (calibrationOrigin.current === "onboarding") {
+      setShowIntro(true);
+      return;
+    }
+    const mode = snapshot.calibrated
+      && snapshot.permission === "granted"
+      && snapshot.settings.cameraEnabled
+      ? "camera"
+      : "timer";
+    const next = await run(() => coreClient.startMonitoring(mode));
+    if (next) setPage("today");
   };
 
   if (showIntro || snapshot.lifecycle === "unavailable") {
@@ -232,7 +278,7 @@ export function App() {
         busy={busy}
         onComplete={(baseline, cameraId) => void finishCalibration(baseline, cameraId)}
         onTimerFallback={() => void startTimerOnboarding("denied")}
-        onBack={() => setShowIntro(true)}
+        onBack={() => void leaveCalibration()}
       />
     );
   }
@@ -262,6 +308,7 @@ export function App() {
         onSaveSettings={saveSettings}
         onExport={() => void exportStatistics()}
         onDeleteData={() => void deleteData()}
+        onEnableCamera={() => void enableCameraDetection()}
         onRecalibrate={() => void recalibrate()}
       />
       <HelpDialog open={helpOpen} language={language} onClose={() => setHelpOpen(false)} />

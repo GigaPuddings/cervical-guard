@@ -64,6 +64,7 @@ interface DashboardProps {
   onSaveSettings: (settings: AppSettings) => Promise<boolean>;
   onExport: () => void;
   onDeleteData: () => void;
+  onEnableCamera: () => void;
   onRecalibrate: () => void;
   onRetryPreview: () => void;
   onHelp: () => void;
@@ -168,6 +169,7 @@ export function Dashboard(props: DashboardProps) {
               onSave={props.onSaveSettings}
               onExport={props.onExport}
               onDeleteData={props.onDeleteData}
+              onEnableCamera={props.onEnableCamera}
               onRecalibrate={props.onRecalibrate}
             />
           )}
@@ -178,7 +180,7 @@ export function Dashboard(props: DashboardProps) {
   );
 }
 
-function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks, error, onStartBreak, onEndBreak, onPage, onRetryPreview }: DashboardProps) {
+function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks, error, onStartBreak, onEndBreak, onPage, onRetryPreview, onEnableCamera }: DashboardProps) {
   const thresholdSeconds = snapshot.settings.sedentarySeconds;
   const isReminderTest = thresholdSeconds <= 30;
   const schedulePause = reminderSchedulePause(snapshot.settings);
@@ -248,7 +250,7 @@ function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks,
         </section>
 
         <section className="hidden min-h-0 grid-rows-[62px_minmax(0,1fr)_68px_68px] overflow-hidden rounded-card border border-edge bg-panel shadow-panel min-[1180px]:grid">
-          <div className="flex items-center justify-between px-5"><span className="flex items-center gap-2 text-xs font-extrabold"><Camera size={17} /> 检测状态</span><span className={cn("rounded-full px-3 py-1 text-[9px] font-bold", snapshot.lifecycle === "paused" ? "bg-warning-soft text-warning" : snapshot.frameQuality === "good" ? "bg-accent-soft text-accent" : "bg-warning-soft text-warning")}>{snapshot.lifecycle === "paused" ? "静默中" : snapshot.frameQuality === "good" ? "检测中" : "待确认"}</span></div>
+          <div className="flex items-center justify-between px-5"><span className="flex items-center gap-2 text-xs font-extrabold"><Camera size={17} /> 检测状态</span><span className={cn("rounded-full px-3 py-1 text-[9px] font-bold", snapshot.lifecycle === "paused" ? "bg-warning-soft text-warning" : !isCamera || snapshot.frameQuality === "good" ? "bg-accent-soft text-accent" : "bg-warning-soft text-warning")}>{snapshot.lifecycle === "paused" ? "静默中" : !isCamera ? "定时中" : snapshot.frameQuality === "good" ? "检测中" : "待确认"}</span></div>
           <div className="relative mx-4 min-h-0 overflow-hidden rounded-xl bg-[linear-gradient(135deg,var(--theme-panel-strong),var(--theme-accent-strong))]">
             {isCamera && streamUrl ? (
               <>
@@ -262,7 +264,10 @@ function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks,
                 {imgLoaded && <PoseCanvas landmarks={landmarks} />}
               </>
             ) : (
-              <div className="grid size-full -translate-y-4 place-content-center justify-items-center text-muted"><ScanFace size={96} strokeWidth={1.15} /></div>
+              <div className="grid size-full -translate-y-2 place-content-center justify-items-center gap-2 text-muted">
+                <ScanFace size={82} strokeWidth={1.15} />
+                {!isCamera && <button className="relative z-10 rounded-lg border border-inverse/20 bg-panel-strong/35 px-3 py-1.5 text-[9px] font-bold text-inverse hover:bg-panel-strong/55" onClick={onEnableCamera}>开启姿势检测</button>}
+              </div>
             )}
             {isCamera && isVisionLoading && (
               <div className="absolute inset-0 grid place-content-center justify-items-center gap-2 bg-panel-strong/90 text-inverse-muted"><Camera size={22} /><span className="text-[9px]">{visionStatus === "requesting" ? "正在请求摄像头权限…" : "正在加载姿态模型…"}</span></div>
@@ -514,7 +519,7 @@ const settingsTabs: Array<{ id: SettingsTab; label: string; description: string;
   { id: "privacy", label: "数据与隐私", description: "本地统计、导出与数据清理", icon: ShieldCheck, tone: "bg-neutral-soft text-muted" },
 ];
 
-function SettingsPage({ snapshot, error, onSave, onExport, onDeleteData, onRecalibrate }: { snapshot: AppSnapshot; error: string | null; onSave: (settings: AppSettings) => Promise<boolean>; onExport: () => void; onDeleteData: () => void; onRecalibrate: () => void }) {
+function SettingsPage({ snapshot, error, onSave, onExport, onDeleteData, onEnableCamera, onRecalibrate }: { snapshot: AppSnapshot; error: string | null; onSave: (settings: AppSettings) => Promise<boolean>; onExport: () => void; onDeleteData: () => void; onEnableCamera: () => void; onRecalibrate: () => void }) {
   const [draft, setDraft] = useState(snapshot.settings);
   const [activeTab, setActiveTab] = useState<SettingsTab>("detection");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -566,7 +571,11 @@ function SettingsPage({ snapshot, error, onSave, onExport, onDeleteData, onRecal
             <div className={selectFieldClass}><span>检测灵敏度</span><SelectField value={draft.sensitivity} options={[{ value: "low", label: "较低 · 减少误报" }, { value: "balanced", label: "平衡 · 推荐" }, { value: "high", label: "较高 · 更早识别" }]} ariaLabel="检测灵敏度" onChange={(value) => set("sensitivity", value)} /></div>
             <div className={selectFieldClass}><span>低头提醒阈值</span><SelectField value={draft.headDownMinutes} options={[1, 2, 3, 5, 10].map((value) => ({ value, label: `${value} 分钟` }))} ariaLabel="低头提醒阈值" onChange={(value) => set("headDownMinutes", value)} /></div>
           </div>
-          <button className="inline-flex items-center gap-2 pt-4 text-sm font-bold text-accent hover:text-accent-strong" onClick={onRecalibrate}><RotateCcw size={18} /> 重新校准正常坐姿</button>
+          {snapshot.monitoringMode === "camera" && snapshot.calibrated ? (
+            <button className="inline-flex items-center gap-2 pt-4 text-sm font-bold text-accent hover:text-accent-strong" onClick={onRecalibrate}><RotateCcw size={18} /> 重新校准正常坐姿</button>
+          ) : (
+            <button className="inline-flex items-center gap-2 pt-4 text-sm font-bold text-accent hover:text-accent-strong" onClick={onEnableCamera}><Camera size={18} /> {snapshot.calibrated ? "重新启用姿势检测" : "开启姿势检测并校准"}</button>
+          )}
         </div>}
 
         {activeTab === "reminder" && <div className="grid min-h-0 gap-x-5 md:grid-cols-2">

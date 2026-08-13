@@ -622,12 +622,41 @@ fn present_away_notice(app: &AppHandle, snapshot: &AppSnapshot) {
     });
 }
 
+/// 主线程任务可能晚于触发它的状态变更执行。只允许仍与核心当前生命周期一致、
+/// 且没有更高优先级提醒的旧快照继续绘制，避免“开始休息”后又被旧状态卡覆盖。
+fn island_status_payload_is_current(
+    payload_lifecycle: MonitoringLifecycle,
+    current_lifecycle: MonitoringLifecycle,
+    has_reminder: bool,
+) -> bool {
+    payload_lifecycle == current_lifecycle
+        && current_lifecycle != MonitoringLifecycle::Break
+        && !has_reminder
+}
+
+fn current_status_payload_matches(app: &AppHandle, payload: &AppSnapshot) -> bool {
+    app.try_state::<AppContext>()
+        .and_then(|context| {
+            context.core.lock().ok().map(|mut core| {
+                let current = core.snapshot();
+                island_status_payload_is_current(
+                    payload.lifecycle,
+                    current.lifecycle,
+                    current.current_reminder.is_some(),
+                )
+            })
+        })
+        .unwrap_or(false)
+}
+
 /// 在主线程上展开悬停详情卡片（窗口变形 + 通知前端渲染）。
 fn present_island_detail(app: &AppHandle, snapshot: &AppSnapshot) {
     let app_handle = app.clone();
     let payload = snapshot.clone();
     let schedule_result = app.run_on_main_thread(move || {
-        if !island_status_feature_enabled(&app_handle, payload.lifecycle) {
+        if !current_status_payload_matches(&app_handle, &payload)
+            || !island_status_feature_enabled(&app_handle, payload.lifecycle)
+        {
             return;
         }
         if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
@@ -652,7 +681,9 @@ fn present_persistent_status(app: &AppHandle, snapshot: &AppSnapshot) {
     let app_handle = app.clone();
     let payload = snapshot.clone();
     let _ = app.run_on_main_thread(move || {
-        if !island_status_feature_enabled(&app_handle, payload.lifecycle) {
+        if !current_status_payload_matches(&app_handle, &payload)
+            || !island_status_feature_enabled(&app_handle, payload.lifecycle)
+        {
             return;
         }
         if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
@@ -2378,9 +2409,10 @@ pub fn run() {
 mod island_ui_tests {
     use super::{
         break_action_hit, guard_protocol_response, island_action_hit, island_height_for_menu,
-        island_status_enabled, island_surface_needed, normalized_proxy, reminder_sound_enabled,
-        tray_icon_with_update_badge, tray_update_badge_visible, update_tray_text, IslandUiState,
-        UpdateUiState, ISLAND_COMPACT_HEIGHT, ISLAND_DETAIL_HEIGHT, ISLAND_MENU_HEIGHT,
+        island_status_enabled, island_status_payload_is_current, island_surface_needed,
+        normalized_proxy, reminder_sound_enabled, tray_icon_with_update_badge,
+        tray_update_badge_visible, update_tray_text, IslandUiState, UpdateUiState,
+        ISLAND_COMPACT_HEIGHT, ISLAND_DETAIL_HEIGHT, ISLAND_MENU_HEIGHT,
         ISLAND_RETURN_CONFIRMATION,
     };
     use crate::model::{AppSettings, MonitoringLifecycle};
@@ -2456,6 +2488,26 @@ mod island_ui_tests {
         assert!(html.contains("island://break"));
         assert!(html.contains("data-command=\"end_break\""));
         assert!(html.contains("transitionVersion"));
+        assert!(html.contains("定时提醒运行中"));
+    }
+
+    #[test]
+    fn a_queued_status_snapshot_cannot_overwrite_break_or_reminder_content() {
+        assert!(island_status_payload_is_current(
+            MonitoringLifecycle::Degraded,
+            MonitoringLifecycle::Degraded,
+            false,
+        ));
+        assert!(!island_status_payload_is_current(
+            MonitoringLifecycle::Degraded,
+            MonitoringLifecycle::Break,
+            false,
+        ));
+        assert!(!island_status_payload_is_current(
+            MonitoringLifecycle::Monitoring,
+            MonitoringLifecycle::Monitoring,
+            true,
+        ));
     }
 
     #[test]

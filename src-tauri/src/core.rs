@@ -388,6 +388,9 @@ impl RuntimeState {
     pub fn finish_onboarding(&mut self, mode: MonitoringMode, permission: PermissionState) {
         self.snapshot.permission = permission;
         self.snapshot.monitoring_mode = mode;
+        // “暂时使用定时提醒”是用户明确选择的运行模式。同步关闭摄像头偏好，
+        // 避免设置页显示已启用、实际却仍在 timer/degraded 状态。
+        self.snapshot.settings.camera_enabled = mode == MonitoringMode::Camera;
         self.snapshot.lifecycle = if mode == MonitoringMode::Camera {
             MonitoringLifecycle::Calibrating
         } else {
@@ -409,6 +412,7 @@ impl RuntimeState {
         self.snapshot.calibrated = true;
         self.snapshot.calibration_baseline = Some(result.baseline);
         self.snapshot.settings.camera_id = result.camera_id;
+        self.snapshot.settings.camera_enabled = true;
         self.snapshot.permission = PermissionState::Granted;
         self.snapshot.monitoring_mode = MonitoringMode::Camera;
         self.snapshot.lifecycle = MonitoringLifecycle::Monitoring;
@@ -433,6 +437,10 @@ impl RuntimeState {
             return Err("摄像头尚未授权或未完成校准".into());
         }
         self.snapshot.monitoring_mode = mode;
+        if mode == MonitoringMode::Camera {
+            // 这是用户主动进入摄像头模式（自动故障降级只会传入 Timer）。
+            self.snapshot.settings.camera_enabled = true;
+        }
         self.snapshot.lifecycle = if mode == MonitoringMode::Camera {
             MonitoringLifecycle::Monitoring
         } else {
@@ -937,6 +945,25 @@ mod tests {
     fn camera_mode_requires_calibration_and_permission() {
         let mut state = state();
         assert!(state.start_monitoring(MonitoringMode::Camera).is_err());
+    }
+
+    #[test]
+    fn timer_onboarding_and_camera_calibration_keep_the_camera_preference_consistent() {
+        let mut state = state();
+        assert_eq!(state.snapshot.monitoring_mode, MonitoringMode::Timer);
+        assert!(!state.snapshot.settings.camera_enabled);
+
+        state.start_calibration();
+        state
+            .save_calibration(CalibrationResult {
+                baseline: 0.64,
+                camera_id: "default".into(),
+            })
+            .unwrap();
+
+        assert_eq!(state.snapshot.monitoring_mode, MonitoringMode::Camera);
+        assert_eq!(state.snapshot.lifecycle, MonitoringLifecycle::Monitoring);
+        assert!(state.snapshot.settings.camera_enabled);
     }
 
     #[test]

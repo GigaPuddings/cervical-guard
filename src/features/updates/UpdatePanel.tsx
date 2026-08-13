@@ -15,6 +15,14 @@ function shouldCheckWhenOpened(stage: UpdateStage): boolean {
   return stage === "idle" || stage === "latest" || stage === "error";
 }
 
+export function shouldShowDeferredUpdateAction(stage: UpdateStage, updateAvailable: boolean): boolean {
+  return stage === "downloading" || (stage === "available" && updateAvailable);
+}
+
+export function shouldShowActualDownloadProgress(stage: UpdateStage, downloadStarted: boolean): boolean {
+  return stage === "downloading" && downloadStarted;
+}
+
 export interface AppUpdater {
   stage: UpdateStage;
   currentVersion: string;
@@ -25,7 +33,7 @@ export interface AppUpdater {
   downloadedBytes: number;
   totalBytes: number;
   bytesPerSecond: number;
-  proxyActive: boolean;
+  downloadStarted: boolean;
   error: string;
   dialogOpen: boolean;
   updateAvailable: boolean;
@@ -56,6 +64,7 @@ export function useAppUpdater(language: Language): AppUpdater {
   const [downloadedBytes, setDownloadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
   const [bytesPerSecond, setBytesPerSecond] = useState(0);
+  const [downloadStarted, setDownloadStarted] = useState(false);
   const [error, setError] = useState("");
   const updateAvailable = Boolean(version) && stage !== "latest" && stage !== "restarting";
 
@@ -88,6 +97,7 @@ export function useAppUpdater(language: Language): AppUpdater {
       setVersion("");
       setNotes("");
       setDate("");
+      setDownloadStarted(false);
       const { check } = await import("@tauri-apps/plugin-updater");
       const proxy = await resolveProxy();
       const update = await check(proxy ? { timeout: 30_000, proxy } : { timeout: 30_000 });
@@ -123,6 +133,7 @@ export function useAppUpdater(language: Language): AppUpdater {
     setDownloadedBytes(0);
     setTotalBytes(0);
     setBytesPerSecond(0);
+    setDownloadStarted(false);
     let downloaded = 0;
     let total = 0;
     let measuredAt = performance.now();
@@ -130,10 +141,13 @@ export function useAppUpdater(language: Language): AppUpdater {
     try {
       await update.downloadAndInstall((event) => {
         if (event.event === "Started") {
+          setDownloadStarted(true);
           total = event.data.contentLength ?? 0;
           setTotalBytes(total);
         }
         if (event.event === "Progress") {
+          // 防御旧版本插件未先发 Started 的情况；收到真实字节后仍应切到真实进度。
+          setDownloadStarted(true);
           downloaded += event.data.chunkLength;
           setDownloadedBytes(downloaded);
           const now = performance.now();
@@ -144,7 +158,10 @@ export function useAppUpdater(language: Language): AppUpdater {
             measuredBytes = downloaded;
           }
         }
-        if (event.event === "Finished") setProgress(100);
+        if (event.event === "Finished") {
+          setDownloadStarted(true);
+          setProgress(100);
+        }
         else if (total > 0) setProgress(Math.min(99, Math.round(downloaded / total * 100)));
       }, { timeout: 30 * 60_000 });
       setProgress(100);
@@ -206,7 +223,7 @@ export function useAppUpdater(language: Language): AppUpdater {
     downloadedBytes,
     totalBytes,
     bytesPerSecond,
-    proxyActive: Boolean(proxyRef.current),
+    downloadStarted,
     error,
     dialogOpen,
     updateAvailable,
@@ -236,7 +253,7 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
   const status = updater.stage === "checking" ? t.checking
     : updater.stage === "latest" ? t.latest
       : updater.stage === "available" ? t.available(updater.version)
-        : updater.stage === "downloading" ? t.downloading(updater.progress)
+        : updater.stage === "downloading" ? (updater.downloadStarted ? t.downloading(updater.progress) : t.preparingDownload)
           : updater.stage === "restarting" ? t.restart
             : updater.stage === "error" ? `${t.failed}: ${updater.error}`
               : t.description;
@@ -270,16 +287,22 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
             </div>
           )}
 
-          {updater.stage === "downloading" && (
+          {updater.stage === "downloading" && !updater.downloadStarted && (
+            <div className="mt-5 flex items-center gap-3 rounded-2xl border border-accent/20 bg-accent-soft/45 p-4 text-[10px] font-bold text-accent" role="status" aria-live="polite">
+              <LoaderCircle className="animate-spin" size={17} />
+              <span>{t.preparingDownload}</span>
+            </div>
+          )}
+
+          {shouldShowActualDownloadProgress(updater.stage, updater.downloadStarted) && (
             <div className="mt-5 rounded-2xl border border-accent/20 bg-accent-soft/45 p-4" role="status" aria-live="polite">
               <div className="flex items-center justify-between text-[10px] font-bold"><span>{t.downloadProgress}</span><span>{updater.totalBytes > 0 ? `${formatBytes(updater.downloadedBytes, language)} / ${formatBytes(updater.totalBytes, language)}` : formatBytes(updater.downloadedBytes, language)}</span></div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-edge">
-                <i className={`block h-full rounded-full bg-accent transition-[width] ${updater.totalBytes === 0 ? "w-1/3 animate-pulse" : ""}`} style={updater.totalBytes > 0 ? { width: `${updater.progress}%` } : undefined} />
+                <i className="block h-full rounded-full bg-accent transition-[width]" style={{ width: updater.totalBytes > 0 ? `${updater.progress}%` : "0%" }} />
               </div>
-              <p className="mb-0 mt-2 text-right text-[10px] font-extrabold text-accent">{updater.totalBytes > 0 ? `${updater.progress}%` : t.preparingDownload}</p>
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[9px] text-muted">
+              <p className="mb-0 mt-2 text-right text-[10px] font-extrabold text-accent">{updater.totalBytes > 0 ? `${updater.progress}%` : formatBytes(updater.downloadedBytes, language)}</p>
+              <div className="mt-2 text-[9px] text-muted">
                 <span>{t.speed}: {updater.bytesPerSecond > 0 ? `${formatBytes(updater.bytesPerSecond, language)}/s` : "—"}</span>
-                <span>{updater.proxyActive ? t.proxyDetected : t.proxyDirect}</span>
               </div>
               <p className="mb-0 mt-2 text-[9px] leading-4 text-subtle">{t.backgroundHint}</p>
             </div>
@@ -287,12 +310,12 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
         </div>
 
         <footer className="flex flex-wrap justify-end gap-2 border-t border-edge bg-panel-muted/55 px-6 py-4">
-          <button className="inline-flex min-h-10 items-center justify-center rounded-xl border border-edge bg-panel px-4 text-[11px] font-bold text-muted hover:bg-panel-muted" onClick={updater.close}>{updater.stage === "downloading" ? t.backgroundDownload : t.later}</button>
+          {shouldShowDeferredUpdateAction(updater.stage, updater.updateAvailable) && <button className="inline-flex min-h-10 items-center justify-center rounded-xl border border-edge bg-panel px-4 text-[11px] font-bold text-muted hover:bg-panel-muted" onClick={updater.close}>{updater.stage === "downloading" ? t.backgroundDownload : t.later}</button>}
           {updater.updateAvailable && updater.stage !== "downloading" && updater.stage !== "restarting" ? (
             <button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-accent px-5 text-[11px] font-bold text-inverse hover:bg-accent-strong" onClick={() => void updater.install()}><DownloadCloud size={16} />{t.install}</button>
-          ) : (
+          ) : updater.stage !== "downloading" && updater.stage !== "restarting" ? (
             <button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-accent px-5 text-[11px] font-bold text-inverse hover:bg-accent-strong disabled:opacity-45" disabled={busy} onClick={() => void updater.check(true)}>{updater.stage === "checking" ? <LoaderCircle className="animate-spin" size={16} /> : <RefreshCw size={16} />}{t.check}</button>
-          )}
+          ) : null}
         </footer>
       </section>
     </div>

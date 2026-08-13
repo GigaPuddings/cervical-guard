@@ -407,6 +407,11 @@
       const stateLabel = (snapshot) => {
         if (snapshot.lifecycle === 'paused') return tr('检测已暂停', 'Monitoring paused');
         if (snapshot.lifecycle === 'break') return tr('休息进行中', 'Break in progress');
+        // 定时模式没有摄像头画面，“unknown”是正常占位状态，不能向用户显示
+        // “等待稳定画面”这类只属于姿态识别管线的文案。
+        if (snapshot.monitoringMode === 'timer' || snapshot.lifecycle === 'degraded') {
+          return tr('定时提醒运行中', 'Timer reminders active');
+        }
         const labels = {
           no_person: '已离座 · 计时暂停', present: '正在确认坐姿', sitting_normal: '姿态自然 · 正在计时',
           head_down: '持续低头中', standing_break: '站立活动中', unknown: '等待稳定画面',
@@ -497,6 +502,7 @@
         };
         if (location.hash === '#detail') renderDetail(preview);
         else if (location.hash === '#status') renderStatus(preview);
+        else if (location.hash === '#timer') renderStatus({ ...preview, lifecycle: 'degraded', monitoringMode: 'timer', behavior: 'unknown' });
         else if (location.hash === '#paused') renderStatus({ ...preview, lifecycle: 'paused', pausedUntil: new Date(Date.now() + 15 * 60 * 1000).toISOString() });
         else if (location.hash === '#away') renderAway();
         else if (location.hash === '#returned') renderReturned();
