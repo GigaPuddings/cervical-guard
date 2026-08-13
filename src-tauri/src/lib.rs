@@ -274,6 +274,20 @@ pub struct AppContext {
     database: Mutex<Database>,
     vision: Arc<VisionService>,
     island_ui: Mutex<IslandUiState>,
+    update_ui: Mutex<UpdateUiState>,
+}
+
+#[derive(Default)]
+struct UpdateUiState {
+    stage: String,
+    version: Option<String>,
+    progress: u8,
+}
+
+impl UpdateUiState {
+    fn keeps_app_alive(&self) -> bool {
+        matches!(self.stage.as_str(), "downloading" | "restarting")
+    }
 }
 
 /// 计算灵动岛窗口左上角位置（逻辑像素）：主显示器顶部居中。
@@ -1205,9 +1219,88 @@ async fn stop_vision(context: State<'_, AppContext>) -> Result<(), String> {
         .map_err(|error| format!("摄像头会话线程异常:{error}"))?
 }
 
+fn normalized_proxy(value: &str) -> Option<String> {
+    let candidate = value.trim();
+    if candidate.is_empty() {
+        return None;
+    }
+    if candidate.starts_with("http://") || candidate.starts_with("https://") {
+        Some(candidate.to_string())
+    } else if candidate.contains("://") {
+        // The updater's current reqwest build does not include SOCKS support.
+        // Ignoring an unsupported scheme lets TUN routing or direct access work
+        // instead of turning every update check into an invalid-proxy error.
+        None
+    } else {
+        Some(format!("http://{candidate}"))
+    }
+}
+
+fn proxy_from_environment() -> Option<String> {
+    ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"]
+        .into_iter()
+        .find_map(|name| {
+            std::env::var(name)
+                .ok()
+                .and_then(|value| normalized_proxy(&value))
+        })
+}
+
+#[cfg(target_os = "windows")]
+fn proxy_from_system() -> Option<String> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+
+    let internet_settings = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings")
+        .ok()?;
+    let enabled = internet_settings
+        .get_value::<u32, _>("ProxyEnable")
+        .unwrap_or(0)
+        != 0;
+    if !enabled {
+        return None;
+    }
+    let server = internet_settings
+        .get_value::<String, _>("ProxyServer")
+        .ok()?;
+    // Windows accepts either a single host:port or a protocol map such as
+    // `http=127.0.0.1:7890;https=127.0.0.1:7890`. Updates are always HTTPS.
+    let selected = if server.contains('=') {
+        let entries: Vec<_> = server
+            .split(';')
+            .filter_map(|entry| entry.split_once('='))
+            .collect();
+        entries
+            .iter()
+            .find(|(scheme, _)| scheme.trim().eq_ignore_ascii_case("https"))
+            .or_else(|| {
+                entries
+                    .iter()
+                    .find(|(scheme, _)| scheme.trim().eq_ignore_ascii_case("http"))
+            })
+            .map(|(_, address)| address.trim())?
+    } else {
+        server.trim()
+    };
+    normalized_proxy(selected)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn proxy_from_system() -> Option<String> {
+    None
+}
+
+#[tauri::command]
+fn get_update_proxy() -> Option<String> {
+    proxy_from_environment().or_else(proxy_from_system)
+}
+
 fn tray_menu(
     app: &AppHandle,
+    update_stage: &str,
     update_version: Option<&str>,
+    update_progress: u8,
     language: &str,
 ) -> tauri::Result<Menu<tauri::Wry>> {
     let english = language == "en-US";
@@ -1222,12 +1315,7 @@ fn tray_menu(
         true,
         None::<&str>,
     )?;
-    let update_text = match (english, update_version) {
-        (true, Some(version)) => format!("● Update available: v{version}"),
-        (false, Some(version)) => format!("● 发现新版本 v{version}"),
-        (true, None) => "Check for updates".to_string(),
-        (false, None) => "检查更新".to_string(),
-    };
+    let update_text = update_tray_text(english, update_stage, update_version, update_progress);
     let update = MenuItem::with_id(app, "update", update_text, true, None::<&str>)?;
     let pause = MenuItem::with_id(
         app,
@@ -1244,36 +1332,86 @@ fn tray_menu(
         app,
         "quit",
         if english { "Quit" } else { "退出" },
-        true,
+        !matches!(update_stage, "downloading" | "restarting"),
         None::<&str>,
     )?;
     Menu::with_items(app, &[&show, &update, &pause, &quit])
 }
 
+fn update_tray_text(english: bool, stage: &str, version: Option<&str>, progress: u8) -> String {
+    match (english, stage, version) {
+        (true, "checking", _) => "Checking for updates…".to_string(),
+        (false, "checking", _) => "正在检查更新…".to_string(),
+        (true, "downloading", Some(version)) => {
+            format!("↓ Downloading v{version} · {}%", progress.min(100))
+        }
+        (false, "downloading", Some(version)) => {
+            format!("↓ 正在下载 v{version} · {}%", progress.min(100))
+        }
+        (true, "downloading", None) => format!("↓ Downloading update · {}%", progress.min(100)),
+        (false, "downloading", None) => format!("↓ 正在下载更新 · {}%", progress.min(100)),
+        (true, "restarting", _) => "Update installed · Restarting…".to_string(),
+        (false, "restarting", _) => "更新已安装 · 正在重启…".to_string(),
+        (true, "error", _) => "Update failed · Click to retry".to_string(),
+        (false, "error", _) => "更新失败 · 点击重试".to_string(),
+        (true, "latest", _) => "Up to date · Check again".to_string(),
+        (false, "latest", _) => "已是最新版本 · 再次检查".to_string(),
+        (true, _, Some(version)) => format!("● Update available: v{version}"),
+        (false, _, Some(version)) => format!("● 发现新版本 v{version}"),
+        (true, _, None) => "Check for updates".to_string(),
+        (false, _, None) => "检查更新".to_string(),
+    }
+}
+
 #[tauri::command]
 fn set_update_tray_status(
     app: AppHandle,
+    stage: String,
     version: Option<String>,
+    progress: u8,
     language: String,
 ) -> Result<(), String> {
-    let menu = tray_menu(&app, version.as_deref(), &language).map_err(|error| error.to_string())?;
+    if let Some(context) = app.try_state::<AppContext>() {
+        if let Ok(mut update_ui) = context.update_ui.lock() {
+            update_ui.stage.clone_from(&stage);
+            update_ui.version.clone_from(&version);
+            update_ui.progress = progress.min(100);
+        }
+    }
+    let menu = tray_menu(
+        &app,
+        &stage,
+        version.as_deref(),
+        progress.min(100),
+        &language,
+    )
+    .map_err(|error| error.to_string())?;
     let tray = app
         .tray_by_id(MAIN_TRAY_ID)
         .ok_or_else(|| "系统托盘尚未就绪".to_string())?;
     tray.set_menu(Some(menu))
         .map_err(|error| error.to_string())?;
-    let tooltip = match (language.as_str(), version.as_deref()) {
-        ("en-US", Some(value)) => format!("Health Reminder · Update v{value} available"),
-        (_, Some(value)) => format!("健康提醒 · 新版本 v{value} 可用"),
-        ("en-US", None) => "Health Reminder · Posture & Sitting".to_string(),
-        _ => "健康提醒 · 姿态与久坐".to_string(),
+    let update_label = update_tray_text(
+        language == "en-US",
+        &stage,
+        version.as_deref(),
+        progress.min(100),
+    );
+    let tooltip = if matches!(stage.as_str(), "idle" | "latest") {
+        if language == "en-US" {
+            "Health Reminder · Posture & Sitting".to_string()
+        } else {
+            "健康提醒 · 姿态与久坐".to_string()
+        }
+    } else {
+        update_label
     };
     tray.set_tooltip(Some(tooltip))
         .map_err(|error| error.to_string())
 }
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
-    let menu = tray_menu(app.handle(), None, "zh-CN")?;
+    let menu = tray_menu(app.handle(), "idle", None, 0, "zh-CN")?;
     let mut builder = TrayIconBuilder::with_id(MAIN_TRAY_ID)
         .tooltip("健康提醒 · 姿态与久坐")
         .menu(&menu)
@@ -1383,6 +1521,7 @@ pub fn run() {
                 database: Mutex::new(database),
                 vision,
                 island_ui: Mutex::new(IslandUiState::default()),
+                update_ui: Mutex::new(UpdateUiState::default()),
             });
             build_tray(app)?;
             set_reminder_island_visible(app.handle(), false, false)?;
@@ -1927,19 +2066,27 @@ pub fn run() {
                 return;
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let should_hide = window
+                let (should_hide, update_active) = window
                     .app_handle()
                     .try_state::<AppContext>()
-                    .and_then(|context| {
-                        context
+                    .map(|context| {
+                        let should_hide = context
                             .core
                             .lock()
                             .ok()
                             .map(|core| core.settings().run_in_background)
+                            .unwrap_or(false);
+                        let update_active = context
+                            .update_ui
+                            .lock()
+                            .ok()
+                            .map(|update| update.keeps_app_alive())
+                            .unwrap_or(false);
+                        (should_hide, update_active)
                     })
-                    .unwrap_or(false);
+                    .unwrap_or((false, false));
                 api.prevent_close();
-                if should_hide {
+                if should_hide || update_active {
                     let _ = window.hide();
                 } else {
                     // reminder-island 窗口始终存在（通常为隐藏状态），因此若仅让
@@ -1975,6 +2122,7 @@ pub fn run() {
             set_island_menu_open,
             mute_island,
             set_update_tray_status,
+            get_update_proxy,
         ])
         .run(tauri::generate_context!())
         .expect("健康提醒应用启动失败");
@@ -1984,11 +2132,41 @@ pub fn run() {
 mod island_ui_tests {
     use super::{
         break_action_hit, guard_protocol_response, island_action_hit, island_height_for_menu,
-        island_status_enabled, island_surface_needed, reminder_sound_enabled, IslandUiState,
-        ISLAND_COMPACT_HEIGHT, ISLAND_DETAIL_HEIGHT, ISLAND_MENU_HEIGHT,
-        ISLAND_RETURN_CONFIRMATION,
+        island_status_enabled, island_surface_needed, normalized_proxy, reminder_sound_enabled,
+        update_tray_text, IslandUiState, UpdateUiState, ISLAND_COMPACT_HEIGHT,
+        ISLAND_DETAIL_HEIGHT, ISLAND_MENU_HEIGHT, ISLAND_RETURN_CONFIRMATION,
     };
     use crate::model::{AppSettings, MonitoringLifecycle};
+
+    #[test]
+    fn updater_tray_reports_progress_and_keeps_the_process_alive() {
+        let downloading = UpdateUiState {
+            stage: "downloading".to_string(),
+            version: Some("0.2.0".to_string()),
+            progress: 37,
+        };
+        assert!(downloading.keeps_app_alive());
+        assert_eq!(
+            update_tray_text(
+                false,
+                &downloading.stage,
+                downloading.version.as_deref(),
+                37
+            ),
+            "↓ 正在下载 v0.2.0 · 37%"
+        );
+        assert!(!UpdateUiState::default().keeps_app_alive());
+    }
+
+    #[test]
+    fn updater_proxy_accepts_windows_host_port_notation() {
+        assert_eq!(
+            normalized_proxy("127.0.0.1:7890").as_deref(),
+            Some("http://127.0.0.1:7890")
+        );
+        assert_eq!(normalized_proxy("socks5://127.0.0.1:1080"), None);
+        assert_eq!(normalized_proxy("   "), None);
+    }
 
     #[test]
     fn reminder_island_is_served_inside_the_guard_protocol() {

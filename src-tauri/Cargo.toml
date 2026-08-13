@@ -38,3 +38,4 @@ uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.62.2", features = ["Security_Authorization_AppCapabilityAccess", "Win32_System_WinRT"] }
+winreg = "0.55"

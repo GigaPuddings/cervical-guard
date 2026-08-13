@@ -2,12 +2,18 @@ import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { DownloadCloud, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import packageJson from "../../../package.json";
 import { copy, type Language } from "../../i18n";
 
+const MarkdownPreview = lazy(() => import("./MarkdownPreview"));
+
 type UpdateResource = Awaited<ReturnType<typeof import("@tauri-apps/plugin-updater").check>>;
 export type UpdateStage = "idle" | "checking" | "latest" | "available" | "downloading" | "restarting" | "error";
+
+function shouldCheckWhenOpened(stage: UpdateStage): boolean {
+  return stage === "idle" || stage === "latest" || stage === "error";
+}
 
 export interface AppUpdater {
   stage: UpdateStage;
@@ -18,6 +24,8 @@ export interface AppUpdater {
   progress: number;
   downloadedBytes: number;
   totalBytes: number;
+  bytesPerSecond: number;
+  proxyActive: boolean;
   error: string;
   dialogOpen: boolean;
   updateAvailable: boolean;
@@ -35,6 +43,8 @@ export function useAppUpdater(language: Language): AppUpdater {
   const t = copy[language].updater;
   const updateRef = useRef<UpdateResource>(null);
   const checkingRef = useRef(false);
+  const stageRef = useRef<UpdateStage>("idle");
+  const proxyRef = useRef<string | undefined>(undefined);
   const startupCheckedRef = useRef(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [stage, setStage] = useState<UpdateStage>("idle");
@@ -45,19 +55,32 @@ export function useAppUpdater(language: Language): AppUpdater {
   const [progress, setProgress] = useState(0);
   const [downloadedBytes, setDownloadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
+  const [bytesPerSecond, setBytesPerSecond] = useState(0);
   const [error, setError] = useState("");
   const updateAvailable = Boolean(version) && stage !== "latest" && stage !== "restarting";
 
+  const changeStage = useCallback((next: UpdateStage) => {
+    stageRef.current = next;
+    setStage(next);
+  }, []);
+
+  const resolveProxy = useCallback(async () => {
+    if (isTauri()) {
+      proxyRef.current = await invoke<string | null>("get_update_proxy").then((value) => value ?? undefined).catch(() => undefined);
+    }
+    return proxyRef.current;
+  }, []);
+
   const checkUpdate = useCallback(async (reveal = true) => {
     if (reveal) setDialogOpen(true);
-    if (checkingRef.current) return;
+    if (checkingRef.current || stageRef.current === "downloading" || stageRef.current === "restarting") return;
     if (!isTauri()) {
       setError(t.browserOnly);
-      setStage("error");
+      changeStage("error");
       return;
     }
     checkingRef.current = true;
-    setStage("checking");
+    changeStage("checking");
     setError("");
     try {
       await updateRef.current?.close();
@@ -66,39 +89,44 @@ export function useAppUpdater(language: Language): AppUpdater {
       setNotes("");
       setDate("");
       const { check } = await import("@tauri-apps/plugin-updater");
-      const update = await check({ timeout: 30_000 });
+      const proxy = await resolveProxy();
+      const update = await check(proxy ? { timeout: 30_000, proxy } : { timeout: 30_000 });
       updateRef.current = update;
       if (!update) {
         setVersion("");
         setNotes("");
         setDate("");
-        setStage("latest");
+        changeStage("latest");
         return;
       }
       setCurrentVersion(update.currentVersion || packageJson.version);
       setVersion(update.version);
       setNotes(update.body?.trim() ?? "");
       setDate(update.date ?? "");
-      setStage("available");
+      changeStage("available");
     } catch (reason) {
       setError(reasonText(reason));
-      setStage("error");
+      changeStage("error");
     } finally {
       checkingRef.current = false;
     }
-  }, [t.browserOnly]);
+  }, [changeStage, resolveProxy, t.browserOnly]);
 
   const install = useCallback(async () => {
     const update = updateRef.current;
     if (!update) return;
     setDialogOpen(true);
-    setStage("downloading");
+    if (stageRef.current === "downloading" || stageRef.current === "restarting") return;
+    changeStage("downloading");
     setError("");
     setProgress(0);
     setDownloadedBytes(0);
     setTotalBytes(0);
+    setBytesPerSecond(0);
     let downloaded = 0;
     let total = 0;
+    let measuredAt = performance.now();
+    let measuredBytes = 0;
     try {
       await update.downloadAndInstall((event) => {
         if (event.event === "Started") {
@@ -108,19 +136,26 @@ export function useAppUpdater(language: Language): AppUpdater {
         if (event.event === "Progress") {
           downloaded += event.data.chunkLength;
           setDownloadedBytes(downloaded);
+          const now = performance.now();
+          const elapsed = now - measuredAt;
+          if (elapsed >= 750) {
+            setBytesPerSecond(Math.round((downloaded - measuredBytes) * 1_000 / elapsed));
+            measuredAt = now;
+            measuredBytes = downloaded;
+          }
         }
         if (event.event === "Finished") setProgress(100);
         else if (total > 0) setProgress(Math.min(99, Math.round(downloaded / total * 100)));
-      }, { timeout: 5 * 60_000 });
+      }, { timeout: 30 * 60_000 });
       setProgress(100);
-      setStage("restarting");
+      changeStage("restarting");
       const { relaunch } = await import("@tauri-apps/plugin-process");
       await relaunch();
     } catch (reason) {
       setError(reasonText(reason));
-      setStage("error");
+      changeStage("error");
     }
-  }, []);
+  }, [changeStage]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -129,7 +164,7 @@ export function useAppUpdater(language: Language): AppUpdater {
     void listen("updater://open", () => {
       if (!active) return;
       setDialogOpen(true);
-      void checkUpdate(false);
+      if (shouldCheckWhenOpened(stageRef.current)) void checkUpdate(false);
     }).then((dispose) => {
       if (active) unlisten = dispose;
       else dispose();
@@ -152,10 +187,12 @@ export function useAppUpdater(language: Language): AppUpdater {
   useEffect(() => {
     if (!isTauri()) return;
     void invoke("set_update_tray_status", {
-      version: updateAvailable ? version : null,
+      stage,
+      version: version || null,
+      progress,
       language,
     }).catch(() => undefined);
-  }, [language, updateAvailable, version]);
+  }, [language, progress, stage, version]);
 
   useEffect(() => () => { void updateRef.current?.close(); }, []);
 
@@ -168,13 +205,16 @@ export function useAppUpdater(language: Language): AppUpdater {
     progress,
     downloadedBytes,
     totalBytes,
+    bytesPerSecond,
+    proxyActive: Boolean(proxyRef.current),
     error,
     dialogOpen,
     updateAvailable,
-    open: () => { setDialogOpen(true); void checkUpdate(false); },
-    close: () => {
-      if (stage !== "downloading" && stage !== "restarting") setDialogOpen(false);
+    open: () => {
+      setDialogOpen(true);
+      if (shouldCheckWhenOpened(stageRef.current)) void checkUpdate(false);
     },
+    close: () => setDialogOpen(false),
     check: checkUpdate,
     install,
   };
@@ -203,14 +243,14 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-panel-strong/45 p-4 backdrop-blur-[3px]" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) updater.close(); }}>
-      <section className="flex max-h-[min(680px,calc(100vh-32px))] w-full max-w-[620px] flex-col overflow-hidden rounded-[24px] border border-edge bg-panel shadow-panel" role="dialog" aria-modal="true" aria-labelledby="update-dialog-title">
+      <section className="flex max-h-[min(680px,calc(100vh-32px))] w-full max-w-[620px] flex-col overflow-hidden rounded-[14px] border border-edge bg-panel shadow-panel" role="dialog" aria-modal="true" aria-labelledby="update-dialog-title">
         <header className="flex items-start gap-4 border-b border-edge px-6 py-5">
           <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent"><Sparkles size={22} /></span>
           <div className="min-w-0 flex-1">
             <h2 className="m-0 text-lg font-black" id="update-dialog-title">{t.title}</h2>
             <p className="mb-0 mt-1 text-[11px] leading-5 text-muted">{status}</p>
           </div>
-          <button className="grid size-9 shrink-0 place-items-center rounded-xl text-muted hover:bg-panel-muted hover:text-foreground disabled:opacity-35" aria-label={language === "en-US" ? "Close" : "关闭"} disabled={busy && updater.stage !== "checking"} onClick={updater.close}><X size={18} /></button>
+          <button className="grid size-9 shrink-0 place-items-center rounded-lg text-muted hover:bg-panel-muted hover:text-foreground" aria-label={language === "en-US" ? "Close" : "关闭"} onClick={updater.close}><X size={18} /></button>
         </header>
 
         <div className="min-h-0 overflow-y-auto px-6 py-5">
@@ -222,7 +262,11 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
           {updater.updateAvailable && (
             <div className="mt-5">
               <div className="mb-2 flex items-center justify-between gap-3"><h3 className="m-0 text-xs font-extrabold">{t.releaseNotes}</h3>{published && <time className="text-[9px] text-subtle">{published}</time>}</div>
-              <div className="max-h-[260px] overflow-y-auto whitespace-pre-wrap rounded-2xl border border-edge-soft bg-panel-muted px-4 py-3 text-[10px] leading-5 text-muted">{updater.notes || t.noReleaseNotes}</div>
+              <div className="max-h-[260px] overflow-y-auto rounded-xl border border-edge-soft bg-panel-muted px-4 py-3 text-[10px] leading-5 text-muted">
+                <Suspense fallback={<p className="my-2 animate-pulse text-subtle">{t.loadingReleaseNotes}</p>}>
+                  <MarkdownPreview markdown={updater.notes || t.noReleaseNotes} />
+                </Suspense>
+              </div>
             </div>
           )}
 
@@ -233,12 +277,17 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
                 <i className={`block h-full rounded-full bg-accent transition-[width] ${updater.totalBytes === 0 ? "w-1/3 animate-pulse" : ""}`} style={updater.totalBytes > 0 ? { width: `${updater.progress}%` } : undefined} />
               </div>
               <p className="mb-0 mt-2 text-right text-[10px] font-extrabold text-accent">{updater.totalBytes > 0 ? `${updater.progress}%` : t.preparingDownload}</p>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[9px] text-muted">
+                <span>{t.speed}: {updater.bytesPerSecond > 0 ? `${formatBytes(updater.bytesPerSecond, language)}/s` : "—"}</span>
+                <span>{updater.proxyActive ? t.proxyDetected : t.proxyDirect}</span>
+              </div>
+              <p className="mb-0 mt-2 text-[9px] leading-4 text-subtle">{t.backgroundHint}</p>
             </div>
           )}
         </div>
 
         <footer className="flex flex-wrap justify-end gap-2 border-t border-edge bg-panel-muted/55 px-6 py-4">
-          <button className="inline-flex min-h-10 items-center justify-center rounded-xl border border-edge bg-panel px-4 text-[11px] font-bold text-muted hover:bg-panel-muted disabled:opacity-40" disabled={busy && updater.stage !== "checking"} onClick={updater.close}>{t.later}</button>
+          <button className="inline-flex min-h-10 items-center justify-center rounded-xl border border-edge bg-panel px-4 text-[11px] font-bold text-muted hover:bg-panel-muted" onClick={updater.close}>{updater.stage === "downloading" ? t.backgroundDownload : t.later}</button>
           {updater.updateAvailable && updater.stage !== "downloading" && updater.stage !== "restarting" ? (
             <button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-accent px-5 text-[11px] font-bold text-inverse hover:bg-accent-strong" onClick={() => void updater.install()}><DownloadCloud size={16} />{t.install}</button>
           ) : (
