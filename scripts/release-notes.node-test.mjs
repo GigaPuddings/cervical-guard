@@ -30,13 +30,14 @@ describe("conventional commits and release notes", () => {
     assert.equal(groups.other.length, 1);
   });
 
-  it("renders bilingual Markdown used by GitHub and updater notes", () => {
+  it("renders English Markdown used by GitHub and updater notes", () => {
     const notes = renderReleaseNotes({
       tag: "v0.2.0",
       previousTag: "v0.1.0",
       commits: [{ hash: "abcdef123", subject: "feat(updater): add automatic notes" }],
     });
-    assert.match(notes, /Features \/ 新功能/);
+    assert.match(notes, /### Features/);
+    assert.doesNotMatch(notes, /新功能|问题修复|性能优化|其他变更/);
     assert.match(notes, /\*\*updater:\*\* add automatic notes/);
     assert.match(notes, /Changes since v0\.1\.0/);
   });

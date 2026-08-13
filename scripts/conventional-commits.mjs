@@ -1,13 +1,13 @@
 export const COMMIT_TYPES = [
-  ["feat", "New feature / 新功能"],
-  ["fix", "Bug fix / 问题修复"],
-  ["perf", "Performance / 性能优化"],
-  ["refactor", "Refactor / 重构"],
-  ["docs", "Documentation / 文档"],
-  ["test", "Tests / 测试"],
-  ["build", "Build system / 构建"],
-  ["ci", "CI workflow / 持续集成"],
-  ["chore", "Maintenance / 维护"],
+  ["feat", "New feature"],
+  ["fix", "Bug fix"],
+  ["perf", "Performance"],
+  ["refactor", "Refactor"],
+  ["docs", "Documentation"],
+  ["test", "Tests"],
+  ["build", "Build system"],
+  ["ci", "CI workflow"],
+  ["chore", "Maintenance"],
 ];
 
 const allowedTypes = COMMIT_TYPES.map(([type]) => type).join("|");

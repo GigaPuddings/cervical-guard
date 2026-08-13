@@ -20,7 +20,7 @@
 4. 新版本必须高于已发布或已撤回的所有标签版本。命令会同步更新 `package.json`、`src-tauri/Cargo.toml`、`Cargo.lock` 和 `tauri.conf.json`，执行完整测试并提交版本变更。
 5. 测试通过后会预览自动更新日志，再推送代码和标签、等待 GitHub Actions 完成，并检查正式 Release 中存在 NSIS、签名和 `latest.json` 后才返回成功。
 
-更新日志读取上一个稳定版本标签到当前标签之间的提交，按 `feat`、`fix`、`perf`、其他变更生成双语 Markdown。无法识别的历史提交会进入“其他变更”，不会阻止发布；自动版本提交 `chore: release vX.Y.Z` 不进入日志。GitHub Release 正文和 Tauri `latest.json` 的 `notes` 使用同一份内容。
+更新日志读取上一个稳定版本标签到当前标签之间的提交，生成英文 Markdown，并按 `Features`、`Fixes`、`Performance`、`Other Changes` 分类。无法识别的历史提交会进入 `Other Changes`，不会阻止发布；自动版本提交 `chore: release vX.Y.Z` 不进入日志。GitHub Release 正文和 Tauri `latest.json` 的 `notes` 使用同一份内容。
 
 ## 撤回并替换最新版本
 

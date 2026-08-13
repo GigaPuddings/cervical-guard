@@ -63,6 +63,13 @@ export function remoteTagVersions() {
   return [...new Set(versions)];
 }
 
+export function localTagVersions() {
+  const output = capture("git", ["tag", "--list", "v*"]);
+  return output.split(/\r?\n/)
+    .map((tag) => /^v(\d+\.\d+\.\d+)$/.exec(tag)?.[1] ?? null)
+    .filter(Boolean);
+}
+
 export function latestPublishedRelease() {
   const releases = JSON.parse(capture("gh", [
     "release", "list", "--limit", "100",

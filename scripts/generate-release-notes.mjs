@@ -36,10 +36,10 @@ export function renderReleaseNotes({ tag, previousTag, commits }) {
   const version = tag.replace(/^v/, "");
   const groups = categorizeCommits(commits);
   const sections = [
-    ["feat", "Features / 新功能"],
-    ["fix", "Fixes / 问题修复"],
-    ["perf", "Performance / 性能优化"],
-    ["other", "Other Changes / 其他变更"],
+    ["feat", "Features"],
+    ["fix", "Fixes"],
+    ["perf", "Performance"],
+    ["other", "Other Changes"],
   ];
   const lines = [`## Cervical Guard ${version}`, ""];
   for (const [key, title] of sections) {
@@ -48,7 +48,7 @@ export function renderReleaseNotes({ tag, previousTag, commits }) {
     for (const commit of groups[key]) lines.push(`- ${commit.breaking ? "**BREAKING:** " : ""}${commit.text} (\`${commit.hash.slice(0, 7)}\`)`);
     lines.push("");
   }
-  if (!commits.length || sections.every(([key]) => groups[key].length === 0)) lines.push("- No user-visible changes / 无面向用户的变更", "");
+  if (!commits.length || sections.every(([key]) => groups[key].length === 0)) lines.push("- No user-visible changes", "");
   lines.push(`_Changes since ${previousTag ?? "the initial commit"}._`);
   return `${lines.join("\n")}\n`;
 }

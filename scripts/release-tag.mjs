@@ -8,6 +8,7 @@ import {
   inherit,
   inheritPnpm,
   latestPublishedRelease,
+  localTagVersions,
   promptValue,
   remoteTagVersions,
 } from "./release-utils.mjs";
@@ -72,17 +73,22 @@ function waitForReleaseRun(tag, commit) {
 const projectVersion = configuredVersions();
 inherit("gh", ["auth", "status"]);
 const latestRelease = latestPublishedRelease();
-const tagVersions = remoteTagVersions();
-const highestUsed = highestVersion([...tagVersions, latestRelease?.version]);
+const localVersions = localTagVersions();
+const remoteVersions = remoteTagVersions();
+const highestUsed = highestVersion([...localVersions, ...remoteVersions, latestRelease?.version]);
 const suggestedVersion = highestUsed
   ? (compareVersions(projectVersion, highestUsed) > 0 ? projectVersion : bumpPatch(highestUsed))
   : projectVersion;
 
 console.log(`Latest published version: ${latestRelease?.version ?? "none"}`);
-console.log(`Highest version previously used by a tag: ${highestVersion(tagVersions) ?? "none"}`);
+console.log(`Highest local tag version: ${highestVersion(localVersions) ?? "none"}`);
+console.log(`Highest remote tag version: ${highestVersion(remoteVersions) ?? "none"}`);
 console.log(`Current project version: ${projectVersion}`);
 
 const version = requestedVersion ?? await promptValue("New release version", suggestedVersion);
+if (localVersions.includes(version)) {
+  throw new Error(`Local tag v${version} already exists. Choose a higher version, for example ${bumpPatch(version)}.`);
+}
 if (compareVersions(version, projectVersion) < 0) throw new Error(`New version ${version} cannot be lower than project version ${projectVersion}.`);
 if (highestUsed && compareVersions(version, highestUsed) <= 0) {
   throw new Error(`New version ${version} must be greater than the previously used version ${highestUsed}. Withdrawn versions are not reused.`);
