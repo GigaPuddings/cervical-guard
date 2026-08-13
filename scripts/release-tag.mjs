@@ -6,8 +6,8 @@ import {
   compareVersions,
   highestVersion,
   inherit,
+  inheritPnpm,
   latestPublishedRelease,
-  pnpmCommand,
   promptValue,
   remoteTagVersions,
 } from "./release-utils.mjs";
@@ -105,7 +105,7 @@ try {
     writeVersion(version);
     versionPrepared = true;
   }
-  inherit(pnpmCommand, ["check"]);
+  inheritPnpm(["check"]);
 } catch (error) {
   if (versionPrepared) for (const [path, contents] of backups) writeFileSync(path, contents);
   throw error;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { bumpPatch, compareVersions, highestVersion, parseVersion } from "./release-utils.mjs";
+import { bumpPatch, capturePnpm, compareVersions, highestVersion, parseVersion } from "./release-utils.mjs";
 
 describe("release version helpers", () => {
   it("compares stable semantic versions numerically", () => {
@@ -21,5 +21,9 @@ describe("release version helpers", () => {
   it("rejects prerelease and incomplete versions", () => {
     assert.throws(() => parseVersion("1.0"));
     assert.throws(() => parseVersion("1.0.0-beta.1"));
+  });
+
+  it("can launch pnpm as a child process on this platform", () => {
+    assert.match(capturePnpm(["--version"]), /^\d+\.\d+\.\d+/);
   });
 });

@@ -2,8 +2,6 @@ import { execFileSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
-export const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-
 export function capture(command, args, options = {}) {
   return execFileSync(command, args, {
     encoding: "utf8",
@@ -13,6 +11,22 @@ export function capture(command, args, options = {}) {
 
 export function inherit(command, args) {
   execFileSync(command, args, { stdio: "inherit" });
+}
+
+function pnpmInvocation(args) {
+  if (process.platform !== "win32") return { command: "pnpm", args };
+  const command = process.env.ComSpec ?? `${process.env.SystemRoot ?? "C:\\Windows"}\\System32\\cmd.exe`;
+  return { command, args: ["/d", "/s", "/c", "pnpm", ...args] };
+}
+
+export function capturePnpm(args) {
+  const invocation = pnpmInvocation(args);
+  return capture(invocation.command, invocation.args);
+}
+
+export function inheritPnpm(args) {
+  const invocation = pnpmInvocation(args);
+  inherit(invocation.command, invocation.args);
 }
 
 export function parseVersion(value) {
