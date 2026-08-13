@@ -25,6 +25,7 @@ const ISLAND_COMPACT_HEIGHT: f64 = 76.0;
 const ISLAND_DETAIL_WIDTH: f64 = 360.0;
 const ISLAND_DETAIL_HEIGHT: f64 = 176.0;
 const ISLAND_MENU_HEIGHT: f64 = 166.0;
+const MAIN_TRAY_ID: &str = "main-tray";
 /// 屏幕顶部触发悬停展开的热区（逻辑像素）：以岛中心为圆心的半宽与高度。
 /// 高度覆盖整个紧凑窗口 + 上方余量，避免光标快速划过窄热区时来不及展开。
 const ISLAND_HOT_ZONE_HALF_WIDTH: f64 = 210.0;
@@ -213,6 +214,7 @@ fn island_may_overlay_content(app: &AppHandle) -> bool {
 
 fn island_surface_needed(
     settings: &AppSettings,
+    lifecycle: MonitoringLifecycle,
     reminder_active: bool,
     break_active: bool,
     behavior_notice_active: bool,
@@ -226,8 +228,18 @@ fn island_surface_needed(
             || (break_active && settings.island_break_enabled)
             || (behavior_notice_active && settings.island_head_down_enabled)
             || (away_notice && settings.island_away_enabled)
-            || settings.island_persistent_status_enabled
+            || (settings.island_persistent_status_enabled
+                && persistent_status_lifecycle(lifecycle))
             || menu_open)
+}
+
+fn persistent_status_lifecycle(lifecycle: MonitoringLifecycle) -> bool {
+    matches!(
+        lifecycle,
+        MonitoringLifecycle::Monitoring
+            | MonitoringLifecycle::Degraded
+            | MonitoringLifecycle::Paused
+    )
 }
 
 #[cfg(target_os = "windows")]
@@ -629,7 +641,7 @@ fn collapse_island_detail(app: AppHandle, context: State<'_, AppContext>) -> Res
         resize_island(&app_handle, ISLAND_COMPACT_WIDTH, ISLAND_COMPACT_HEIGHT);
         // 提醒或离开提示仍在时保留窗口（前端已切回对应卡片），否则隐藏。
         if snapshot.settings.island_persistent_status_enabled
-            && snapshot.lifecycle == MonitoringLifecycle::Monitoring
+            && persistent_status_lifecycle(snapshot.lifecycle)
             && !has_reminder
             && !away_notice
         {
@@ -669,7 +681,7 @@ fn dismiss_behavior_notice(app: AppHandle, context: State<'_, AppContext>) -> Re
         ui.suppress_hover_until_cursor_exit();
     }
     if snapshot.settings.island_persistent_status_enabled
-        && snapshot.lifecycle == MonitoringLifecycle::Monitoring
+        && persistent_status_lifecycle(snapshot.lifecycle)
     {
         present_persistent_status(&app, &snapshot);
     } else {
@@ -1178,12 +1190,77 @@ async fn stop_vision(context: State<'_, AppContext>) -> Result<(), String> {
         .map_err(|error| format!("摄像头会话线程异常:{error}"))?
 }
 
+fn tray_menu(
+    app: &AppHandle,
+    update_version: Option<&str>,
+    language: &str,
+) -> tauri::Result<Menu<tauri::Wry>> {
+    let english = language == "en-US";
+    let show = MenuItem::with_id(
+        app,
+        "show",
+        if english {
+            "Open Health Reminder"
+        } else {
+            "打开健康提醒"
+        },
+        true,
+        None::<&str>,
+    )?;
+    let update_text = match (english, update_version) {
+        (true, Some(version)) => format!("● Update available: v{version}"),
+        (false, Some(version)) => format!("● 发现新版本 v{version}"),
+        (true, None) => "Check for updates".to_string(),
+        (false, None) => "检查更新".to_string(),
+    };
+    let update = MenuItem::with_id(app, "update", update_text, true, None::<&str>)?;
+    let pause = MenuItem::with_id(
+        app,
+        "pause",
+        if english {
+            "Pause / Resume monitoring"
+        } else {
+            "暂停 / 恢复检测"
+        },
+        true,
+        None::<&str>,
+    )?;
+    let quit = MenuItem::with_id(
+        app,
+        "quit",
+        if english { "Quit" } else { "退出" },
+        true,
+        None::<&str>,
+    )?;
+    Menu::with_items(app, &[&show, &update, &pause, &quit])
+}
+
+#[tauri::command]
+fn set_update_tray_status(
+    app: AppHandle,
+    version: Option<String>,
+    language: String,
+) -> Result<(), String> {
+    let menu = tray_menu(&app, version.as_deref(), &language)
+        .map_err(|error| error.to_string())?;
+    let tray = app
+        .tray_by_id(MAIN_TRAY_ID)
+        .ok_or_else(|| "系统托盘尚未就绪".to_string())?;
+    tray.set_menu(Some(menu))
+        .map_err(|error| error.to_string())?;
+    let tooltip = match (language.as_str(), version.as_deref()) {
+        ("en-US", Some(value)) => format!("Health Reminder · Update v{value} available"),
+        (_, Some(value)) => format!("健康提醒 · 新版本 v{value} 可用"),
+        ("en-US", None) => "Health Reminder · Posture & Sitting".to_string(),
+        _ => "健康提醒 · 姿态与久坐".to_string(),
+    };
+    tray.set_tooltip(Some(tooltip))
+        .map_err(|error| error.to_string())
+}
+
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "打开健康提醒", true, None::<&str>)?;
-    let pause = MenuItem::with_id(app, "pause", "暂停 / 恢复检测", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &pause, &quit])?;
-    let mut builder = TrayIconBuilder::new()
+    let menu = tray_menu(app.handle(), None, "zh-CN")?;
+    let mut builder = TrayIconBuilder::with_id(MAIN_TRAY_ID)
         .tooltip("健康提醒 · 姿态与久坐")
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -1201,6 +1278,10 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         })
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main_window(app),
+            "update" => {
+                show_main_window(app);
+                let _ = app.emit("updater://open", ());
+            }
             "pause" => {
                 if let Some(context) = app.try_state::<AppContext>() {
                     if let Ok(mut core) = context.core.lock() {
@@ -1380,7 +1461,7 @@ pub fn run() {
                         .unwrap_or(true);
                     if snapshot.settings.island_persistent_status_enabled
                         && snapshot.current_reminder.is_none()
-                        && snapshot.lifecycle == MonitoringLifecycle::Monitoring
+                        && persistent_status_lifecycle(snapshot.lifecycle)
                         && !passive_notice_active
                         && !matches!(
                             snapshot.behavior,
@@ -1494,6 +1575,7 @@ pub fn run() {
                     let settings = &snapshot.settings;
                     let surface_needed = island_surface_needed(
                         settings,
+                        snapshot.lifecycle,
                         reminder_active,
                         break_active,
                         behavior_notice_active,
@@ -1873,6 +1955,7 @@ pub fn run() {
             dismiss_behavior_notice,
             set_island_menu_open,
             mute_island,
+            set_update_tray_status,
         ])
         .run(tauri::generate_context!())
         .expect("健康提醒应用启动失败");
@@ -1882,9 +1965,10 @@ pub fn run() {
 mod island_ui_tests {
     use super::{
         break_action_hit, guard_protocol_response, island_action_hit, island_surface_needed,
-        reminder_sound_enabled, IslandUiState, ISLAND_RETURN_CONFIRMATION,
+        persistent_status_lifecycle, reminder_sound_enabled, IslandUiState,
+        ISLAND_RETURN_CONFIRMATION,
     };
-    use crate::model::AppSettings;
+    use crate::model::{AppSettings, MonitoringLifecycle};
 
     #[test]
     fn reminder_island_is_served_inside_the_guard_protocol() {
@@ -1977,17 +2061,73 @@ mod island_ui_tests {
         let mut settings = AppSettings::default();
         settings.island_persistent_status_enabled = false;
         assert!(!island_surface_needed(
-            &settings, false, false, false, false, false, false
+            &settings,
+            MonitoringLifecycle::Monitoring,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
         ));
 
         settings.island_persistent_status_enabled = true;
         assert!(island_surface_needed(
-            &settings, false, false, false, false, false, false
+            &settings,
+            MonitoringLifecycle::Monitoring,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+        ));
+        assert!(island_surface_needed(
+            &settings,
+            MonitoringLifecycle::Paused,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+        ));
+        assert!(!island_surface_needed(
+            &settings,
+            MonitoringLifecycle::Calibrating,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
         ));
 
         settings.island_enabled = false;
         assert!(!island_surface_needed(
-            &settings, true, true, true, true, true, false
+            &settings,
+            MonitoringLifecycle::Monitoring,
+            true,
+            true,
+            true,
+            true,
+            true,
+            false
+        ));
+    }
+
+    #[test]
+    fn persistent_status_represents_monitoring_paused_and_degraded_lifecycles() {
+        assert!(persistent_status_lifecycle(
+            MonitoringLifecycle::Monitoring
+        ));
+        assert!(persistent_status_lifecycle(MonitoringLifecycle::Paused));
+        assert!(persistent_status_lifecycle(
+            MonitoringLifecycle::Degraded
+        ));
+        assert!(!persistent_status_lifecycle(MonitoringLifecycle::Break));
+        assert!(!persistent_status_lifecycle(
+            MonitoringLifecycle::Calibrating
         ));
     }
 

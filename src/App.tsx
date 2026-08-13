@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Calibration } from "./features/calibration/Calibration";
 import { Dashboard } from "./features/dashboard/Dashboard";
 import { Onboarding } from "./features/onboarding/Onboarding";
+import { HelpDialog } from "./features/help/HelpDialog";
 import { BreakIsland } from "./features/reminders/BreakIsland";
 import { ReminderOverlay } from "./features/reminders/ReminderOverlay";
 import { coreClient } from "./infra/client";
@@ -14,6 +15,7 @@ import { downloadText } from "./utils";
 import { useVisionMonitor } from "./vision/useVisionMonitor";
 import { languageOf, localizeBackendMessage, type Language } from "./i18n";
 import { useRuntimeI18n } from "./runtimeI18n";
+import { UpdateDialog, useAppUpdater } from "./features/updates/UpdatePanel";
 
 function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "操作暂时无法完成";
@@ -24,11 +26,13 @@ export function App() {
   const [showIntro, setShowIntro] = useState(false);
   const [cameraFailure, setCameraFailure] = useState<string | null>(null);
   const [cameraSetupError, setCameraSetupError] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const ingesting = useRef(false);
   const snapshotEpoch = useRef(0);
   const lastReminderId = useRef<string | null>(null);
   const fallbackStarted = useRef(false);
   const language = languageOf(snapshot?.settings.language);
+  const updater = useAppUpdater(language);
   useRuntimeI18n(language);
 
   const run = useCallback(async (operation: () => Promise<AppSnapshot>) => {
@@ -240,6 +244,8 @@ export function App() {
         streamUrl={vision.streamUrl}
         previewError={vision.previewError}
         onRetryPreview={vision.retryPreview}
+        onHelp={() => setHelpOpen(true)}
+        updater={updater}
         landmarks={vision.landmarks}
         error={localizeBackendMessage(cameraFailure ?? error, language)}
         onPage={setPage}
@@ -252,6 +258,8 @@ export function App() {
         onDeleteData={() => void deleteData()}
         onRecalibrate={() => void recalibrate()}
       />
+      <HelpDialog open={helpOpen} language={language} onClose={() => setHelpOpen(false)} />
+      <UpdateDialog updater={updater} language={language} />
       {/* 浏览器开发环境保留页面内预览；桌面端只允许 Rust 创建的独立
           reminder-island 窗口承载提醒，避免在主窗口顶部重复渲染“伪灵动岛”。 */}
       {!isTauri() && snapshot.currentReminder && (

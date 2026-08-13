@@ -20,6 +20,7 @@ import {
   Menu,
   Pause,
   Play,
+  RefreshCw,
   RotateCcw,
   ScanFace,
   Settings,
@@ -38,8 +39,9 @@ import { SelectField } from "../../components/SelectField";
 import { StatusPill } from "../../components/StatusPill";
 import { WeatherPage } from "../weather/WeatherPage";
 import { TodayWeatherHeader } from "../weather/WeatherOverview";
-import { UpdatePanel } from "../updates/UpdatePanel";
 import { copy, languageOf } from "../../i18n";
+import type { AppUpdater } from "../updates/UpdatePanel";
+import packageJson from "../../../package.json";
 import type { AppPage, AppSettings, AppSnapshot, BehaviorHistoryEvent, DailyStatistics, LandmarkPoint } from "../../types";
 import type { VisionStatus } from "../../vision/useVisionMonitor";
 import { cn, compactDuration, formatDuration, percent } from "../../utils";
@@ -64,6 +66,8 @@ interface DashboardProps {
   onDeleteData: () => void;
   onRecalibrate: () => void;
   onRetryPreview: () => void;
+  onHelp: () => void;
+  updater: AppUpdater;
 }
 
 const navItems: Array<{ page: AppPage; label: string; icon: typeof LayoutDashboard }> = [
@@ -75,6 +79,8 @@ const navItems: Array<{ page: AppPage; label: string; icon: typeof LayoutDashboa
 
 export function Dashboard(props: DashboardProps) {
   const { snapshot, page, onPage } = props;
+  const language = languageOf(snapshot.settings.language);
+  const updaterCopy = copy[language].updater;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false);
   return (
@@ -137,9 +143,13 @@ export function Dashboard(props: DashboardProps) {
             <div className="min-w-0"><strong className="block text-xs">本地隐私模式</strong><small className="mt-0.5 block truncate text-[9px] text-muted">画面不保存、不上传</small></div>
           </div>
         </div>
-        <div className="mt-3 px-2">
-          <button className="flex h-9 items-center gap-2 text-xs font-semibold text-muted hover:text-accent"><CircleHelp size={16} /> 使用帮助</button>
-          <p className="mt-1 text-[8px] text-subtle">健康提醒 v0.1.0 · 行为提醒工具</p>
+        <div className="mt-3 grid gap-0.5 px-2">
+          <button className="relative flex h-9 items-center gap-2 text-xs font-semibold text-muted hover:text-accent" onClick={props.updater.open}>
+            <RefreshCw size={16} /> {updaterCopy.check}
+            {props.updater.updateAvailable && <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-1 text-[8px] font-extrabold text-warning"><i className="size-1.5 rounded-full bg-warning" />{updaterCopy.badge}</span>}
+          </button>
+          <button className="flex h-9 items-center gap-2 text-xs font-semibold text-muted hover:text-accent" onClick={props.onHelp}><CircleHelp size={16} /> {language === "en-US" ? "Help" : "使用帮助"}</button>
+          <p className="mt-1 text-[8px] text-subtle">{language === "en-US" ? `Health Reminder v${packageJson.version} · Behavior reminder` : `健康提醒 v${packageJson.version} · 行为提醒工具`}</p>
         </div>
       </aside>
 
@@ -568,7 +578,7 @@ function SettingsPage({ snapshot, error, onSave, onExport, onDeleteData, onRecal
 
         {activeTab === "runtime" && <div><div className={fieldGridClass}><label><span>工作开始</span><input type="time" value={draft.workdayStart} onChange={(event) => set("workdayStart", event.target.value)} /></label><label><span>工作结束</span><input type="time" value={draft.workdayEnd} onChange={(event) => set("workdayEnd", event.target.value)} /></label></div><div className="grid gap-x-5 md:grid-cols-2"><Toggle checked={draft.runInBackground} onChange={(value) => set("runInBackground", value)} label="关闭窗口后在后台运行" description="隐藏后继续低功耗监测" /><Toggle checked={draft.autostart} onChange={(value) => set("autostart", value)} label="开机自动启动" description="登录系统后自动守护工作节奏" /><Toggle checked={draft.weekendEnabled} onChange={(value) => set("weekendEnabled", value)} label="周末启用" description="周六和周日也执行工作时段规则" /></div></div>}
 
-        {activeTab === "privacy" && <div className="grid gap-4 md:grid-cols-2"><div><div className="rounded-[14px] border border-edge-soft bg-panel-muted p-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent-soft text-accent"><ShieldCheck size={18} /></span><div><strong className="text-xs">原始画面不落盘</strong><p className="m-0 mt-0.5 text-[8px] text-muted">摄像头画面仅在本机内存中处理。</p></div></div><ul className="mt-3 grid list-none gap-2 p-0 text-[9px] text-muted [&_li]:flex [&_li]:items-center [&_li]:gap-2 [&_svg]:text-accent"><li><Eye size={14} /> 不进行身份识别</li><li><CameraOff size={14} /> 不保存视频或截图</li><li><LockKeyhole size={14} /> 不上传摄像头数据</li></ul><Toggle checked={draft.statisticsEnabled} onChange={(value) => set("statisticsEnabled", value)} label="保存本地行为统计" description="关闭后停止累计，已有数据不自动删除" /></div><div className="mt-4 rounded-[14px] border border-edge-soft bg-panel-muted p-4"><strong className="text-xs">{copy[languageOf(draft.language)].settings.language}</strong><SelectField value={draft.language} options={[{ value: "zh-CN", label: copy[languageOf(draft.language)].settings.chinese }, { value: "en-US", label: copy[languageOf(draft.language)].settings.english }]} ariaLabel={copy[languageOf(draft.language)].settings.language} onChange={(value) => set("language", value)} /></div></div><div><div className="rounded-[14px] border border-edge-soft bg-panel-muted p-4"><strong className="text-xs">本地数据管理</strong><p className="mb-3 mt-1 text-[9px] leading-4 text-muted">导出内容仅包含日期、时长、次数与结构化行为历史，不含图片。</p><div className="grid gap-2"><button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-edge bg-panel px-4 text-[10px] font-bold text-muted hover:bg-panel-muted" onClick={onExport}><Download size={16} /> 导出 CSV</button><button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-[10px] font-bold text-danger hover:bg-danger-soft" onClick={onDeleteData}><Trash2 size={16} /> 删除全部统计与行为历史</button></div><p className="mb-0 mt-3 text-[8px] leading-3.5 text-subtle">健康提醒用于日常行为提醒，不用于疾病诊断或替代医生建议。</p></div><UpdatePanel language={languageOf(draft.language)} /></div></div>}
+        {activeTab === "privacy" && <div className="grid gap-4 md:grid-cols-2"><div><div className="rounded-[14px] border border-edge-soft bg-panel-muted p-4"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-accent-soft text-accent"><ShieldCheck size={18} /></span><div><strong className="text-xs">原始画面不落盘</strong><p className="m-0 mt-0.5 text-[8px] text-muted">摄像头画面仅在本机内存中处理。</p></div></div><ul className="mt-3 grid list-none gap-2 p-0 text-[9px] text-muted [&_li]:flex [&_li]:items-center [&_li]:gap-2 [&_svg]:text-accent"><li><Eye size={14} /> 不进行身份识别</li><li><CameraOff size={14} /> 不保存视频或截图</li><li><LockKeyhole size={14} /> 不上传摄像头数据</li></ul><Toggle checked={draft.statisticsEnabled} onChange={(value) => set("statisticsEnabled", value)} label="保存本地行为统计" description="关闭后停止累计，已有数据不自动删除" /></div><div className="mt-4 rounded-[14px] border border-edge-soft bg-panel-muted p-4"><strong className="text-xs">{copy[languageOf(draft.language)].settings.language}</strong><SelectField value={draft.language} options={[{ value: "zh-CN", label: copy[languageOf(draft.language)].settings.chinese }, { value: "en-US", label: copy[languageOf(draft.language)].settings.english }]} ariaLabel={copy[languageOf(draft.language)].settings.language} onChange={(value) => set("language", value)} /></div></div><div><div className="rounded-[14px] border border-edge-soft bg-panel-muted p-4"><strong className="text-xs">本地数据管理</strong><p className="mb-3 mt-1 text-[9px] leading-4 text-muted">导出内容仅包含日期、时长、次数与结构化行为历史，不含图片。</p><div className="grid gap-2"><button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-edge bg-panel px-4 text-[10px] font-bold text-muted hover:bg-panel-muted" onClick={onExport}><Download size={16} /> 导出 CSV</button><button className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-[10px] font-bold text-danger hover:bg-danger-soft" onClick={onDeleteData}><Trash2 size={16} /> 删除全部统计与行为历史</button></div><p className="mb-0 mt-3 text-[8px] leading-3.5 text-subtle">健康提醒用于日常行为提醒，不用于疾病诊断或替代医生建议。</p></div></div></div>}
         </section>
       </div>
 
