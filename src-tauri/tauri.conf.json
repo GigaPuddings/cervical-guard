@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "健康提醒",
+  "productName": "Cervical Guard",
   "version": "0.1.0",
   "identifier": "com.cervicalguard.desktop",
   "build": {

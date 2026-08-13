@@ -2,6 +2,8 @@
 
 本项目使用 Tauri 2 updater、NSIS 和 GitHub Releases。更新包必须签名；签名校验不能关闭。
 
+安装包产品名固定为英文 `Cervical Guard`，避免 GitHub Release 对非 ASCII 资产名进行截断或改写。
+
 ## 一次性配置
 
 1. 私钥保存在本机 `C:\Users\zero\.tauri\cervical-guard.key`，不要提交、发送或丢失。公钥已写入 `src-tauri/tauri.conf.json`。
