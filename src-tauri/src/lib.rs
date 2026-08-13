@@ -12,7 +12,7 @@ use model::{
     AppSettings, AppSnapshot, BehaviorHistoryEvent, BehaviorState, CalibrationResult,
     DailyStatistics, MonitoringLifecycle, MonitoringMode, PermissionState, VisionObservation,
 };
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
@@ -318,11 +318,23 @@ pub struct AppContext {
     update_ui: Mutex<UpdateUiState>,
 }
 
-#[derive(Default)]
+#[derive(Clone)]
 struct UpdateUiState {
     stage: String,
     version: Option<String>,
     progress: u8,
+    language: String,
+}
+
+impl Default for UpdateUiState {
+    fn default() -> Self {
+        Self {
+            stage: "idle".to_string(),
+            version: None,
+            progress: 0,
+            language: "zh-CN".to_string(),
+        }
+    }
 }
 
 impl UpdateUiState {
@@ -883,6 +895,7 @@ fn ingest_observation(
 
 #[tauri::command]
 fn pause_monitoring(
+    app: AppHandle,
     context: State<'_, AppContext>,
     minutes: Option<u64>,
 ) -> Result<AppSnapshot, String> {
@@ -893,6 +906,7 @@ fn pause_monitoring(
     core.pause(minutes);
     let snapshot = core.snapshot();
     persist(&context, &core)?;
+    drop(core);
     {
         let database = context
             .database
@@ -910,17 +924,22 @@ fn pause_monitoring(
         .map_err(|_| "状态锁已损坏".to_string())?
         .request_pause_status();
     suppress_island_hover_until_cursor_exit(&context)?;
+    rebuild_tray_menu(&app)?;
     Ok(snapshot)
 }
 
 #[tauri::command]
-fn resume_monitoring(context: State<'_, AppContext>) -> Result<AppSnapshot, String> {
+fn resume_monitoring(
+    app: AppHandle,
+    context: State<'_, AppContext>,
+) -> Result<AppSnapshot, String> {
     let snapshot = snapshot_after(&context, RuntimeState::resume)?;
     context
         .island_ui
         .lock()
         .map_err(|_| "状态锁已损坏".to_string())?
         .clear_pause_status_request();
+    rebuild_tray_menu(&app)?;
     Ok(snapshot)
 }
 
@@ -964,6 +983,7 @@ fn start_break(app: AppHandle, context: State<'_, AppContext>) -> Result<AppSnap
         .map_err(|_| "状态锁已损坏".to_string())?
         .remember_main_visibility_for_break(restore_main_after_break);
     let _ = app.emit("monitoring://snapshot", &snapshot);
+    rebuild_tray_menu(&app)?;
     present_break_island(&app, &snapshot);
     Ok(snapshot)
 }
@@ -1001,6 +1021,7 @@ fn end_break(app: AppHandle, context: State<'_, AppContext>) -> Result<AppSnapsh
         restore
     };
     let _ = app.emit("monitoring://snapshot", &snapshot);
+    rebuild_tray_menu(&app)?;
     if restore_main_after_break {
         show_main_window(&app);
     } else {
@@ -1349,40 +1370,96 @@ fn tray_menu(
     update_version: Option<&str>,
     update_progress: u8,
     language: &str,
+    lifecycle: MonitoringLifecycle,
 ) -> tauri::Result<Menu<tauri::Wry>> {
     let english = language == "en-US";
+    let monitoring_active = matches!(
+        lifecycle,
+        MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded
+    );
+    let pause_action_enabled = monitoring_active || lifecycle == MonitoringLifecycle::Paused;
+    let status = MenuItem::with_id(
+        app,
+        "monitoring-status",
+        match (english, lifecycle) {
+            (true, MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded) => {
+                "Health Reminder · Monitoring"
+            }
+            (true, MonitoringLifecycle::Paused) => "Health Reminder · Monitoring paused",
+            (true, MonitoringLifecycle::Break) => "Health Reminder · Break in progress",
+            (true, MonitoringLifecycle::Initializing) => "Health Reminder · Starting monitoring",
+            (true, MonitoringLifecycle::Calibrating) => "Health Reminder · Calibrating",
+            (true, MonitoringLifecycle::Unavailable) => "Health Reminder · Monitoring unavailable",
+            (false, MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded) => {
+                "健康提醒 · 正在检测"
+            }
+            (false, MonitoringLifecycle::Paused) => "健康提醒 · 检测已暂停",
+            (false, MonitoringLifecycle::Break) => "健康提醒 · 主动休息中",
+            (false, MonitoringLifecycle::Initializing) => "健康提醒 · 正在启动检测",
+            (false, MonitoringLifecycle::Calibrating) => "健康提醒 · 正在校准",
+            (false, MonitoringLifecycle::Unavailable) => "健康提醒 · 检测不可用",
+        },
+        false,
+        None::<&str>,
+    )?;
+    let separator_after_status = PredefinedMenuItem::separator(app)?;
     let show = MenuItem::with_id(
         app,
         "show",
         if english {
-            "Open Health Reminder"
+            "Open main window"
         } else {
-            "打开健康提醒"
+            "打开主窗口"
         },
         true,
         None::<&str>,
     )?;
-    let update_text = update_tray_text(english, update_stage, update_version, update_progress);
-    let update = MenuItem::with_id(app, "update", update_text, true, None::<&str>)?;
     let pause = MenuItem::with_id(
         app,
         "pause",
-        if english {
-            "Pause / Resume monitoring"
-        } else {
-            "暂停 / 恢复检测"
+        match (english, lifecycle) {
+            (true, MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded) => {
+                "Pause monitoring"
+            }
+            (true, MonitoringLifecycle::Paused) => "Resume monitoring",
+            (true, MonitoringLifecycle::Break) => "Break controls are in the main window",
+            (true, _) => "Monitoring controls unavailable",
+            (false, MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded) => "暂停检测",
+            (false, MonitoringLifecycle::Paused) => "恢复检测",
+            (false, MonitoringLifecycle::Break) => "请在主窗口结束休息",
+            (false, _) => "检测操作暂不可用",
         },
-        true,
+        pause_action_enabled,
         None::<&str>,
     )?;
+    let separator_before_update = PredefinedMenuItem::separator(app)?;
+    let update_text = update_tray_text(english, update_stage, update_version, update_progress);
+    let update = MenuItem::with_id(app, "update", update_text, true, None::<&str>)?;
+    let separator_before_quit = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(
         app,
         "quit",
-        if english { "Quit" } else { "退出" },
+        if english {
+            "Quit Health Reminder"
+        } else {
+            "退出健康提醒"
+        },
         !matches!(update_stage, "downloading" | "restarting"),
         None::<&str>,
     )?;
-    Menu::with_items(app, &[&show, &update, &pause, &quit])
+    Menu::with_items(
+        app,
+        &[
+            &status,
+            &separator_after_status,
+            &show,
+            &pause,
+            &separator_before_update,
+            &update,
+            &separator_before_quit,
+            &quit,
+        ],
+    )
 }
 
 fn update_tray_text(english: bool, stage: &str, version: Option<&str>, progress: u8) -> String {
@@ -1401,13 +1478,97 @@ fn update_tray_text(english: bool, stage: &str, version: Option<&str>, progress:
         (false, "restarting", _) => "更新已安装 · 正在重启…".to_string(),
         (true, "error", _) => "Update failed · Click to retry".to_string(),
         (false, "error", _) => "更新失败 · 点击重试".to_string(),
-        (true, "latest", _) => "Up to date · Check again".to_string(),
-        (false, "latest", _) => "已是最新版本 · 再次检查".to_string(),
-        (true, _, Some(version)) => format!("● Update available: v{version}"),
-        (false, _, Some(version)) => format!("● 发现新版本 v{version}"),
-        (true, _, None) => "Check for updates".to_string(),
-        (false, _, None) => "检查更新".to_string(),
+        (true, "latest", _) => "Check for updates (up to date)".to_string(),
+        (false, "latest", _) => "检查更新（当前已是最新）".to_string(),
+        (true, _, Some(version)) => format!("View update v{version}"),
+        (false, _, Some(version)) => format!("查看新版本 v{version}"),
+        (true, _, None) => "Check for updates…".to_string(),
+        (false, _, None) => "检查更新…".to_string(),
     }
+}
+
+fn tray_update_badge_visible(stage: &str, version: Option<&str>) -> bool {
+    version.is_some() && matches!(stage, "available" | "downloading" | "error")
+}
+
+fn tray_icon_with_update_badge(base: &tauri::image::Image<'_>) -> tauri::image::Image<'static> {
+    let width = base.width();
+    let height = base.height();
+    let mut rgba = base.rgba().to_vec();
+    let shortest = width.min(height);
+    if shortest < 4 || rgba.len() != (width * height * 4) as usize {
+        return tauri::image::Image::new_owned(rgba, width, height);
+    }
+
+    let badge_radius = (shortest / 6).max(2);
+    let border = (shortest / 32).max(1);
+    let center_x = width.saturating_sub(badge_radius + border);
+    let center_y = badge_radius + border;
+    let mut paint_circle = |radius: u32, color: [u8; 4]| {
+        let radius_squared = i64::from(radius) * i64::from(radius);
+        let left = center_x.saturating_sub(radius);
+        let top = center_y.saturating_sub(radius);
+        let right = (center_x + radius).min(width.saturating_sub(1));
+        let bottom = (center_y + radius).min(height.saturating_sub(1));
+        for y in top..=bottom {
+            for x in left..=right {
+                let dx = i64::from(x) - i64::from(center_x);
+                let dy = i64::from(y) - i64::from(center_y);
+                if dx * dx + dy * dy <= radius_squared {
+                    let offset = ((y * width + x) * 4) as usize;
+                    rgba[offset..offset + 4].copy_from_slice(&color);
+                }
+            }
+        }
+    };
+    paint_circle(badge_radius + border, [244, 247, 242, 255]);
+    paint_circle(badge_radius, [48, 181, 91, 255]);
+    tauri::image::Image::new_owned(rgba, width, height)
+}
+
+fn set_tray_update_badge(app: &AppHandle, visible: bool) -> Result<(), String> {
+    let tray = app
+        .tray_by_id(MAIN_TRAY_ID)
+        .ok_or_else(|| "系统托盘尚未就绪".to_string())?;
+    let Some(base) = app.default_window_icon() else {
+        return Ok(());
+    };
+    let icon = if visible {
+        tray_icon_with_update_badge(base)
+    } else {
+        base.clone()
+    };
+    tray.set_icon(Some(icon)).map_err(|error| error.to_string())
+}
+
+fn rebuild_tray_menu(app: &AppHandle) -> Result<(), String> {
+    let context = app
+        .try_state::<AppContext>()
+        .ok_or_else(|| "应用状态尚未就绪".to_string())?;
+    let update = context
+        .update_ui
+        .lock()
+        .map_err(|_| "更新状态锁已损坏".to_string())?
+        .clone();
+    let lifecycle = context
+        .core
+        .lock()
+        .map_err(|_| "状态锁已损坏".to_string())?
+        .snapshot()
+        .lifecycle;
+    let menu = tray_menu(
+        app,
+        &update.stage,
+        update.version.as_deref(),
+        update.progress,
+        &update.language,
+        lifecycle,
+    )
+    .map_err(|error| error.to_string())?;
+    app.tray_by_id(MAIN_TRAY_ID)
+        .ok_or_else(|| "系统托盘尚未就绪".to_string())?
+        .set_menu(Some(menu))
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1423,21 +1584,14 @@ fn set_update_tray_status(
             update_ui.stage.clone_from(&stage);
             update_ui.version.clone_from(&version);
             update_ui.progress = progress.min(100);
+            update_ui.language.clone_from(&language);
         }
     }
-    let menu = tray_menu(
-        &app,
-        &stage,
-        version.as_deref(),
-        progress.min(100),
-        &language,
-    )
-    .map_err(|error| error.to_string())?;
+    rebuild_tray_menu(&app)?;
     let tray = app
         .tray_by_id(MAIN_TRAY_ID)
         .ok_or_else(|| "系统托盘尚未就绪".to_string())?;
-    tray.set_menu(Some(menu))
-        .map_err(|error| error.to_string())?;
+    set_tray_update_badge(&app, tray_update_badge_visible(&stage, version.as_deref()))?;
     let update_label = update_tray_text(
         language == "en-US",
         &stage,
@@ -1458,7 +1612,13 @@ fn set_update_tray_status(
 }
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
-    let menu = tray_menu(app.handle(), "idle", None, 0, "zh-CN")?;
+    let lifecycle = app
+        .state::<AppContext>()
+        .core
+        .lock()
+        .map(|mut core| core.snapshot().lifecycle)
+        .unwrap_or(MonitoringLifecycle::Paused);
+    let menu = tray_menu(app.handle(), "idle", None, 0, "zh-CN", lifecycle)?;
     let mut builder = TrayIconBuilder::with_id(MAIN_TRAY_ID)
         .tooltip("健康提醒 · 姿态与久坐")
         .menu(&menu)
@@ -1483,7 +1643,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             }
             "pause" => {
                 if let Some(context) = app.try_state::<AppContext>() {
-                    if let Ok(mut core) = context.core.lock() {
+                    let updated = if let Ok(mut core) = context.core.lock() {
                         let snapshot = core.snapshot();
                         if matches!(
                             snapshot.lifecycle,
@@ -1502,7 +1662,13 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                         }
                         let updated = core.snapshot();
                         let _ = persist(&context, &core);
+                        Some(updated)
+                    } else {
+                        None
+                    };
+                    if let Some(updated) = updated {
                         let _ = app.emit("monitoring://snapshot", updated);
+                        let _ = rebuild_tray_menu(app);
                     }
                 }
             }
@@ -1583,6 +1749,16 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(1));
                 let mut last_behavior = BehaviorState::Unknown;
+                let mut last_lifecycle = handle
+                    .try_state::<AppContext>()
+                    .and_then(|context| {
+                        context
+                            .core
+                            .lock()
+                            .ok()
+                            .map(|mut core| core.snapshot().lifecycle)
+                    })
+                    .unwrap_or(MonitoringLifecycle::Unavailable);
                 let mut behavior_started_at = Instant::now();
                 let mut behavior_started_wall = chrono::Utc::now().to_rfc3339();
                 let mut last_break_count = handle
@@ -1612,6 +1788,10 @@ pub fn run() {
                     if let Some(reminder) = reminder {
                         let sound_enabled = reminder_sound_enabled(&snapshot.settings);
                         present_reminder_island(&handle, reminder, sound_enabled);
+                    }
+                    if snapshot.lifecycle != last_lifecycle {
+                        let _ = rebuild_tray_menu(&handle);
+                        last_lifecycle = snapshot.lifecycle;
                     }
                     if snapshot.lifecycle == MonitoringLifecycle::Break {
                         let _ = handle.emit_to("reminder-island", "island://break", &snapshot);
@@ -2199,8 +2379,9 @@ mod island_ui_tests {
     use super::{
         break_action_hit, guard_protocol_response, island_action_hit, island_height_for_menu,
         island_status_enabled, island_surface_needed, normalized_proxy, reminder_sound_enabled,
-        update_tray_text, IslandUiState, UpdateUiState, ISLAND_COMPACT_HEIGHT,
-        ISLAND_DETAIL_HEIGHT, ISLAND_MENU_HEIGHT, ISLAND_RETURN_CONFIRMATION,
+        tray_icon_with_update_badge, tray_update_badge_visible, update_tray_text, IslandUiState,
+        UpdateUiState, ISLAND_COMPACT_HEIGHT, ISLAND_DETAIL_HEIGHT, ISLAND_MENU_HEIGHT,
+        ISLAND_RETURN_CONFIRMATION,
     };
     use crate::model::{AppSettings, MonitoringLifecycle};
 
@@ -2210,6 +2391,7 @@ mod island_ui_tests {
             stage: "downloading".to_string(),
             version: Some("0.2.0".to_string()),
             progress: 37,
+            ..UpdateUiState::default()
         };
         assert!(downloading.keeps_app_alive());
         assert_eq!(
@@ -2222,6 +2404,33 @@ mod island_ui_tests {
             "↓ 正在下载 v0.2.0 · 37%"
         );
         assert!(!UpdateUiState::default().keeps_app_alive());
+    }
+
+    #[test]
+    fn updater_badge_only_marks_a_known_available_update() {
+        assert!(tray_update_badge_visible("available", Some("0.2.0")));
+        assert!(tray_update_badge_visible("downloading", Some("0.2.0")));
+        assert!(tray_update_badge_visible("error", Some("0.2.0")));
+        assert!(!tray_update_badge_visible("latest", None));
+        assert!(!tray_update_badge_visible("checking", None));
+    }
+
+    #[test]
+    fn updater_badge_paints_the_tray_icons_top_right_corner() {
+        let base = tauri::image::Image::new_owned(vec![0; 32 * 32 * 4], 32, 32);
+        let badged = tray_icon_with_update_badge(&base);
+        assert_eq!((badged.width(), badged.height()), (32, 32));
+        let green_pixels = badged
+            .rgba()
+            .chunks_exact(4)
+            .filter(|pixel| pixel[0..4] == [48, 181, 91, 255])
+            .count();
+        assert!(green_pixels > 40);
+        let center_offset = ((6 * 32 + 26) * 4) as usize;
+        assert_eq!(
+            &badged.rgba()[center_offset..center_offset + 4],
+            &[48, 181, 91, 255]
+        );
     }
 
     #[test]
