@@ -186,7 +186,7 @@ fn reminder_sound_enabled(settings: &AppSettings) -> bool {
     settings.sound_enabled && !settings.meeting_mode
 }
 
-fn island_feature_enabled(app: &AppHandle, feature: fn(&AppSettings) -> bool) -> bool {
+fn island_feature_enabled(app: &AppHandle, feature: impl FnOnce(&AppSettings) -> bool) -> bool {
     let Some(context) = app.try_state::<AppContext>() else {
         return false;
     };
@@ -228,18 +228,28 @@ fn island_surface_needed(
             || (break_active && settings.island_break_enabled)
             || (behavior_notice_active && settings.island_head_down_enabled)
             || (away_notice && settings.island_away_enabled)
-            || (settings.island_persistent_status_enabled
-                && persistent_status_lifecycle(lifecycle))
+            || island_status_enabled(settings, lifecycle)
             || menu_open)
 }
 
-fn persistent_status_lifecycle(lifecycle: MonitoringLifecycle) -> bool {
-    matches!(
-        lifecycle,
-        MonitoringLifecycle::Monitoring
-            | MonitoringLifecycle::Degraded
-            | MonitoringLifecycle::Paused
-    )
+fn island_status_enabled(settings: &AppSettings, lifecycle: MonitoringLifecycle) -> bool {
+    match lifecycle {
+        MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded => {
+            settings.island_persistent_status_enabled
+        }
+        MonitoringLifecycle::Paused => settings.island_paused_status_enabled,
+        _ => false,
+    }
+}
+
+fn island_height_for_menu(open: bool, detail_expanded: bool) -> f64 {
+    if open {
+        ISLAND_MENU_HEIGHT
+    } else if detail_expanded {
+        ISLAND_DETAIL_HEIGHT
+    } else {
+        ISLAND_COMPACT_HEIGHT
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -551,7 +561,7 @@ fn present_island_detail(app: &AppHandle, snapshot: &AppSnapshot) {
     let payload = snapshot.clone();
     let schedule_result = app.run_on_main_thread(move || {
         if !island_feature_enabled(&app_handle, |settings| {
-            settings.island_persistent_status_enabled
+            island_status_enabled(settings, payload.lifecycle)
         }) {
             return;
         }
@@ -578,7 +588,7 @@ fn present_persistent_status(app: &AppHandle, snapshot: &AppSnapshot) {
     let payload = snapshot.clone();
     let _ = app.run_on_main_thread(move || {
         if !island_feature_enabled(&app_handle, |settings| {
-            settings.island_persistent_status_enabled
+            island_status_enabled(settings, payload.lifecycle)
         }) {
             return;
         }
@@ -640,8 +650,7 @@ fn collapse_island_detail(app: AppHandle, context: State<'_, AppContext>) -> Res
     let _ = app.run_on_main_thread(move || {
         resize_island(&app_handle, ISLAND_COMPACT_WIDTH, ISLAND_COMPACT_HEIGHT);
         // 提醒或离开提示仍在时保留窗口（前端已切回对应卡片），否则隐藏。
-        if snapshot.settings.island_persistent_status_enabled
-            && persistent_status_lifecycle(snapshot.lifecycle)
+        if island_status_enabled(&snapshot.settings, snapshot.lifecycle)
             && !has_reminder
             && !away_notice
         {
@@ -680,9 +689,7 @@ fn dismiss_behavior_notice(app: AppHandle, context: State<'_, AppContext>) -> Re
             .map_err(|_| "状态锁已损坏".to_string())?;
         ui.suppress_hover_until_cursor_exit();
     }
-    if snapshot.settings.island_persistent_status_enabled
-        && persistent_status_lifecycle(snapshot.lifecycle)
-    {
+    if island_status_enabled(&snapshot.settings, snapshot.lifecycle) {
         present_persistent_status(&app, &snapshot);
     } else {
         hide_island_window(&app);
@@ -711,6 +718,14 @@ fn update_island_peek_state(
         None => serde_json::json!({ "active": false, "x": 0.0, "y": 0.0 }),
     };
     let _ = app.emit_to("reminder-island", "island://peek-through", payload);
+}
+
+fn update_island_hover_state(app: &AppHandle, current: &mut bool, next: bool) {
+    if *current == next {
+        return;
+    }
+    *current = next;
+    let _ = app.emit_to("reminder-island", "island://pointer-hover", next);
 }
 
 fn persist(context: &AppContext, core: &RuntimeState) -> Result<(), String> {
@@ -1006,7 +1021,7 @@ fn update_settings(
     }
     let snapshot = snapshot_after(&context, |core| core.update_settings(settings))?;
     if !snapshot.settings.island_enabled
-        || (!snapshot.settings.island_persistent_status_enabled
+        || (!island_status_enabled(&snapshot.settings, snapshot.lifecycle)
             && snapshot.current_reminder.is_none()
             && snapshot.lifecycle != MonitoringLifecycle::Break)
     {
@@ -1045,19 +1060,19 @@ fn set_island_menu_open(
     context: State<'_, AppContext>,
     open: bool,
 ) -> Result<(), String> {
-    context
-        .island_ui
-        .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?
-        .menu_open = open;
+    let detail_expanded = {
+        let mut ui = context
+            .island_ui
+            .lock()
+            .map_err(|_| "状态锁已损坏".to_string())?;
+        let detail_expanded = ui.detail_expanded;
+        ui.menu_open = open;
+        detail_expanded
+    };
     window
         .set_size(tauri::Size::Logical(tauri::LogicalSize::new(
             ISLAND_COMPACT_WIDTH,
-            if open {
-                ISLAND_MENU_HEIGHT
-            } else {
-                ISLAND_COMPACT_HEIGHT
-            },
+            island_height_for_menu(open, detail_expanded),
         )))
         .map_err(|error| error.to_string())?;
     window
@@ -1241,8 +1256,7 @@ fn set_update_tray_status(
     version: Option<String>,
     language: String,
 ) -> Result<(), String> {
-    let menu = tray_menu(&app, version.as_deref(), &language)
-        .map_err(|error| error.to_string())?;
+    let menu = tray_menu(&app, version.as_deref(), &language).map_err(|error| error.to_string())?;
     let tray = app
         .tray_by_id(MAIN_TRAY_ID)
         .ok_or_else(|| "系统托盘尚未就绪".to_string())?;
@@ -1459,14 +1473,14 @@ pub fn run() {
                         .lock()
                         .map(|ui| ui.away_notice || ui.behavior_notice_active())
                         .unwrap_or(true);
-                    if snapshot.settings.island_persistent_status_enabled
+                    if island_status_enabled(&snapshot.settings, snapshot.lifecycle)
                         && snapshot.current_reminder.is_none()
-                        && persistent_status_lifecycle(snapshot.lifecycle)
                         && !passive_notice_active
-                        && !matches!(
-                            snapshot.behavior,
-                            BehaviorState::HeadDown | BehaviorState::NoPerson
-                        )
+                        && (snapshot.lifecycle == MonitoringLifecycle::Paused
+                            || !matches!(
+                                snapshot.behavior,
+                                BehaviorState::HeadDown | BehaviorState::NoPerson
+                            ))
                     {
                         present_persistent_status(&handle, &snapshot);
                     }
@@ -1541,6 +1555,7 @@ pub fn run() {
                 let mut content_windows_were_hidden = false;
                 let mut action_buttons_capturing = false;
                 let mut pointer_peeking: Option<(f64, f64)> = None;
+                let mut pointer_hovering = false;
                 loop {
                     tokio::time::sleep(if idle {
                         Duration::from_secs(1)
@@ -1592,6 +1607,7 @@ pub fn run() {
                         }
                         action_buttons_capturing = false;
                         pointer_peeking = None;
+                        update_island_hover_state(&hover_handle, &mut pointer_hovering, false);
                         hover_inside = false;
                         expanded_at = None;
                         hot_zone_hits = 0;
@@ -1608,7 +1624,7 @@ pub fn run() {
                                 present_reminder_island(&hover_handle, reminder, false);
                             } else if break_active {
                                 present_break_island(&hover_handle, &snapshot);
-                            } else if settings.island_persistent_status_enabled {
+                            } else if island_status_enabled(settings, snapshot.lifecycle) {
                                 present_persistent_status(&hover_handle, &snapshot);
                             }
                         }
@@ -1628,6 +1644,7 @@ pub fn run() {
                         content_windows_were_hidden = false;
                         action_buttons_capturing = false;
                         update_island_peek_state(&hover_handle, &mut pointer_peeking, None);
+                        update_island_hover_state(&hover_handle, &mut pointer_hovering, false);
                         hover_inside = false;
                         expanded_at = None;
                         hot_zone_hits = 0;
@@ -1675,8 +1692,14 @@ pub fn run() {
                         let _ = window.set_ignore_cursor_events(false);
                         action_buttons_capturing = true;
                         update_island_peek_state(&hover_handle, &mut pointer_peeking, None);
+                        update_island_hover_state(&hover_handle, &mut pointer_hovering, true);
                         continue;
                     }
+                    update_island_hover_state(
+                        &hover_handle,
+                        &mut pointer_hovering,
+                        pointer_in_island.is_some(),
+                    );
                     let over_close =
                         pointer_in_island.is_some_and(|(x, y)| x >= 330.0 && y <= 26.0);
                     if over_close {
@@ -1695,7 +1718,8 @@ pub fn run() {
                         update_island_peek_state(
                             &hover_handle,
                             &mut pointer_peeking,
-                            pointer_in_island.filter(|_| !over_action),
+                            pointer_in_island
+                                .filter(|_| settings.island_peek_through_enabled && !over_action),
                         );
                         hover_inside = false;
                         expanded_at = None;
@@ -1710,7 +1734,7 @@ pub fn run() {
                         update_island_peek_state(
                             &hover_handle,
                             &mut pointer_peeking,
-                            pointer_in_island,
+                            pointer_in_island.filter(|_| settings.island_peek_through_enabled),
                         );
                         hover_inside = false;
                         expanded_at = None;
@@ -1727,7 +1751,8 @@ pub fn run() {
                         update_island_peek_state(
                             &hover_handle,
                             &mut pointer_peeking,
-                            pointer_in_island.filter(|_| !over_action),
+                            pointer_in_island
+                                .filter(|_| settings.island_peek_through_enabled && !over_action),
                         );
                         hover_inside = false;
                         expanded_at = None;
@@ -1746,7 +1771,7 @@ pub fn run() {
                     update_island_peek_state(
                         &hover_handle,
                         &mut pointer_peeking,
-                        pointer_in_island,
+                        pointer_in_island.filter(|_| settings.island_peek_through_enabled),
                     );
                     // 热区命中判断（物理坐标）：优先使用窗口实际位置计算热区，
                     // 确保热区与窗口真实位置对齐；窗口位置不可用时回退到显示器中心。
@@ -1859,13 +1884,7 @@ pub fn run() {
                     hover_inside = inside;
                     if inside {
                         let eligible = snapshot.current_reminder.is_none()
-                            && snapshot.settings.island_persistent_status_enabled
-                            && matches!(
-                                snapshot.lifecycle,
-                                MonitoringLifecycle::Monitoring
-                                    | MonitoringLifecycle::Degraded
-                                    | MonitoringLifecycle::Paused
-                            );
+                            && island_status_enabled(&snapshot.settings, snapshot.lifecycle);
                         let Ok(mut ui) = context.island_ui.lock() else {
                             continue;
                         };
@@ -1964,8 +1983,9 @@ pub fn run() {
 #[cfg(test)]
 mod island_ui_tests {
     use super::{
-        break_action_hit, guard_protocol_response, island_action_hit, island_surface_needed,
-        persistent_status_lifecycle, reminder_sound_enabled, IslandUiState,
+        break_action_hit, guard_protocol_response, island_action_hit, island_height_for_menu,
+        island_status_enabled, island_surface_needed, reminder_sound_enabled, IslandUiState,
+        ISLAND_COMPACT_HEIGHT, ISLAND_DETAIL_HEIGHT, ISLAND_MENU_HEIGHT,
         ISLAND_RETURN_CONFIRMATION,
     };
     use crate::model::{AppSettings, MonitoringLifecycle};
@@ -2060,6 +2080,7 @@ mod island_ui_tests {
     fn hover_polling_stays_idle_when_no_island_surface_is_enabled() {
         let mut settings = AppSettings::default();
         settings.island_persistent_status_enabled = false;
+        settings.island_paused_status_enabled = false;
         assert!(!island_surface_needed(
             &settings,
             MonitoringLifecycle::Monitoring,
@@ -2072,6 +2093,7 @@ mod island_ui_tests {
         ));
 
         settings.island_persistent_status_enabled = true;
+        settings.island_paused_status_enabled = true;
         assert!(island_surface_needed(
             &settings,
             MonitoringLifecycle::Monitoring,
@@ -2117,18 +2139,42 @@ mod island_ui_tests {
     }
 
     #[test]
-    fn persistent_status_represents_monitoring_paused_and_degraded_lifecycles() {
-        assert!(persistent_status_lifecycle(
+    fn status_switches_control_monitoring_and_paused_lifecycles_independently() {
+        let mut settings = AppSettings::default();
+        assert!(!island_status_enabled(
+            &settings,
             MonitoringLifecycle::Monitoring
         ));
-        assert!(persistent_status_lifecycle(MonitoringLifecycle::Paused));
-        assert!(persistent_status_lifecycle(
+        assert!(island_status_enabled(
+            &settings,
+            MonitoringLifecycle::Paused
+        ));
+
+        settings.island_persistent_status_enabled = true;
+        settings.island_paused_status_enabled = false;
+        assert!(island_status_enabled(
+            &settings,
+            MonitoringLifecycle::Monitoring
+        ));
+        assert!(island_status_enabled(
+            &settings,
             MonitoringLifecycle::Degraded
         ));
-        assert!(!persistent_status_lifecycle(MonitoringLifecycle::Break));
-        assert!(!persistent_status_lifecycle(
-            MonitoringLifecycle::Calibrating
+        assert!(!island_status_enabled(
+            &settings,
+            MonitoringLifecycle::Paused
         ));
+        assert!(!island_status_enabled(
+            &settings,
+            MonitoringLifecycle::Break
+        ));
+    }
+
+    #[test]
+    fn closing_menu_restores_the_surface_that_was_underneath() {
+        assert_eq!(island_height_for_menu(true, true), ISLAND_MENU_HEIGHT);
+        assert_eq!(island_height_for_menu(false, true), ISLAND_DETAIL_HEIGHT);
+        assert_eq!(island_height_for_menu(false, false), ISLAND_COMPACT_HEIGHT);
     }
 
     #[test]

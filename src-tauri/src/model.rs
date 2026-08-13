@@ -168,6 +168,10 @@ pub struct AppSettings {
     pub island_break_enabled: bool,
     #[serde(default)]
     pub island_persistent_status_enabled: bool,
+    #[serde(default = "default_enabled")]
+    pub island_paused_status_enabled: bool,
+    #[serde(default = "default_enabled")]
+    pub island_peek_through_enabled: bool,
     #[serde(default)]
     pub island_allow_with_main_window: bool,
     #[serde(default)]
@@ -208,6 +212,8 @@ impl Default for AppSettings {
             island_head_down_enabled: true,
             island_break_enabled: true,
             island_persistent_status_enabled: false,
+            island_paused_status_enabled: true,
+            island_peek_through_enabled: true,
             island_allow_with_main_window: false,
             island_permanent_close_enabled: false,
         }
@@ -335,6 +341,17 @@ mod settings_tests {
         json.as_object_mut().unwrap().remove("quietHoursEnabled");
         let settings: AppSettings = serde_json::from_value(json).unwrap();
         assert!(settings.quiet_hours_enabled);
+    }
+
+    #[test]
+    fn legacy_settings_enable_new_island_interactions_during_migration() {
+        let mut json = serde_json::to_value(AppSettings::default()).unwrap();
+        let object = json.as_object_mut().unwrap();
+        object.remove("islandPausedStatusEnabled");
+        object.remove("islandPeekThroughEnabled");
+        let settings: AppSettings = serde_json::from_value(json).unwrap();
+        assert!(settings.island_paused_status_enabled);
+        assert!(settings.island_peek_through_enabled);
     }
 }
 

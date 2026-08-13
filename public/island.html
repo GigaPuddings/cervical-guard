@@ -67,7 +67,8 @@
     button:disabled { opacity: .45; cursor: default; }
     .break-action { display: none; width: 68px; }
     .island-close { position: absolute; z-index: 5; right: 6px; top: 4px; display: none; width: 20px; height: 20px; border: 0; border-radius: 7px; color: #90a097; background: transparent; font-size: 13px; }
-    body.ready:not(.mode-reminder):not(.mode-returned):not(.mode-behavior) .island-close { display: block; }
+    body.ready.island-hovered:not(.mode-reminder):not(.mode-returned):not(.mode-behavior) .island-close,
+    body.ready.menu-open:not(.mode-reminder):not(.mode-returned):not(.mode-behavior) .island-close { display: block; }
     .close-menu { position: absolute; z-index: 8; right: 7px; top: 27px; display: none; width: 146px; padding: 5px; border: 1px solid rgba(255,255,255,.10); border-radius: 11px; background: rgba(18,27,21,.99); box-shadow: 0 10px 28px rgba(0,0,0,.32); }
     body.menu-open .close-menu { display: grid; gap: 3px; }
     .close-menu button { width: 100%; height: 27px; padding: 0 8px; border: 0; text-align: left; }
@@ -266,6 +267,10 @@
         }
         body.classList.toggle('peek-through', active);
       };
+      island.addEventListener('mouseenter', () => body.classList.add('island-hovered'));
+      island.addEventListener('mouseleave', () => {
+        if (!body.classList.contains('menu-open')) body.classList.remove('island-hovered');
+      });
       const enterMode = (next) => {
         clearTimers(); transitionVersion += 1; mode = next;
         const keepPeekThrough = body.classList.contains('peek-through');
@@ -274,6 +279,10 @@
         requestAnimationFrame(() => body.classList.add('ready'));
       };
       const setMenu = async (open) => {
+        if (open) {
+          clearTimeout(collapseTimer);
+          collapseTimer = 0;
+        }
         if (open && api) {
           try {
             const snapshot = await api.core.invoke('get_app_snapshot');
@@ -282,6 +291,7 @@
           } catch { /* 保留上次设置 */ }
         }
         body.classList.toggle('menu-open', open);
+        if (open) body.classList.add('island-hovered');
         if (api) {
           try { await api.core.invoke('set_island_menu_open', { open }); } catch { /* 窗口关闭时忽略 */ }
         }
@@ -371,7 +381,11 @@
         hideTimer = setTimeout(() => void dismissBehavior(), 6000);
       };
       const renderStatus = (snapshot) => {
-        if (!snapshot || !snapshot.settings || !snapshot.settings.islandPersistentStatusEnabled) return;
+        if (!snapshot || !snapshot.settings) return;
+        const enabled = snapshot.lifecycle === 'paused'
+          ? snapshot.settings.islandPausedStatusEnabled !== false
+          : snapshot.settings.islandPersistentStatusEnabled;
+        if (!enabled) return;
         applyLanguage(snapshot);
         lastSnapshot = snapshot;
         if (snapshot.lifecycle === 'paused') setIcon('pause');
@@ -479,7 +493,7 @@
           nextReminderAt: new Date(Date.now() + 1170 * 1000).toISOString(), reminderRemainingSeconds: 1170,
           today: { seatedSeconds: 8100, breakCount: 2, awaySeconds: 540 },
           pausedUntil: null,
-          settings: { language: 'zh-CN', islandPersistentStatusEnabled: true, islandPermanentCloseEnabled: true },
+          settings: { language: 'zh-CN', islandPersistentStatusEnabled: true, islandPausedStatusEnabled: true, islandPeekThroughEnabled: true, islandPermanentCloseEnabled: true },
         };
         if (location.hash === '#detail') renderDetail(preview);
         else if (location.hash === '#status') renderStatus(preview);
@@ -506,6 +520,9 @@
         else renderDetail(event.payload);
       });
       void api.event.listen('island://hover-left', scheduleCollapse);
+      void api.event.listen('island://pointer-hover', (event) => {
+        body.classList.toggle('island-hovered', Boolean(event.payload));
+      });
       void api.event.listen('island://peek-through', (event) => setPeekThrough(event.payload));
       void api.event.listen('weather://summary', (event) => updateWeather(event.payload));
 
@@ -516,7 +533,7 @@
         permanentClose.hidden = !permanentCloseAllowed;
         if (snapshot.lifecycle === 'break') renderBreak(snapshot);
         else if (snapshot.currentReminder) renderReminder(snapshot.currentReminder);
-        else if (snapshot.settings && snapshot.settings.islandPersistentStatusEnabled) renderStatus(snapshot);
+        else if (snapshot.settings && (snapshot.lifecycle === 'paused' ? snapshot.settings.islandPausedStatusEnabled !== false : snapshot.settings.islandPersistentStatusEnabled)) renderStatus(snapshot);
         else setTimeout(() => { if (mode === 'idle') void hide(false); }, 500);
       }).catch(() => void hide(false));
     })();

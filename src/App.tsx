@@ -160,6 +160,12 @@ export function App() {
     if (cameraActive) fallbackStarted.current = false;
   }, [cameraActive]);
 
+  // 手动暂停会按设计停止摄像头会话，不属于设备故障。恢复后等待当前会话
+  // 自己产生错误或超时，不能沿用暂停前残留的失败横幅。
+  useEffect(() => {
+    if (snapshot?.lifecycle === "paused" || cameraActive) setCameraFailure(null);
+  }, [cameraActive, snapshot?.lifecycle]);
+
   if (!snapshot) {
     return <div className="grid h-full place-content-center justify-items-center gap-3.5 bg-canvas text-xs text-muted"><div className="grid size-[52px] place-items-center rounded-[17px_17px_17px_6px] bg-accent text-[19px] font-extrabold text-inverse shadow-panel">健</div><strong>本地状态暂不可用</strong><span>请关闭后重新打开应用</span>{error && <small className="text-danger">{error}</small>}</div>;
   }
@@ -247,10 +253,10 @@ export function App() {
         onHelp={() => setHelpOpen(true)}
         updater={updater}
         landmarks={vision.landmarks}
-        error={localizeBackendMessage(cameraFailure ?? error, language)}
+        error={localizeBackendMessage(snapshot.lifecycle === "paused" ? null : cameraFailure ?? error, language)}
         onPage={setPage}
-        onPause={(minutes) => void run(() => coreClient.pauseMonitoring(minutes))}
-        onResume={() => void run(() => coreClient.resumeMonitoring())}
+        onPause={(minutes) => { setCameraFailure(null); void run(() => coreClient.pauseMonitoring(minutes)); }}
+        onResume={() => { setCameraFailure(null); void run(() => coreClient.resumeMonitoring()); }}
         onStartBreak={() => void run(() => coreClient.startBreak())}
         onEndBreak={() => void run(() => coreClient.endBreak())}
         onSaveSettings={saveSettings}

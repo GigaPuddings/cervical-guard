@@ -44,6 +44,8 @@ const defaultSettings: AppSettings = {
   islandHeadDownEnabled: true,
   islandBreakEnabled: true,
   islandPersistentStatusEnabled: false,
+  islandPausedStatusEnabled: true,
+  islandPeekThroughEnabled: true,
   islandAllowWithMainWindow: false,
   islandPermanentCloseEnabled: false,
 };

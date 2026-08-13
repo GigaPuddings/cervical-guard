@@ -82,6 +82,8 @@ export interface AppSettings {
   islandHeadDownEnabled: boolean;
   islandBreakEnabled: boolean;
   islandPersistentStatusEnabled: boolean;
+  islandPausedStatusEnabled: boolean;
+  islandPeekThroughEnabled: boolean;
   islandAllowWithMainWindow: boolean;
   islandPermanentCloseEnabled: boolean;
 }

@@ -32,6 +32,8 @@ const settingsSchema = z.object({
   islandHeadDownEnabled: z.boolean().default(true),
   islandBreakEnabled: z.boolean().default(true),
   islandPersistentStatusEnabled: z.boolean().default(false),
+  islandPausedStatusEnabled: z.boolean().default(true),
+  islandPeekThroughEnabled: z.boolean().default(true),
   islandAllowWithMainWindow: z.boolean().default(false),
   islandPermanentCloseEnabled: z.boolean().default(false),
 });
