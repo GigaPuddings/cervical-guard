@@ -187,8 +187,23 @@ function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks,
   const progress = percent(snapshot.seatedSeconds, thresholdSeconds);
   const reminderTiming = reminderTimingCopy(snapshot, schedulePause);
   const isCamera = snapshot.monitoringMode === "camera";
+  const canEnableCamera = !isCamera && (snapshot.lifecycle === "monitoring" || snapshot.lifecycle === "degraded");
   // 追踪应用内预览首帧是否已渲染,确保骨架不会在画面到达前出现。
   const [imgLoaded, setImgLoaded] = useState(false);
+  const detectionPanelTitle = snapshot.lifecycle === "paused"
+    ? "检测已暂停"
+    : snapshot.lifecycle === "break"
+      ? "休息进行中"
+      : isCamera
+        ? (visionStatus === "ready" ? (imgLoaded ? "正在实时检测" : "正在连接视频流") : "正在连接检测")
+        : "定时提醒模式";
+  const detectionPanelDescription = snapshot.lifecycle === "paused"
+    ? (isCamera ? "恢复后继续本地姿态识别" : "恢复后继续普通定时提醒")
+    : snapshot.lifecycle === "break"
+      ? (isCamera ? "结束休息后继续本地姿态识别" : "结束休息后继续普通定时提醒")
+      : isCamera
+        ? qualityLabel(snapshot.frameQuality)
+        : "仅根据启用时间提供久坐提醒";
   const streamSession = streamUrl?.startsWith("data:image/")
     ? "event-preview"
     : (streamUrl?.split("?", 1)[0] ?? null);
@@ -266,7 +281,7 @@ function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks,
             ) : (
               <div className="grid size-full -translate-y-2 place-content-center justify-items-center gap-2 text-muted">
                 <ScanFace size={82} strokeWidth={1.15} />
-                {!isCamera && <button type="button" className="relative z-20 min-h-9 rounded-lg border border-inverse/20 bg-panel-strong/45 px-4 py-2 text-[10px] font-bold text-inverse shadow-control hover:bg-panel-strong/65" onClick={onEnableCamera}>开启姿势检测</button>}
+                {canEnableCamera && <button type="button" className="relative z-20 min-h-9 rounded-lg border border-inverse/20 bg-panel-strong/45 px-4 py-2 text-[10px] font-bold text-inverse shadow-control hover:bg-panel-strong/65" onClick={onEnableCamera}>开启姿势检测</button>}
               </div>
             )}
             {isCamera && isVisionLoading && (
@@ -280,8 +295,8 @@ function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks,
               </div>
             )}
             <div className={cn("pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-panel-strong/80 to-transparent px-4 pt-8 text-inverse", snapshot.lifecycle === "paused" ? "pb-6 text-center" : "pb-3")}>
-              <strong className="block text-[11px]">{snapshot.lifecycle === "paused" ? "摄像头未启用" : isCamera ? (visionStatus === "ready" ? (imgLoaded ? "正在实时检测" : "正在连接视频流") : "正在连接检测") : "定时提醒模式"}</strong>
-              <small className={cn("block truncate text-[8px] text-inverse/60", snapshot.lifecycle === "paused" ? "mt-2" : "mt-1")}>{snapshot.lifecycle === "paused" ? "恢复后继续本地姿态识别" : isCamera ? qualityLabel(snapshot.frameQuality) : "仅根据启用时间提供久坐提醒"}</small>
+              <strong className="block text-[11px]">{detectionPanelTitle}</strong>
+              <small className={cn("block truncate text-[8px] text-inverse/60", snapshot.lifecycle === "paused" ? "mt-2" : "mt-1")}>{detectionPanelDescription}</small>
             </div>
           </div>
           <button className="mx-4 grid min-w-0 grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-2 text-left hover:bg-panel-muted" onClick={() => onPage("privacy")}><span className="grid size-9 place-items-center rounded-xl bg-accent-soft text-accent"><ShieldCheck size={18} /></span><span className="min-w-0"><strong className="block text-[10px]">隐私与设备</strong><small className="mt-1 block truncate text-[9px] text-muted">画面仅在本机处理，不保存，不上传</small></span><ChevronRight size={16} className="text-muted" /></button>
