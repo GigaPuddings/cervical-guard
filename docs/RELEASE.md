@@ -14,9 +14,17 @@
 
 ## 发布
 
-1. 同时更新 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 的 SemVer 版本号并提交。
-2. 在干净工作区运行 `pnpm tag`。该命令会执行完整测试、校验三处版本一致、推送当前提交，并创建、上传 `v<version>` 标签。
-3. GitHub Actions 会生成 NSIS 安装包、更新签名和 `latest.json`，然后自动发布正式 GitHub Release。
-4. 在 Actions 页面确认 `Release desktop app` 成功；正式 Release 会被应用内更新检查发现。
+1. 提交业务代码，确认工作区干净，然后运行 `pnpm tag`。
+2. 命令会读取并显示最新正式 Release、远端已使用的最高标签版本和当前项目版本，然后提示输入新的 `x.y.z` 版本号。也可非交互运行，例如 `pnpm tag -- 0.2.0`。
+3. 新版本必须高于已发布或已撤回的所有标签版本。命令会同步更新 `package.json`、`src-tauri/Cargo.toml`、`Cargo.lock` 和 `tauri.conf.json`，执行完整测试并提交版本变更。
+4. 测试通过后，命令会推送代码和标签，等待 GitHub Actions 完成，并检查正式 Release 中存在 NSIS、签名和 `latest.json` 后才返回成功。
+
+## 撤回并替换最新版本
+
+1. 运行 `pnpm release:withdraw`，核对最新版本和待删除资产，并按提示输入完整确认文本。
+2. 撤回只删除最新 GitHub Release 及下载资产，保留 Git 标签作为不可复用的版本记录。
+3. 修复代码并提交后再次运行 `pnpm tag`，输入更高版本。例如撤回 `0.1.0` 后发布 `0.1.1`。
+
+不要用相同版本号覆盖已经公开过的安装包。GitHub CDN、`latest.json` 和客户端可能缓存旧二进制或签名；复用版本号会造成不可预测的更新校验结果。
 
 不要手工编辑 `latest.json` 的签名字段；`tauri-action` 会从当前构建生成正确内容。

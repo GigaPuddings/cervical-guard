@@ -8,10 +8,12 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:release": "node --test scripts/*.node-test.mjs",
     "test:watch": "vitest",
     "tauri": "tauri",
-    "check": "pnpm test && pnpm build && cargo test --manifest-path src-tauri/Cargo.toml",
-    "tag": "pnpm check && node scripts/release-tag.mjs"
+    "check": "pnpm test && pnpm test:release && pnpm build && cargo test --manifest-path src-tauri/Cargo.toml",
+    "tag": "node scripts/release-tag.mjs",
+    "release:withdraw": "node scripts/withdraw-release.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
