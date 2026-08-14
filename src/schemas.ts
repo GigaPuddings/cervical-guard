@@ -1,11 +1,11 @@
-import { z } from "zod";
+import { z } from 'zod'
 
 const settingsSchema = z.object({
   schemaVersion: z.literal(2),
-  language: z.enum(["zh-CN", "en-US"]).default("zh-CN"),
+  language: z.enum(['zh-CN', 'en-US']).default('zh-CN'),
   cameraEnabled: z.boolean(),
   cameraId: z.string(),
-  sensitivity: z.enum(["low", "balanced", "high"]),
+  sensitivity: z.enum(['low', 'balanced', 'high']),
   sedentaryMinutes: z.number().int().min(1).max(120),
   sedentarySeconds: z.number().int().min(5).max(14_400),
   repeatReminderMinutes: z.number().int().min(1).max(30),
@@ -35,8 +35,8 @@ const settingsSchema = z.object({
   islandPausedStatusEnabled: z.boolean().default(true),
   islandPeekThroughEnabled: z.boolean().default(true),
   islandAllowWithMainWindow: z.boolean().default(false),
-  islandPermanentCloseEnabled: z.boolean().default(false),
-});
+  islandPermanentCloseEnabled: z.boolean().default(false)
+})
 
 const dailyStatisticsSchema = z.object({
   localDate: z.string(),
@@ -48,28 +48,28 @@ const dailyStatisticsSchema = z.object({
   reminderCount: z.number().nonnegative(),
   dismissedCount: z.number().nonnegative(),
   awaySeconds: z.number().nonnegative().default(0),
-  awayCount: z.number().nonnegative().default(0),
-});
+  awayCount: z.number().nonnegative().default(0)
+})
 
 export const reminderSchema = z.object({
   id: z.string(),
-  kind: z.enum(["sedentary", "head_down", "combined"]),
-  level: z.enum(["gentle", "noticeable", "strong"]),
+  kind: z.enum(['sedentary', 'head_down', 'combined']),
+  level: z.enum(['gentle', 'noticeable', 'strong']),
   title: z.string(),
   message: z.string(),
   durationSeconds: z.number().nonnegative(),
-  triggeredAt: z.string(),
-});
+  triggeredAt: z.string()
+})
 
 export const snapshotSchema = z.object({
   schemaVersion: z.literal(2),
-  lifecycle: z.enum(["unavailable", "initializing", "calibrating", "monitoring", "paused", "break", "degraded"]),
-  behavior: z.enum(["no_person", "present", "sitting_normal", "head_down", "standing_break", "unknown"]),
-  permission: z.enum(["prompt", "granted", "denied", "unavailable"]),
-  monitoringMode: z.enum(["camera", "timer"]),
+  lifecycle: z.enum(['unavailable', 'initializing', 'calibrating', 'monitoring', 'paused', 'break', 'degraded']),
+  behavior: z.enum(['no_person', 'present', 'sitting_normal', 'head_down', 'standing_break', 'unknown']),
+  permission: z.enum(['prompt', 'granted', 'denied', 'unavailable']),
+  monitoringMode: z.enum(['camera', 'timer']),
   personPresent: z.boolean(),
   postureConfidence: z.number(),
-  frameQuality: z.enum(["good", "dark", "occluded", "multi_person", "unstable"]),
+  frameQuality: z.enum(['good', 'dark', 'occluded', 'multi_person', 'unstable']),
   seatedSeconds: z.number().nonnegative(),
   headDownSeconds: z.number().nonnegative(),
   awaySeconds: z.number().nonnegative().default(0),
@@ -84,16 +84,18 @@ export const snapshotSchema = z.object({
   calibrated: z.boolean(),
   calibrationBaseline: z.number().nullable(),
   lastObservationAt: z.string().nullable(),
-  sessionStartedAt: z.string().nullable().default(null),
-});
+  sessionStartedAt: z.string().nullable().default(null)
+})
 
-export const statisticsSchema = z.array(dailyStatisticsSchema);
+export const statisticsSchema = z.array(dailyStatisticsSchema)
 
-export const behaviorHistorySchema = z.array(z.object({
-  id: z.string(),
-  eventType: z.enum(["away", "head_down", "break", "proactive_break", "early_break", "proactive_pause", "reminder"]),
-  startedAt: z.string(),
-  endedAt: z.string().nullable(),
-  durationSeconds: z.number().nonnegative(),
-  action: z.string().nullable(),
-}));
+export const behaviorHistorySchema = z.array(
+  z.object({
+    id: z.string(),
+    eventType: z.enum(['away', 'head_down', 'break', 'proactive_break', 'early_break', 'proactive_pause', 'reminder']),
+    startedAt: z.string(),
+    endedAt: z.string().nullable(),
+    durationSeconds: z.number().nonnegative(),
+    action: z.string().nullable()
+  })
+)

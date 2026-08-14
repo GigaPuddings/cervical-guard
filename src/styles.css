@@ -121,6 +121,7 @@
 }
 
 @layer base {
+
   html,
   body,
   #root {
@@ -175,9 +176,24 @@
 }
 
 @keyframes onboarding-card-cycle {
-  0%, 4% { opacity: 0; transform: translateY(18px) scale(.97); }
-  9%, 27% { opacity: 1; transform: translateY(0) scale(1); }
-  32%, 100% { opacity: 0; transform: translateY(-10px) scale(.985); }
+
+  0%,
+  4% {
+    opacity: 0;
+    transform: translateY(18px) scale(.97);
+  }
+
+  9%,
+  27% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  32%,
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(.985);
+  }
 }
 
 .onboarding-privacy-card {
@@ -193,6 +209,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
