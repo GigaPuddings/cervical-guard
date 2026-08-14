@@ -10,9 +10,9 @@ function intervalLabel(seconds: number): string {
   return `${Number.isInteger(minutes) ? minutes : minutes.toFixed(1)} 分钟`
 }
 
-function Toggle({ checked, onChange, label, description }: { checked: boolean; onChange: (checked: boolean) => void; label: string; description: string }) {
+function Toggle({ checked, onChange, label, description, className }: { checked: boolean; onChange: (checked: boolean) => void; label: string; description: string; className?: string }) {
   return (
-    <label className="relative flex min-h-15 cursor-pointer items-center gap-4 border-b border-edge-soft py-2">
+    <label className={cn('relative flex min-h-15 cursor-pointer items-center gap-4 border-b border-edge-soft py-2', className)}>
       <div className="flex flex-1 flex-col gap-1">
         <strong className="text-sm leading-5 2xl:text-base">{label}</strong>
         <small className="text-[11px] leading-4 text-muted 2xl:text-[13px]">{description}</small>
@@ -304,10 +304,16 @@ export function SettingsPage({
           )}
 
           {activeTab === 'reminder' && (
-            <div className="grid min-h-0 gap-x-5 md:grid-cols-2">
-              <div className="min-w-0">
+            <div className="grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(310px,.85fr)]">
+              <section className="min-w-0 rounded-[16px] border border-edge-soft bg-panel-muted/65 p-4 2xl:p-5" aria-labelledby="reminder-cadence-title">
+                <div className="mb-4">
+                  <h3 className="m-0 text-base font-black 2xl:text-lg" id="reminder-cadence-title">
+                    久坐节奏
+                  </h3>
+                  <p className="mb-0 mt-1 text-[11px] leading-5 text-muted 2xl:text-xs">设置首次提醒、重复间隔和休息时长</p>
+                </div>
                 <SedentaryThresholdControl seconds={draft.sedentarySeconds} onChange={setSedentarySeconds} />
-                <div className={fieldGridClass}>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div className={selectFieldClass}>
                     <span>重复提醒</span>
                     <SelectField
@@ -343,10 +349,22 @@ export function SettingsPage({
                     />
                   </div>
                 </div>
-              </div>
-              <div className="min-w-0 border-edge-soft md:border-l md:pl-5">
-                <Toggle checked={draft.quietHoursEnabled} onChange={value => set('quietHoursEnabled', value)} label="上午 / 下午模式（午间静默）" description="关闭为连续工作；开启后午间暂停提醒" />
-                <div className={cn(fieldGridClass, !draft.quietHoursEnabled && 'opacity-50')}>
+              </section>
+
+              <section className="min-w-0 rounded-[16px] border border-edge-soft bg-panel-muted/65 p-4 2xl:p-5" aria-labelledby="quiet-hours-title">
+                <div className="mb-4">
+                  <h3 className="m-0 text-base font-black 2xl:text-lg" id="quiet-hours-title">
+                    静默时段
+                  </h3>
+                  <p className="mb-0 mt-1 text-[11px] leading-5 text-muted 2xl:text-xs">需要安静工作时，暂停午间提醒</p>
+                </div>
+                <Toggle className="min-h-0 border-0 py-0" checked={draft.quietHoursEnabled} onChange={value => set('quietHoursEnabled', value)} label="上午 / 下午模式（午间静默）" description="关闭为连续工作；开启后午间暂停提醒" />
+                <div
+                  className={cn(
+                    'mt-5 grid grid-cols-1 gap-4 border-t border-edge-soft pt-5 sm:grid-cols-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-2.5 [&_label>span]:text-xs [&_label>span]:font-bold [&_label>span]:text-muted [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-edge [&_input]:bg-field [&_input]:px-4 [&_input]:text-[13px] disabled:[&_input]:cursor-not-allowed',
+                    !draft.quietHoursEnabled && 'opacity-50'
+                  )}
+                >
                   <label>
                     <span>午间静默开始</span>
                     <input type="time" disabled={!draft.quietHoursEnabled} value={draft.quietStart} onChange={event => set('quietStart', event.target.value)} />
@@ -356,17 +374,33 @@ export function SettingsPage({
                     <input type="time" disabled={!draft.quietHoursEnabled} value={draft.quietEnd} onChange={event => set('quietEnd', event.target.value)} />
                   </label>
                 </div>
-                <div className="grid gap-x-4 md:grid-cols-2">
-                  <Toggle
-                    checked={draft.repeatReminders}
-                    onChange={value => set('repeatReminders', value)}
-                    label="持续行为重复提醒"
-                    description={draft.sedentarySeconds <= 30 ? `测试时每 ${draft.sedentarySeconds} 秒重复` : '遵守同类提醒冷却时间'}
-                  />
-                  <Toggle checked={draft.meetingMode} onChange={value => set('meetingMode', value)} label="会议模式" description="仅显示安静通知" />
-                  <Toggle checked={draft.soundEnabled} onChange={value => set('soundEnabled', value)} label="通知声音" description="会议模式下仍保持静音" />
+              </section>
+
+              <section className="rounded-[16px] border border-edge-soft bg-panel-muted/65 p-4 xl:col-span-2 2xl:p-5" aria-labelledby="notification-style-title">
+                <div>
+                  <h3 className="m-0 text-base font-black 2xl:text-lg" id="notification-style-title">
+                    通知方式
+                  </h3>
+                  <p className="mb-0 mt-1 text-[11px] leading-5 text-muted 2xl:text-xs">选择提醒是否重复、静音或播放声音</p>
                 </div>
-              </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl border border-edge-soft bg-panel px-4 py-3">
+                    <Toggle
+                      className="min-h-0 border-0 py-0"
+                      checked={draft.repeatReminders}
+                      onChange={value => set('repeatReminders', value)}
+                      label="持续行为重复提醒"
+                      description={draft.sedentarySeconds <= 30 ? `测试时每 ${draft.sedentarySeconds} 秒重复` : '遵守同类提醒冷却时间'}
+                    />
+                  </div>
+                  <div className="rounded-xl border border-edge-soft bg-panel px-4 py-3">
+                    <Toggle className="min-h-0 border-0 py-0" checked={draft.meetingMode} onChange={value => set('meetingMode', value)} label="会议模式" description="仅显示安静通知" />
+                  </div>
+                  <div className="rounded-xl border border-edge-soft bg-panel px-4 py-3">
+                    <Toggle className="min-h-0 border-0 py-0" checked={draft.soundEnabled} onChange={value => set('soundEnabled', value)} label="通知声音" description="会议模式下仍保持静音" />
+                  </div>
+                </div>
+              </section>
             </div>
           )}
 
@@ -378,7 +412,7 @@ export function SettingsPage({
                 <Toggle checked={draft.islandAwayEnabled} onChange={value => set('islandAwayEnabled', value)} label="离座状态" description="确认无人后保持显示计时暂停" />
                 <Toggle checked={draft.islandHeadDownEnabled} onChange={value => set('islandHeadDownEnabled', value)} label="低头状态" description="持续确认低头后显示提示" />
                 <Toggle checked={draft.islandBreakEnabled} onChange={value => set('islandBreakEnabled', value)} label="休息倒计时" description="休息期间显示倒计时与操作" />
-                <Toggle checked={draft.islandPersistentStatusEnabled} onChange={value => set('islandPersistentStatusEnabled', value)} label="持续检测状态" description="检测中常驻紧凑状态，悬停查看详情" />
+                <Toggle checked={draft.islandPersistentStatusEnabled} onChange={value => set('islandPersistentStatusEnabled', value)} label="持续检测状态" description="控制紧凑状态是否常驻；关闭后仍可悬停查看详情" />
                 <Toggle checked={draft.islandPausedStatusEnabled} onChange={value => set('islandPausedStatusEnabled', value)} label="暂停状态" description="暂停检测时显示恢复时间与暂停状态" />
                 <Toggle checked={draft.islandPeekThroughEnabled} onChange={value => set('islandPeekThroughEnabled', value)} label="鼠标放大镜效果" description="鼠标经过灵动岛时显示局部放大镜；关闭后仅隐藏放大镜" />
                 <Toggle checked={draft.islandAllowWithMainWindow} onChange={value => set('islandAllowWithMainWindow', value)} label="与普通窗口同时显示" description="主窗口可见时也显示灵动岛" />

@@ -225,6 +225,20 @@ pub(crate) fn island_status_feature_enabled(
     })
 }
 
+pub(crate) fn island_hover_status_feature_enabled(
+    app: &AppHandle,
+    lifecycle: MonitoringLifecycle,
+) -> bool {
+    let Some(context) = app.try_state::<AppContext>() else {
+        return false;
+    };
+    let settings = match context.core.lock() {
+        Ok(core) => core.settings().clone(),
+        Err(_) => return false,
+    };
+    island_hover_status_enabled_for_context(&context, &settings, lifecycle)
+}
+
 pub(crate) fn island_status_enabled_for_context(
     context: &AppContext,
     settings: &AppSettings,
@@ -234,6 +248,16 @@ pub(crate) fn island_status_enabled_for_context(
         .island_ui
         .lock()
         .is_ok_and(|mut ui| ui.island_available(settings) && ui.status_enabled(settings, lifecycle))
+}
+
+pub(crate) fn island_hover_status_enabled_for_context(
+    context: &AppContext,
+    settings: &AppSettings,
+    lifecycle: MonitoringLifecycle,
+) -> bool {
+    context.island_ui.lock().is_ok_and(|mut ui| {
+        ui.island_available(settings) && island_hover_status_enabled(settings, lifecycle)
+    })
 }
 
 pub(crate) fn island_may_overlay_content(app: &AppHandle) -> bool {
@@ -279,6 +303,19 @@ pub(crate) fn island_status_enabled(
         MonitoringLifecycle::Paused => settings.island_paused_status_enabled,
         _ => false,
     }
+}
+
+/// 悬停详情与“持续检测状态”常驻卡片是两个独立能力。监测运行时只要灵动岛
+/// 总开关开启，就保留顶部热区；关闭常驻状态只让紧凑卡片默认隐藏。
+pub(crate) fn island_hover_status_enabled(
+    settings: &AppSettings,
+    lifecycle: MonitoringLifecycle,
+) -> bool {
+    settings.island_enabled
+        && matches!(
+            lifecycle,
+            MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded
+        )
 }
 
 pub(crate) fn island_height_for_menu(open: bool, detail_expanded: bool) -> f64 {
@@ -393,6 +430,40 @@ pub(crate) fn set_reminder_island_visible(
     .shadow(false)
     .build()?;
     window.set_ignore_cursor_events(!interactive)?;
+    Ok(())
+}
+
+/// 悬停模式需要一个隐藏的 WebView 来接收详情事件和提供窗口坐标，但不能像
+/// “持续检测状态”那样创建后立即显示紧凑卡片。
+pub(crate) fn ensure_hidden_reminder_island(app: &AppHandle) -> tauri::Result<()> {
+    if app.get_webview_window("reminder-island").is_some() {
+        return Ok(());
+    }
+    let width = ISLAND_COMPACT_WIDTH;
+    let height = ISLAND_COMPACT_HEIGHT;
+    let (x, y) = island_origin(app, width);
+    let window = WebviewWindowBuilder::new(
+        app,
+        "reminder-island",
+        WebviewUrl::CustomProtocol(
+            "guard://localhost/reminder-island"
+                .parse()
+                .expect("动态岛地址必须有效"),
+        ),
+    )
+    .title("健康提醒")
+    .inner_size(width, height)
+    .position(x, y)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .focused(false)
+    .visible(false)
+    .shadow(false)
+    .build()?;
+    window.set_ignore_cursor_events(true)?;
     Ok(())
 }
 
@@ -624,7 +695,7 @@ pub(crate) fn present_island_detail(app: &AppHandle, snapshot: &AppSnapshot) {
     let payload = snapshot.clone();
     let schedule_result = app.run_on_main_thread(move || {
         if !current_status_payload_matches(&app_handle, &payload)
-            || !island_status_feature_enabled(&app_handle, payload.lifecycle)
+            || !island_hover_status_feature_enabled(&app_handle, payload.lifecycle)
         {
             return;
         }

@@ -283,9 +283,16 @@ pub(crate) fn run() {
                     let break_active = snapshot.lifecycle == MonitoringLifecycle::Break;
                     let reminder_active = snapshot.current_reminder.is_some();
                     let settings = &snapshot.settings;
+                    let persistent_status_enabled =
+                        island_status_enabled_for_context(&context, settings, snapshot.lifecycle);
+                    let hover_status_enabled = island_hover_status_enabled_for_context(
+                        &context,
+                        settings,
+                        snapshot.lifecycle,
+                    );
                     let surface_needed = island_surface_needed(
                         settings,
-                        island_status_enabled_for_context(&context, settings, snapshot.lifecycle),
+                        persistent_status_enabled || hover_status_enabled,
                         reminder_active,
                         break_active,
                         behavior_notice_active,
@@ -319,12 +326,13 @@ pub(crate) fn run() {
                                 present_reminder_island(&hover_handle, reminder, false);
                             } else if break_active {
                                 present_break_island(&hover_handle, &snapshot);
-                            } else if island_status_enabled_for_context(
-                                &context,
-                                settings,
-                                snapshot.lifecycle,
-                            ) {
+                            } else if persistent_status_enabled {
                                 present_persistent_status(&hover_handle, &snapshot);
+                            } else if hover_status_enabled {
+                                let app_handle = hover_handle.clone();
+                                let _ = hover_handle.run_on_main_thread(move || {
+                                    let _ = ensure_hidden_reminder_island(&app_handle);
+                                });
                             }
                         }
                         continue;
@@ -583,7 +591,7 @@ pub(crate) fn run() {
                     hover_inside = inside;
                     if inside {
                         let eligible = snapshot.current_reminder.is_none()
-                            && island_status_enabled_for_context(
+                            && island_hover_status_enabled_for_context(
                                 &context,
                                 &snapshot.settings,
                                 snapshot.lifecycle,

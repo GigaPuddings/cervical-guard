@@ -42,11 +42,12 @@ pub fn run() {
 #[cfg(test)]
 mod island_ui_tests {
     use super::{
-        break_action_hit, island_action_hit, island_height_for_menu, island_status_enabled,
-        island_status_payload_is_current, island_surface_needed, normalized_proxy,
-        reminder_sound_enabled, tray_icon_with_update_badge, tray_update_badge_visible,
-        update_tray_text, IslandUiState, UpdateUiState, ISLAND_COMPACT_HEIGHT,
-        ISLAND_DETAIL_HEIGHT, ISLAND_MENU_HEIGHT, ISLAND_RETURN_CONFIRMATION,
+        break_action_hit, island_action_hit, island_height_for_menu, island_hover_status_enabled,
+        island_status_enabled, island_status_payload_is_current, island_surface_needed,
+        normalized_proxy, reminder_sound_enabled, tray_icon_with_update_badge,
+        tray_update_badge_visible, update_tray_text, IslandUiState, UpdateUiState,
+        ISLAND_COMPACT_HEIGHT, ISLAND_DETAIL_HEIGHT, ISLAND_MENU_HEIGHT,
+        ISLAND_RETURN_CONFIRMATION,
     };
     use crate::app_runtime::guard_protocol_response;
     use crate::model::{AppSettings, MonitoringLifecycle};
@@ -122,6 +123,8 @@ mod island_ui_tests {
         assert!(html.contains("island://break"));
         assert!(html.contains("data-command=\"end_break\""));
         assert!(html.contains("transitionVersion"));
+        assert!(html.contains("await hide(true)"));
+        assert!(html.contains("closeAnimationMs = 250"));
         assert!(html.contains("定时提醒运行中"));
     }
 
@@ -271,6 +274,36 @@ mod island_ui_tests {
         assert!(!island_status_enabled(
             &settings,
             MonitoringLifecycle::Break
+        ));
+    }
+
+    #[test]
+    fn disabling_persistent_status_keeps_monitoring_hover_available() {
+        let mut settings = AppSettings::default();
+        settings.island_enabled = true;
+        settings.island_persistent_status_enabled = false;
+
+        assert!(!island_status_enabled(
+            &settings,
+            MonitoringLifecycle::Monitoring
+        ));
+        assert!(island_hover_status_enabled(
+            &settings,
+            MonitoringLifecycle::Monitoring
+        ));
+        assert!(island_hover_status_enabled(
+            &settings,
+            MonitoringLifecycle::Degraded
+        ));
+        assert!(!island_hover_status_enabled(
+            &settings,
+            MonitoringLifecycle::Paused
+        ));
+
+        settings.island_enabled = false;
+        assert!(!island_hover_status_enabled(
+            &settings,
+            MonitoringLifecycle::Monitoring
         ));
     }
 
