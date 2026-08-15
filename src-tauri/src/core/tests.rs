@@ -89,7 +89,7 @@ fn camera_ingest_returns_a_due_head_down_reminder() {
 }
 
 #[test]
-fn short_keypoint_loss_pauses_clock_without_publishing_away() {
+fn short_keypoint_loss_keeps_clock_running_without_publishing_away() {
     let mut state = state();
     state.snapshot.monitoring_mode = MonitoringMode::Camera;
     state.snapshot.lifecycle = MonitoringLifecycle::Monitoring;
@@ -107,9 +107,9 @@ fn short_keypoint_loss_pauses_clock_without_publishing_away() {
 
     assert!(state.snapshot.person_present);
     assert_eq!(state.snapshot.behavior, BehaviorState::SittingNormal);
-    assert!(!state.sedentary_clock_running());
+    assert!(state.sedentary_clock_running());
     state.advance(5, Instant::now() + Duration::from_secs(5));
-    assert_eq!(state.snapshot.seated_seconds, 30);
+    assert_eq!(state.snapshot.seated_seconds, 35);
     assert_eq!(state.snapshot.today.away_count, 0);
 }
 
@@ -163,7 +163,8 @@ fn partial_head_evidence_never_accumulates_into_away() {
     assert!(state.snapshot.person_present);
     assert_eq!(state.snapshot.behavior, BehaviorState::SittingNormal);
     assert_eq!(state.snapshot.today.away_count, 0);
-    assert!(!state.sedentary_clock_running());
+    assert!(state.sedentary_clock_running());
+    assert!(state.person_missing_since.is_none());
 }
 
 #[test]
@@ -202,6 +203,7 @@ fn continuous_keypoint_loss_confirms_away_only_once() {
     assert!(!state.snapshot.person_present);
     assert_eq!(state.snapshot.behavior, BehaviorState::NoPerson);
     assert_eq!(state.snapshot.today.away_count, 1);
+    assert!(!state.sedentary_clock_running());
 
     state.ingest(missing).unwrap();
     assert_eq!(state.snapshot.today.away_count, 1);

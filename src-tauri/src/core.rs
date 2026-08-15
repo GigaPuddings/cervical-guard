@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// 连续缺失达到该时长后，才把“不确定/丢点”升级为真正离座。
-/// 在确认窗口内暂停坐姿计时，但不发布离座状态，也不累计离座统计。
+/// 确认窗口内继续沿用上一个已确认状态；只有确认离座后才暂停坐姿计时。
 const DEFAULT_PERSON_ABSENCE_CONFIRMATION_SECS: u64 = 3;
 
 pub struct RuntimeState {
@@ -165,7 +165,6 @@ impl RuntimeState {
         }
         self.snapshot.monitoring_mode == MonitoringMode::Timer
             || (self.snapshot.person_present
-                && self.person_missing_since.is_none()
                 && matches!(
                     self.snapshot.behavior,
                     BehaviorState::SittingNormal | BehaviorState::HeadDown
@@ -244,13 +243,12 @@ impl RuntimeState {
 
         // 坐姿计时门控：
         // - Timer 模式：无条件累加（无摄像头行为感知）。
-        // - Camera 模式：原始检测一旦进入缺失确认窗口就立即暂停；只有连续
-        //   缺失达到阈值才把对外 person_present 改为 false。
+        // - Camera 模式：缺失确认窗口内沿用上一个已确认状态；只有连续缺失
+        //   达到阈值并把 person_present 改为 false 后才暂停。
         let seated = if self.snapshot.monitoring_mode == MonitoringMode::Timer {
             true
         } else {
             self.snapshot.person_present
-                && self.person_missing_since.is_none()
                 && matches!(
                     self.snapshot.behavior,
                     BehaviorState::SittingNormal | BehaviorState::HeadDown
@@ -618,9 +616,9 @@ impl RuntimeState {
         self.snapshot.posture_confidence = observation.posture.confidence;
 
         if observation.person.uncertain {
-            // 单个或少量头部点位属于“画面不确定”：暂停连续坐姿计时，但每帧
-            // 都重新开始缺失候选，避免局部遮挡最终被累计成明确离座。
-            self.person_missing_since = Some(now);
+            // 单个或少量头部点位属于“画面不确定”：沿用上一个已确认状态继续
+            // 计时，并清除缺失候选，避免局部遮挡最终被累计成明确离座。
+            self.person_missing_since = None;
             self.sitting_candidate_since = None;
             self.head_candidate_since = None;
             self.normal_candidate_since = None;
@@ -631,8 +629,8 @@ impl RuntimeState {
             let missing = *self.person_missing_since.get_or_insert(now);
             self.sitting_candidate_since = None;
             self.head_candidate_since = None;
-            // 单帧或短时关键点丢失只视为“不确定”：计时立即暂停，但对外仍保留
-            // 上一个已确认的在场状态，避免深度低头/遮挡触发离座灵动岛。
+            // 完全没有可信点位时进入离座确认窗口；确认前继续沿用上一个在场
+            // 状态和计时，避免短时丢点造成时钟频繁停顿。
             if now.duration_since(missing) >= self.person_absence_confirmation() {
                 if self.snapshot.person_present && self.snapshot.settings.statistics_enabled {
                     self.snapshot.today.away_count =
