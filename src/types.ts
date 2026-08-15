@@ -13,7 +13,7 @@ export interface VisionObservation {
   schemaVersion: typeof SCHEMA_VERSION
   sequence: number
   capturedAtMonotonicMs: number
-  person: { present: boolean; confidence: number }
+  person: { present: boolean; uncertain: boolean; confidence: number }
   posture: { state: PostureState; confidence: number }
   head: { downScore: number; confidence: number }
   frameQuality: FrameQuality
@@ -44,6 +44,7 @@ export interface AppSettings {
   headDownStrongMinutes: number
   repeatReminders: boolean
   autostart: boolean
+  silentAutostart: boolean
   runInBackground: boolean
   soundEnabled: boolean
   meetingMode: boolean

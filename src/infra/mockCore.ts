@@ -16,6 +16,7 @@ const defaultSettings: AppSettings = {
   headDownStrongMinutes: 10,
   repeatReminders: true,
   autostart: false,
+  silentAutostart: true,
   runInBackground: true,
   soundEnabled: false,
   meetingMode: false,
@@ -203,6 +204,12 @@ class MockCore {
         break
       case 'ingest_observation': {
         const observation = args?.observation as VisionObservation
+        if (observation.person.uncertain) {
+          this.snapshot.postureConfidence = observation.posture.confidence
+          this.snapshot.frameQuality = observation.frameQuality
+          this.snapshot.lastObservationAt = new Date().toISOString()
+          break
+        }
         if (this.snapshot.personPresent && !observation.person.present) this.snapshot.today.awayCount += 1
         this.snapshot.personPresent = observation.person.present
         this.snapshot.postureConfidence = observation.posture.confidence
@@ -313,7 +320,7 @@ class MockCore {
       schemaVersion: 2,
       sequence: Math.floor(performance.now() / 240),
       capturedAtMonotonicMs: performance.now(),
-      person: { present: true, confidence: 0.9 },
+      person: { present: true, uncertain: false, confidence: 0.9 },
       posture: { state: 'sitting', confidence: 0.9 },
       head: { downScore: 0.1, confidence: 0.9 },
       frameQuality: 'good',

@@ -64,6 +64,10 @@ pub enum PostureState {
 #[serde(rename_all = "camelCase")]
 pub struct PersonObservation {
     pub present: bool,
+    /// 只捕捉到少量头部点位时既不能确认有人，也不能据此确认离座。
+    /// 旧客户端没有该字段时按明确结果处理，保持事件协议向后兼容。
+    #[serde(default)]
+    pub uncertain: bool,
     pub confidence: f64,
 }
 
@@ -118,6 +122,9 @@ impl VisionObservation {
         {
             return Err("观察值置信度必须位于 0 到 1 之间".to_string());
         }
+        if self.person.present && self.person.uncertain {
+            return Err("人物观察值不能同时标记为在场和不确定".to_string());
+        }
         if !self.captured_at_monotonic_ms.is_finite() || !self.metrics.pose_ms.is_finite() {
             return Err("观察值包含无效数值".to_string());
         }
@@ -143,6 +150,8 @@ pub struct AppSettings {
     pub head_down_strong_minutes: u64,
     pub repeat_reminders: bool,
     pub autostart: bool,
+    #[serde(default = "default_enabled")]
+    pub silent_autostart: bool,
     pub run_in_background: bool,
     pub sound_enabled: bool,
     pub meeting_mode: bool,
@@ -194,6 +203,7 @@ impl Default for AppSettings {
             head_down_strong_minutes: 10,
             repeat_reminders: true,
             autostart: false,
+            silent_autostart: true,
             run_in_background: true,
             sound_enabled: false,
             meeting_mode: false,
@@ -352,6 +362,14 @@ mod settings_tests {
         let settings: AppSettings = serde_json::from_value(json).unwrap();
         assert!(settings.island_paused_status_enabled);
         assert!(settings.island_peek_through_enabled);
+    }
+
+    #[test]
+    fn legacy_settings_enable_silent_autostart_during_migration() {
+        let mut json = serde_json::to_value(AppSettings::default()).unwrap();
+        json.as_object_mut().unwrap().remove("silentAutostart");
+        let settings: AppSettings = serde_json::from_value(json).unwrap();
+        assert!(settings.silent_autostart);
     }
 }
 

@@ -1,5 +1,23 @@
 use super::*;
 
+const AUTOSTART_BACKGROUND_ARG: &str = "--background-autostart";
+
+fn should_show_main_window_for_launch(args: &[String], silent_autostart: bool) -> bool {
+    !silent_autostart || !args.iter().any(|arg| arg == AUTOSTART_BACKGROUND_ARG)
+}
+
+fn silent_autostart_enabled(app: &AppHandle) -> bool {
+    app.try_state::<AppContext>()
+        .and_then(|context| {
+            context
+                .core
+                .lock()
+                .ok()
+                .map(|core| core.settings().silent_autostart)
+        })
+        .unwrap_or(false)
+}
+
 pub(crate) fn guard_protocol_response(path: &str) -> tauri::http::Response<Vec<u8>> {
     match path {
         "/reminder-island" | "/" => tauri::http::Response::builder()
@@ -28,9 +46,15 @@ pub(crate) fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_autostart::Builder::new().build())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            show_main_window(app);
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .arg(AUTOSTART_BACKGROUND_ARG)
+                .build(),
+        )
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if should_show_main_window_for_launch(&args, silent_autostart_enabled(app)) {
+                show_main_window(app);
+            }
         }))
         .on_page_load(|webview, payload| {
             // 配置层先隐藏主窗口，避免 WebView 尚未解析 index.html 时暴露空白底色。
@@ -40,9 +64,13 @@ pub(crate) fn run() {
                 && payload.event() == PageLoadEvent::Finished
                 && payload.url().scheme() != "about"
             {
-                let window = webview.window();
-                if let Err(error) = window.show() {
-                    eprintln!("[startup] show main window after page load failed: {error}");
+                let args = std::env::args().collect::<Vec<_>>();
+                let app = webview.app_handle();
+                if should_show_main_window_for_launch(&args, silent_autostart_enabled(app)) {
+                    let window = webview.window();
+                    if let Err(error) = window.show() {
+                        eprintln!("[startup] show main window after page load failed: {error}");
+                    }
                 }
             }
         })
@@ -52,6 +80,7 @@ pub(crate) fn run() {
             let database = Database::open(&directory.join("cervical-guard.sqlite3"))
                 .map_err(std::io::Error::other)?;
             let runtime = RuntimeState::load(&database);
+            let refresh_autostart_registration = runtime.settings().autostart;
             let vision = Arc::new(VisionService::new());
             app.manage(AppContext {
                 core: Mutex::new(runtime),
@@ -60,6 +89,12 @@ pub(crate) fn run() {
                 island_ui: Mutex::new(IslandUiState::default()),
                 update_ui: Mutex::new(UpdateUiState::default()),
             });
+            // enable() 会覆盖既有系统启动项，用带后台标记的新命令迁移旧版本注册。
+            if refresh_autostart_registration {
+                if let Err(error) = app.autolaunch().enable() {
+                    eprintln!("[startup] refresh autostart registration failed: {error}");
+                }
+            }
             build_tray(app)?;
             set_reminder_island_visible(app.handle(), false, false)?;
 
@@ -698,4 +733,25 @@ pub(crate) fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("健康提醒应用启动失败");
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+
+    #[test]
+    fn manual_launch_always_shows_the_main_window() {
+        let args = vec!["cervical-guard".to_string()];
+        assert!(should_show_main_window_for_launch(&args, true));
+    }
+
+    #[test]
+    fn autostart_launch_honors_the_silent_preference() {
+        let args = vec![
+            "cervical-guard".to_string(),
+            AUTOSTART_BACKGROUND_ARG.to_string(),
+        ];
+        assert!(!should_show_main_window_for_launch(&args, true));
+        assert!(should_show_main_window_for_launch(&args, false));
+    }
 }

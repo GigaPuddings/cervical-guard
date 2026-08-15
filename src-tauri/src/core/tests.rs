@@ -20,6 +20,7 @@ fn observation(posture: PostureState, down_score: f64) -> VisionObservation {
         captured_at_monotonic_ms: 100.0,
         person: PersonObservation {
             present: true,
+            uncertain: false,
             confidence: 0.9,
         },
         posture: PostureObservation {
@@ -137,6 +138,32 @@ fn arm_occlusion_inside_confirmation_window_never_publishes_away() {
     assert!(state.snapshot.person_present);
     assert_eq!(state.snapshot.behavior, BehaviorState::SittingNormal);
     assert_eq!(state.snapshot.today.away_count, 0);
+}
+
+#[test]
+fn partial_head_evidence_never_accumulates_into_away() {
+    let mut state = state();
+    state.snapshot.monitoring_mode = MonitoringMode::Camera;
+    state.snapshot.lifecycle = MonitoringLifecycle::Monitoring;
+    state.snapshot.person_present = true;
+    state.snapshot.behavior = BehaviorState::SittingNormal;
+    state.snapshot.seated_seconds = 30;
+    state.person_missing_since =
+        Some(Instant::now() - state.person_absence_confirmation() - Duration::from_secs(1));
+
+    let mut partial = observation(PostureState::Unknown, 0.0);
+    partial.person.present = false;
+    partial.person.uncertain = true;
+    partial.person.confidence = 0.2;
+    partial.posture.confidence = 0.0;
+    partial.head.confidence = 0.0;
+    partial.frame_quality = FrameQuality::Unstable;
+    state.ingest(partial).unwrap();
+
+    assert!(state.snapshot.person_present);
+    assert_eq!(state.snapshot.behavior, BehaviorState::SittingNormal);
+    assert_eq!(state.snapshot.today.away_count, 0);
+    assert!(!state.sedentary_clock_running());
 }
 
 #[test]

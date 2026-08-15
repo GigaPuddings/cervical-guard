@@ -1065,6 +1065,16 @@ fn visibility_of(pose: &PoseResult) -> f64 {
     clamp01(head_visibility_of(pose))
 }
 
+/// 少量可信头部点只能证明画面仍有追踪线索，不能证明完整人物在场，
+/// 更不能和完全空画面一样用于确认离座。
+fn has_partial_head_evidence(pose: &PoseResult) -> bool {
+    HEAD_KEYPOINTS.iter().any(|&index| {
+        pose.keypoints
+            .get(index)
+            .is_some_and(|point| point.score >= KEYPOINT_TRUST_THRESHOLD)
+    })
+}
+
 fn posture_of(pose: &PoseResult) -> (PostureState, f64) {
     let Some(_) = head_centroid(pose) else {
         return (PostureState::Unknown, 0.0);
@@ -1095,7 +1105,8 @@ fn create_observation(
             captured_at_monotonic_ms: 0.0,
             person: PersonObservation {
                 present: false,
-                confidence: 0.0,
+                uncertain: has_partial_head_evidence(pose),
+                confidence: presence_confidence,
             },
             posture: PostureObservation {
                 state: PostureState::Unknown,
@@ -1124,6 +1135,7 @@ fn create_observation(
             captured_at_monotonic_ms: 0.0,
             person: PersonObservation {
                 present: true,
+                uncertain: false,
                 confidence: presence_confidence,
             },
             posture: PostureObservation {
@@ -1174,6 +1186,7 @@ fn create_observation(
         captured_at_monotonic_ms: 0.0,
         person: PersonObservation {
             present: true,
+            uncertain: false,
             confidence: presence_confidence,
         },
         posture: PostureObservation {

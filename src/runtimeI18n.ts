@@ -207,6 +207,8 @@ const zhToEn: Record<string, string> = {
   隐藏后继续低功耗监测: 'Continue low-power monitoring while hidden',
   开机自动启动: 'Start at login',
   登录系统后自动守护工作节奏: 'Start automatically after sign-in',
+  自启动时静默运行: 'Launch silently at login',
+  '登录后仅显示托盘图标，不主动打开主窗口': 'Show only the tray icon after sign-in without opening the main window',
   周末启用: 'Enable on weekends',
   周六和周日也执行工作时段规则: 'Apply work-hour rules on weekends',
   '摄像头画面仅在本机内存中处理。': 'Camera frames are processed only in local memory.',

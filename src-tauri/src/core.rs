@@ -617,6 +617,16 @@ impl RuntimeState {
         self.snapshot.frame_quality = observation.frame_quality;
         self.snapshot.posture_confidence = observation.posture.confidence;
 
+        if observation.person.uncertain {
+            // 单个或少量头部点位属于“画面不确定”：暂停连续坐姿计时，但每帧
+            // 都重新开始缺失候选，避免局部遮挡最终被累计成明确离座。
+            self.person_missing_since = Some(now);
+            self.sitting_candidate_since = None;
+            self.head_candidate_since = None;
+            self.normal_candidate_since = None;
+            return Ok(reminder);
+        }
+
         if !observation.person.present {
             let missing = *self.person_missing_since.get_or_insert(now);
             self.sitting_candidate_since = None;

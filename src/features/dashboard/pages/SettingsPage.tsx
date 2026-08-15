@@ -10,14 +10,14 @@ function intervalLabel(seconds: number): string {
   return `${Number.isInteger(minutes) ? minutes : minutes.toFixed(1)} 分钟`
 }
 
-function Toggle({ checked, onChange, label, description, className }: { checked: boolean; onChange: (checked: boolean) => void; label: string; description: string; className?: string }) {
+function Toggle({ checked, onChange, label, description, className, disabled = false }: { checked: boolean; onChange: (checked: boolean) => void; label: string; description: string; className?: string; disabled?: boolean }) {
   return (
-    <label className={cn('relative flex min-h-15 cursor-pointer items-center gap-4 border-b border-edge-soft py-2', className)}>
+    <label className={cn('relative flex min-h-15 cursor-pointer items-center gap-4 border-b border-edge-soft py-2', disabled && 'cursor-not-allowed opacity-50', className)}>
       <div className="flex flex-1 flex-col gap-1">
         <strong className="text-sm leading-5 2xl:text-base">{label}</strong>
         <small className="text-[11px] leading-4 text-muted 2xl:text-[13px]">{description}</small>
       </div>
-      <input className="peer sr-only" type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} />
+      <input className="peer sr-only" type="checkbox" checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} />
       <span className="relative h-5.5 w-9.5 shrink-0 rounded-full bg-edge transition after:absolute after:left-0.75 after:top-0.75 after:size-4 after:rounded-full after:bg-panel after:shadow-sm after:transition after:content-[''] peer-checked:bg-accent peer-checked:after:translate-x-4" />
     </label>
   )
@@ -436,6 +436,7 @@ export function SettingsPage({
               <div className="grid gap-x-5 md:grid-cols-2">
                 <Toggle checked={draft.runInBackground} onChange={value => set('runInBackground', value)} label="关闭窗口后在后台运行" description="隐藏后继续低功耗监测" />
                 <Toggle checked={draft.autostart} onChange={value => set('autostart', value)} label="开机自动启动" description="登录系统后自动守护工作节奏" />
+                <Toggle checked={draft.silentAutostart} disabled={!draft.autostart} onChange={value => set('silentAutostart', value)} label="自启动时静默运行" description="登录后仅显示托盘图标，不主动打开主窗口" />
                 <Toggle checked={draft.weekendEnabled} onChange={value => set('weekendEnabled', value)} label="周末启用" description="周六和周日也执行工作时段规则" />
               </div>
             </div>

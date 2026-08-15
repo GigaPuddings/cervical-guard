@@ -212,6 +212,22 @@ fn body_keypoints_cannot_assert_presence_without_a_head() {
     let observation = create_observation(&pose, 0.4, 120.0, 20.0);
 
     assert!(!observation.person.present);
+    assert!(!observation.person.uncertain);
+}
+
+#[test]
+fn a_single_trusted_head_point_is_uncertain_instead_of_away() {
+    let mut pose = PoseResult {
+        keypoints: vec![keypoint(0.5, 0.5, 0.01); KEYPOINT_COUNT],
+        max_score: 0.95,
+    };
+    pose.keypoints[NOSE] = keypoint(0.5, 0.4, 0.95);
+
+    let observation = create_observation(&pose, 0.4, 120.0, 20.0);
+
+    assert!(!observation.person.present);
+    assert!(observation.person.uncertain);
+    assert!(observation.person.confidence > 0.0);
 }
 
 #[test]
@@ -316,6 +332,7 @@ fn no_person_when_all_scores_low() {
     };
     let observation = create_observation(&empty, -0.9, 120.0, 20.0);
     assert!(!observation.person.present);
+    assert!(!observation.person.uncertain);
     assert_eq!(observation.frame_quality, FrameQuality::Unstable);
 }
 

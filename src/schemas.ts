@@ -14,6 +14,7 @@ const settingsSchema = z.object({
   headDownStrongMinutes: z.number().int().min(5).max(30),
   repeatReminders: z.boolean(),
   autostart: z.boolean(),
+  silentAutostart: z.boolean().default(true),
   runInBackground: z.boolean(),
   soundEnabled: z.boolean(),
   meetingMode: z.boolean(),
