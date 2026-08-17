@@ -1,11 +1,14 @@
 import { CloudSun, RefreshCw } from 'lucide-react'
+import type { Language } from '../../i18n'
+import { translateNow } from '../../runtimeI18n'
 import { weatherCodeLabel } from './openMeteo'
 import { windLevelLabel } from './presentation'
 import { usePrimaryWeather } from './usePrimaryWeather'
 import { WeatherGlyph } from './WeatherGlyph'
 
-export function TodayWeatherHeader() {
+export function TodayWeatherHeader({ language }: { language: Language }) {
   const { location, forecast, loading, error } = usePrimaryWeather()
+  const t = (value: string) => translateNow(value, language)
 
   if (!location) return null
 
@@ -31,10 +34,10 @@ export function TodayWeatherHeader() {
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-baseline gap-3">
           <strong className="shrink-0 text-[36px] leading-none tracking-[-.04em]">{Math.round(forecast.current.temperature)}°</strong>
-          <b className="truncate text-[15px]">{weatherCodeLabel(forecast.current.weatherCode)}</b>
+          <b className="truncate text-[15px]">{t(weatherCodeLabel(forecast.current.weatherCode))}</b>
         </span>
         <span className="mt-3 block truncate text-[12px] text-muted">
-          湿度 {Math.round(forecast.current.humidity)}% · {windLevelLabel(forecast.current.windSpeed)} {Math.round(forecast.current.windSpeed)} km/h
+          {language === 'en-US' ? 'Humidity' : '湿度'} {Math.round(forecast.current.humidity)}% · {t(windLevelLabel(forecast.current.windSpeed))} {Math.round(forecast.current.windSpeed)} km/h
         </span>
       </span>
     </div>

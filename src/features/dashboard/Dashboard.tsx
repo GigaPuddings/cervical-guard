@@ -158,7 +158,7 @@ export function Dashboard(props: DashboardProps) {
         <div className={cn('h-full min-h-0', page === 'privacy' ? 'overflow-y-auto' : 'overflow-hidden')}>
           {page === 'today' && <TodayPage {...props} />}
           {page === 'statistics' && <StatisticsPage statistics={props.statistics} history={props.behaviorHistory} snapshot={snapshot} />}
-          {page === 'weather' && <WeatherPage />}
+          {page === 'weather' && <WeatherPage language={language} />}
           {page === 'settings' && <SettingsPage snapshot={snapshot} error={props.error} onSave={props.onSaveSettings} onExport={props.onExport} onDeleteData={props.onDeleteData} onEnableCamera={props.onEnableCamera} onRecalibrate={props.onRecalibrate} />}
           {page === 'privacy' && <PrivacyPage snapshot={snapshot} onExport={props.onExport} onDeleteData={props.onDeleteData} />}
         </div>

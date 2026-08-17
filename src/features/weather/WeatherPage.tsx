@@ -1,6 +1,8 @@
 import { CloudSun, MapPin, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '../../utils'
+import type { Language } from '../../i18n'
+import { translateNow } from '../../runtimeI18n'
 import { searchChineseCities, weatherCodeLabel } from './openMeteo'
 import { locationSubtitle } from './presentation'
 import { getWeatherForecast, loadPreferredWeatherLocation, loadWeatherLocations, removeCachedForecast, savePreferredWeatherLocation, saveWeatherLocations } from './repository'
@@ -17,7 +19,17 @@ export function reasonMessage(reason: unknown): string {
   if (typeof reason === 'string' && reason.trim()) return reason.trim()
   return '操作暂时无法完成'
 }
-export function WeatherPage() {
+
+export function locationNeedsLanguageRefresh(location: WeatherLocation, language: Language): boolean {
+  const label = `${location.name} ${location.admin1} ${location.country}`
+  const hasHan = (value: string) => /[\u3400-\u9fff]/u.test(value)
+  return language === 'en-US'
+    ? hasHan(label)
+    : !hasHan(location.name) || Boolean(location.admin1 && !hasHan(location.admin1)) || !hasHan(location.country)
+}
+
+export function WeatherPage({ language }: { language: Language }) {
+  const t = (value: string) => translateNow(value, language)
   const [locations, setLocations] = useState<WeatherLocation[]>(loadWeatherLocations)
   const [activeLocationId, setActiveLocationId] = useState<string | null>(() => loadPreferredWeatherLocation()?.id ?? null)
   const [forecasts, setForecasts] = useState<Record<string, WeatherForecast>>({})
@@ -67,6 +79,39 @@ export function WeatherPage() {
       void refreshOne(location)
     }
   }, [locations, refreshOne])
+
+  useEffect(() => {
+    const pending = locations.filter(location => locationNeedsLanguageRefresh(location, language))
+    if (pending.length === 0) return
+
+    let cancelled = false
+    void Promise.all(pending.map(async location => {
+      try {
+        const matches = await searchChineseCities(location.name, undefined, language)
+        const match = matches.find(candidate => candidate.id === location.id)
+        return match
+          ? { ...location, name: match.name, admin1: match.admin1, country: match.country }
+          : location
+      } catch {
+        // Display metadata is optional. Keep the saved location and cached weather available offline.
+        return location
+      }
+    })).then(localized => {
+      if (cancelled || !mounted.current) return
+      const byId = new Map(localized.map(location => [location.id, location]))
+      const next = locations.map(location => byId.get(location.id) ?? location)
+      const changed = next.some((location, index) => location.name !== locations[index]?.name
+        || location.admin1 !== locations[index]?.admin1
+        || location.country !== locations[index]?.country)
+      if (!changed) return
+      setLocations(next)
+      saveWeatherLocations(next)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [language, locations])
 
   useEffect(() => {
     if (locations.length === 0) {
@@ -143,7 +188,7 @@ export function WeatherPage() {
     setSearchError(null)
     setNotice(null)
     try {
-      const next = await searchChineseCities(query)
+      const next = await searchChineseCities(query, undefined, language)
       setResults(next)
       if (next.length === 0) setSearchError('没有找到匹配的中国城市，请尝试输入完整城市名')
     } catch (reason) {
@@ -203,7 +248,7 @@ export function WeatherPage() {
                 <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">{selectedIds.has(result.id) ? <MapPin size={14} /> : <Plus size={14} />}</span>
                 <span className="min-w-0">
                   <strong className="block truncate text-[clamp(11px,.78vw,14px)]">{result.name}</strong>
-                  <small className="mt-0.5 block truncate text-[clamp(8px,.62vw,11px)] text-muted">{locationSubtitle(result)}</small>
+                  <small className="mt-0.5 block truncate text-[clamp(8px,.62vw,11px)] text-muted">{locationSubtitle(result, language)}</small>
                 </span>
                 <span className="ml-auto shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[clamp(7px,.52vw,9px)] font-bold text-accent">城市</span>
               </button>
@@ -239,7 +284,7 @@ export function WeatherPage() {
                       <span className={cn('grid size-[clamp(28px,2.4vw,36px)] shrink-0 place-items-center rounded-lg', selected ? 'bg-panel text-accent' : 'bg-panel-muted text-muted')}>{forecast ? <WeatherGlyph code={forecast.current.weatherCode} size={15} /> : <MapPin size={15} />}</span>
                       <span className="min-w-0">
                         <strong className="block truncate text-[clamp(11px,.8vw,14px)]">{location.name}</strong>
-                        <small className="block truncate text-[clamp(8px,.6vw,11px)] text-muted">{forecast ? `${Math.round(forecast.current.temperature)}° · ${weatherCodeLabel(forecast.current.weatherCode)}` : location.admin1 || '等待天气'}</small>
+                        <small className="block truncate text-[clamp(8px,.6vw,11px)] text-muted">{forecast ? `${Math.round(forecast.current.temperature)}° · ${t(weatherCodeLabel(forecast.current.weatherCode))}` : t(location.admin1 || '等待天气')}</small>
                       </span>
                     </button>
                     <button className="grid size-6 shrink-0 place-items-center rounded-md text-subtle opacity-0 hover:bg-danger-soft hover:text-danger group-hover:opacity-100 focus:opacity-100" aria-label={`移除${location.name}`} onClick={() => removeLocation(location)}>
@@ -254,6 +299,7 @@ export function WeatherPage() {
         </aside>
 
         <WeatherDetail
+          language={language}
           location={activeLocation}
           forecast={activeForecast}
           error={activeLocation ? errors[activeLocation.id] : undefined}

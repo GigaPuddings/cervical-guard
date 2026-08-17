@@ -1,13 +1,20 @@
 import { weatherCodeLabel } from './openMeteo'
+import type { Language } from '../../i18n'
+import { translateNow } from '../../runtimeI18n'
 import type { WeatherForecast, WeatherLocation, WeatherSummary } from './types'
 
-export function locationSubtitle(location: WeatherLocation): string {
-  return [location.admin1, location.country].filter((value, index, all) => value && all.indexOf(value) === index).join(' · ')
+export function locationSubtitle(location: WeatherLocation, language: Language = 'zh-CN'): string {
+  return [location.admin1, location.country]
+    .filter((value, index, all) => value && all.indexOf(value) === index)
+    .map(value => translateNow(value, language))
+    .join(' · ')
 }
 
-export function formatWeatherUpdatedAt(forecast: WeatherForecast): string {
+export function formatWeatherUpdatedAt(forecast: WeatherForecast, language: Language = 'zh-CN'): string {
   const date = new Date(forecast.fetchedAt)
-  return Number.isNaN(date.getTime()) ? '更新时间未知' : `${new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' }).format(date)} 更新`
+  if (Number.isNaN(date.getTime())) return translateNow('更新时间未知', language)
+  const time = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' }).format(date)
+  return language === 'en-US' ? `Updated ${time}` : `${time} 更新`
 }
 
 export function windLevelLabel(speed: number): string {

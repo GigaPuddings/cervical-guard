@@ -49,7 +49,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
         </div>
         <div className="hidden h-full min-w-0 items-center justify-end gap-4 min-[1180px]:flex">
           <div className="w-55 shrink-0 translate-y-1.5 empty:hidden">
-            <TodayWeatherHeader />
+            <TodayWeatherHeader language={languageOf(snapshot.settings.language)} />
           </div>
           <button className="inline-flex h-11 w-42 shrink-0 translate-y-4 items-center justify-center gap-2 rounded-full bg-accent-soft px-5 text-[12px] font-bold text-foreground transition-colors hover:bg-accent-soft-strong" onClick={snapshot.lifecycle === 'break' ? onEndBreak : onStartBreak}>
             <Coffee size={17} /> {snapshot.lifecycle === 'break' ? '结束休息' : '主动休息'} <ChevronRight size={15} />

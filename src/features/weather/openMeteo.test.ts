@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { outdoorActivityAdvice, rankChineseCityResults, weatherCodeLabel } from "./openMeteo";
-import { uvIndexLabel, weatherHealthAdvice, windLevelLabel } from "./presentation";
+import { formatWeatherUpdatedAt, locationSubtitle, uvIndexLabel, weatherHealthAdvice, windLevelLabel } from "./presentation";
 import type { WeatherForecast } from "./types";
 
 function forecast(overrides: Partial<WeatherForecast["current"]> = {}, rainProbability = 10): WeatherForecast {
@@ -43,6 +43,11 @@ describe("weather presentation", () => {
     expect(uvIndexLabel(2.9)).toBe("低");
     expect(uvIndexLabel(6)).toBe("较高");
     expect(windLevelLabel(8)).toBe("微风");
+  });
+
+  it("formats weather metadata for the selected interface language", () => {
+    expect(locationSubtitle(forecast().location, "en-US")).toBe("北京市 · China");
+    expect(formatWeatherUpdatedAt(forecast(), "en-US")).toMatch(/^Updated /);
   });
 
   it("turns rain and high UV into health-aware break guidance", () => {

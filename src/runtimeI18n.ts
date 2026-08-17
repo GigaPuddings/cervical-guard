@@ -11,6 +11,7 @@ const zhToEn: Record<string, string> = {
   习惯趋势: 'Trends',
   天气与活动: 'Weather & activity',
   偏好设置: 'Preferences',
+  偏好设置分类: 'Preference sections',
   关闭导航: 'Close navigation',
   打开导航: 'Open navigation',
   主导航: 'Main navigation',
@@ -24,6 +25,7 @@ const zhToEn: Record<string, string> = {
   本地隐私模式: 'Local privacy mode',
   '画面不保存、不上传': 'Frames are neither saved nor uploaded',
   使用帮助: 'Help',
+  预览提醒: 'Preview reminder',
   '健康提醒 v0.1.0 · 行为提醒工具': 'Health Reminder v0.1.0 · Behavior reminder',
   今天: 'Today',
   照顾好当下的姿势: 'Take care of your posture',
@@ -68,7 +70,9 @@ const zhToEn: Record<string, string> = {
   忽略提醒: 'Dismissed reminders',
   离座活动: 'Away activity',
   主动休息也会被记录: 'Manual breaks are recorded too',
+  正在形成好习惯: 'A healthy habit is taking shape',
   我们会控制提醒频率: 'Reminder frequency stays controlled',
+  短暂离开也被记录: 'Short periods away are recorded too',
   起身接水也算活动: 'Getting up for water counts as activity',
   '已离座 · 计时已暂停': 'Away · timer paused',
   回来后会继续判断当前会话: 'The current session continues when you return',
@@ -97,8 +101,11 @@ const zhToEn: Record<string, string> = {
   '近 7 天': 'Last 7 days',
   '近 30 天': 'Last 30 days',
   日均坐姿: 'Average sitting',
+  稳定坐姿累计: 'Stable sitting total',
   最长连续: 'Longest session',
   逐步缩短即可: 'Reduce it gradually',
+  提醒转化: 'reminder conversion',
+  暂无提醒: 'No reminders yet',
   每日行为: 'Daily behavior',
   坐姿与低头变化: 'Sitting and head-down trends',
   坐姿: 'Sitting',
@@ -163,8 +170,44 @@ const zhToEn: Record<string, string> = {
   '平衡 · 推荐': 'Balanced · recommended',
   '较高 · 更早识别': 'High · earlier detection',
   重新校准正常坐姿: 'Recalibrate natural posture',
+  重新启用姿势检测: 'Re-enable posture detection',
+  开启姿势检测并校准: 'Enable and calibrate posture detection',
   久坐节奏: 'Sitting cadence',
   '设置首次提醒、重复间隔和休息时长': 'Configure the first reminder, repeat interval, and break duration',
+  久坐首次提醒: 'First sitting reminder',
+  '建议用轻活动打断连续久坐；45 分钟是兼顾专注的产品参考，并非医疗处方。': 'Break up prolonged sitting with light activity. The 45-minute reference balances focus and movement; it is not medical advice.',
+  自定义时长: 'Custom duration',
+  自定义久坐提醒时长: 'Custom sitting reminder duration',
+  单位: 'Unit',
+  秒: 'seconds',
+  分钟: 'minutes',
+  久坐提醒时间单位: 'Sitting reminder time unit',
+  快速时长: 'Quick durations',
+  '10 秒测试': '10-second test',
+  '30 秒测试': '30-second test',
+  '30 分钟 · 积极': '30 minutes · active',
+  '45 分钟 · 推荐': '45 minutes · recommended',
+  '60 分钟 · 温和': '60 minutes · gentle',
+  '1 分钟 · 快速活动': '1 minute · quick activity',
+  '2 分钟 · 轻量休息': '2 minutes · light break',
+  '3 分钟 · 日常节奏': '3 minutes · daily rhythm',
+  '5 分钟 · 健康推荐': '5 minutes · healthy recommendation',
+  '10 分钟 · 充分休息': '10 minutes · full break',
+  测试模式: 'Test mode',
+  '不受工作与静默时段限制': 'ignores work and quiet hours',
+  '连续时长较长，建议优先选择 30–60 分钟': 'This duration is long; prefer 30–60 minutes',
+  '当前处于 30–60 分钟参考范围': 'Within the recommended 30–60 minute range',
+  '提醒较频繁，可按工作节奏调整': 'Frequent reminders; adjust them to your work rhythm',
+  测试: 'test',
+  积极: 'active',
+  推荐: 'recommended',
+  温和: 'gentle',
+  跟随测试阈值: 'follows the test threshold',
+  快速活动: 'quick activity',
+  轻量休息: 'light break',
+  日常节奏: 'daily rhythm',
+  健康推荐: 'healthy recommendation',
+  充分休息: 'full break',
   重复提醒: 'Repeat reminder',
   有效休息: 'Effective break',
   静默时段: 'Quiet hours',
@@ -252,6 +295,17 @@ const zhToEn: Record<string, string> = {
   搜索中国城市: 'Search Chinese cities',
   搜索: 'Search',
   '搜索并选择城市，不读取设备位置': 'Search and select a city; device location is never read',
+  '输入城市名，例如：南京、杭州、深圳': 'Enter a city, for example: Nanjing, Hangzhou, or Shenzhen',
+  '请输入至少 2 个字符，例如“北京”或“杭州市”': 'Enter at least 2 characters, such as “Beijing” or “Hangzhou”.',
+  '没有找到匹配的中国城市，请尝试输入完整城市名': 'No matching Chinese city was found. Try the full city name.',
+  请求已取消: 'Request canceled',
+  操作暂时无法完成: 'The operation is temporarily unavailable',
+  '天气服务响应超时，请稍后重试': 'The weather service timed out. Try again later.',
+  '天气服务返回了无法识别的数据': 'The weather service returned unrecognized data.',
+  '天气服务连接失败，请检查网络后重试': 'Could not connect to the weather service. Check your network and try again.',
+  天气服务没有返回逐日预报: 'The weather service returned no daily forecast.',
+  '仅展示中国城市行政中心': 'Chinese administrative centers only',
+  已选: 'Selected',
   城市搜索结果: 'City search results',
   城市: 'City',
   关注地点: 'Saved places',
@@ -262,17 +316,48 @@ const zhToEn: Record<string, string> = {
   '天气详情、今日概览和休息建议会共用你选择的首选地点。': 'Weather details, Today, and break advice share your preferred place.',
   天气加载失败: 'Weather failed to load',
   离线缓存: 'Offline cache',
+  更新时间未知: 'Update time unknown',
   体感: 'Feels like',
   云量: 'Cloud cover',
   湿度: 'Humidity',
   紫外线: 'UV index',
   今日降水量: 'Rain today',
+  降水: 'Rain',
   降水概率: 'Rain chance',
   结合天气的休息建议: 'Weather-aware break advice',
   今日环境范围: "Today's range",
   雨: 'Rain',
   'UV 峰值': 'Peak UV',
   '模型预报仅供生活参考，不参与医疗判断或自动修改提醒。': 'Forecasts are for daily reference only and do not affect medical judgment or reminder settings.',
+  中国: 'China',
+  静风: 'Calm',
+  微风: 'Light breeze',
+  和风: 'Moderate breeze',
+  劲风: 'Strong breeze',
+  强风: 'High wind',
+  低: 'Low',
+  中等: 'Moderate',
+  较高: 'High',
+  很高: 'Very high',
+  极高: 'Extreme',
+  周一: 'Mon',
+  周二: 'Tue',
+  周三: 'Wed',
+  周四: 'Thu',
+  周五: 'Fri',
+  周六: 'Sat',
+  周日: 'Sun',
+  '雷暴天气优先在室内活动，并远离敞开的窗边。': 'Stay active indoors during thunderstorms and keep away from open windows.',
+  '有降水，休息时可在室内走动，避免久坐后立即冒雨外出。': 'When it is raining, walk indoors during breaks instead of heading straight outside.',
+  '有降水，起身活动优先选择室内通道。': 'When it is raining, choose an indoor route for movement breaks.',
+  '紫外线很强，这轮休息在室内放松肩颈更稳妥。': 'UV is very high; relax your neck and shoulders indoors for this break.',
+  '紫外线很强，短时外出也要做好遮阳。': 'UV is very high; use sun protection even for a short trip outside.',
+  '体感炎热，起身后先补水，再做轻缓活动。': 'It feels hot. Hydrate before starting gentle movement.',
+  '体感较冷，先活动肩背和脚踝，再考虑到室外走动。': 'It feels cold. Warm up your shoulders, back, and ankles before going outside.',
+  '湿度偏高，活动强度保持轻缓，及时补水并留意闷热感。': 'Humidity is high. Keep activity light, hydrate, and watch for stuffiness.',
+  '风力较强，开窗和外出活动时注意避开强阵风。': 'Wind is strong. Avoid gusts when opening windows or moving outdoors.',
+  '天气较平稳，可以走几步、看看远处，让肩颈和眼睛一起放松。': 'Conditions are stable. Walk a little and look into the distance to relax your neck, shoulders, and eyes.',
+  '天气较平稳，工作间隙适合起身走动几分钟。': 'Conditions are stable; a short walk fits well between work sessions.',
   晴: 'Clear',
   大部晴朗: 'Mostly clear',
   局部多云: 'Partly cloudy',
@@ -290,6 +375,24 @@ const zhToEn: Record<string, string> = {
   正在校准: 'Calibrating',
   检测进行中: 'Monitoring',
   检测已暂停: 'Monitoring paused',
+  恢复后继续: 'Continues after resuming',
+  恢复检测后继续累计: 'Timing continues after monitoring resumes',
+  恢复后继续普通定时提醒: 'Timer reminders continue after resuming',
+  结束休息后继续本地姿态识别: 'Local posture detection continues after the break',
+  结束休息后继续普通定时提醒: 'Timer reminders continue after the break',
+  周末暂停提醒: 'Reminders paused for the weekend',
+  等待确认完成: 'Waiting for completion confirmation',
+  请在灵动岛确认完成: 'Confirm completion in Dynamic Island',
+  本次提醒已发出: 'Reminder sent',
+  请处理当前提醒: 'Respond to the current reminder',
+  提醒已发出: 'Reminder sent',
+  即将提醒: 'Reminder coming soon',
+  等待稳定坐姿: 'Waiting for stable posture',
+  识别稳定后开始计时: 'Timing starts after stable detection',
+  重复提醒已关闭: 'Repeat reminders are off',
+  休息后重新计时: 'Timing restarts after a break',
+  等待你开始休息: 'Waiting for you to start a break',
+  正在计算下一次提醒: 'Calculating the next reminder',
   休息中: 'On break',
   定时中: 'Timer',
   开启姿势检测: 'Enable posture detection',
@@ -299,14 +402,28 @@ const zhToEn: Record<string, string> = {
   休息: 'Break',
   稍后: 'Later',
   暂停一小时: 'Pause for one hour',
-  忽略本次: 'Dismiss this reminder'
+  忽略本次: 'Dismiss this reminder',
+  该舒展一下了: 'Time to stretch',
+  起来走一走吧: 'Take a short walk',
+  试着抬起头: 'Lift your head',
+  '你已经连续坐了一段时间，也有持续低头的迹象。建议站起来活动 2～5 分钟。': 'You have been sitting and looking down for a while. Stand up and move for 2–5 minutes.',
+  '你已经连续坐了一段时间，建议站起来活动 2～5 分钟。': 'You have been sitting for a while. Stand up and move for 2–5 minutes.',
+  '检测到你已经低头一段时间，可以抬高视线并放松颈肩。': 'You have been looking down for a while. Raise your gaze and relax your neck and shoulders.'
 }
 
 const enToZh = Object.fromEntries(Object.entries(zhToEn).map(([zh, en]) => [en, zh]))
+const zhPhrases = Object.entries(zhToEn).sort(([left], [right]) => right.length - left.length)
+const enPhrases = zhPhrases.map(([zh, en]) => [en, zh] as const).sort(([left], [right]) => right.length - left.length)
+
+function replacePhrases(value: string, phrases: ReadonlyArray<readonly [string, string]>): string {
+  return phrases.reduce((result, [source, target]) => result.includes(source) ? result.replaceAll(source, target) : result, value)
+}
 
 export function translateDynamic(value: string, language: Language): string {
-  if (language === 'zh-CN')
-    return (enToZh[value] ?? value)
+  if (language === 'zh-CN') {
+    const exact = enToZh[value]
+    if (exact) return exact
+    const dynamic = value
       .replace(/^Continuous:\s+/, '已连续 ')
       .replace(/^Break remaining:\s+/, '休息剩余 ')
       .replace(/^Remaining:\s+/, '剩余 ')
@@ -317,9 +434,14 @@ export function translateDynamic(value: string, language: Language): string {
       .replace(/\s+away events$/, ' 次离座')
       .replace(/\s+times$/, ' 次')
       .replace(/^Device:\s*/, '设备：')
+    return replacePhrases(dynamic, enPhrases)
+      .replace(/(\d+(?:\.\d+)?)\s+seconds?\b/g, '$1 秒')
+      .replace(/(\d+(?:\.\d+)?)\s+minutes?\b/g, '$1 分钟')
+      .replace(/(\d+(?:\.\d+)?)% of reminders/g, '$1% 的提醒')
+  }
   const exact = zhToEn[value]
   if (exact) return exact
-  return value
+  const dynamic = value
     .replace(/^已连续\s+/, 'Continuous: ')
     .replace(/^休息剩余\s+/, 'Break remaining: ')
     .replace(/^剩余\s+/, 'Remaining: ')
@@ -336,6 +458,14 @@ export function translateDynamic(value: string, language: Language): string {
     .replace(/^已选 /, 'Selected ')
     .replace(/^连续坐姿 /, 'Continuous sitting: ')
     .replace(/^最长连续\s+/, 'Longest session: ')
+    .replace(/(\d+(?:\.\d+)?)%\s*的提醒/g, '$1% of reminders')
+    .replace(/^已添加 (.+)，并设为概览天气$/, 'Added $1 and set it as overview weather')
+    .replace(/^(.+) 已在关注列表中$/, '$1 is already in saved places')
+    .replace(/^最多关注 (\d+) 个地点，请先移除一个$/, 'You can save up to $1 places; remove one first')
+    .replace(/^(\d{2}:\d{2}) 更新$/, 'Updated $1')
+  return replacePhrases(dynamic, zhPhrases)
+    .replace(/(\d+(?:\.\d+)?)\s*秒/g, '$1 seconds')
+    .replace(/(\d+(?:\.\d+)?)\s*分钟/g, '$1 minutes')
 }
 
 function translateElement(root: ParentNode, language: Language) {

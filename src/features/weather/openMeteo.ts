@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { Language } from '../../i18n'
 import type { CitySearchResult, DailyWeather, WeatherForecast, WeatherLocation } from './types'
 
 const FORECAST_ENDPOINT = 'https://api.open-meteo.com/v1/forecast'
@@ -78,14 +79,14 @@ async function requestJson(url: URL, signal?: AbortSignal): Promise<unknown> {
   }
 }
 
-export async function searchChineseCities(query: string, signal?: AbortSignal): Promise<CitySearchResult[]> {
+export async function searchChineseCities(query: string, signal?: AbortSignal, language: Language = 'zh-CN'): Promise<CitySearchResult[]> {
   const keyword = query.trim()
   if (keyword.length < 2) return []
   const url = new URL(GEOCODING_ENDPOINT)
   url.search = new URLSearchParams({
     name: keyword,
     count: '12',
-    language: 'zh',
+    language: language === 'en-US' ? 'en' : 'zh',
     format: 'json',
     countryCode: 'CN'
   }).toString()

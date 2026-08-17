@@ -189,8 +189,20 @@
       let language = 'zh-CN';
       const closeAnimationMs = 250;
       const tr = (zh, en) => language === 'en-US' ? en : zh;
+      const weatherConditions = {
+        '晴': 'Clear', '大部晴朗': 'Mostly clear', '局部多云': 'Partly cloudy', '阴': 'Overcast',
+        '有雾': 'Foggy', '毛毛雨': 'Drizzle', '有雨': 'Rain', '有雪': 'Snow', '阵雨': 'Showers',
+        '阵雪': 'Snow showers', '雷暴': 'Thunderstorm', '天气变化中': 'Changing weather',
+      };
+      const localizeCondition = (value) => language === 'en-US' ? (weatherConditions[value] || value) : value;
+      const localizeReminderTitle = (value) => {
+        if (language !== 'en-US') return value;
+        return ({ '该舒展一下了': 'Time to stretch', '起来走一走吧': 'Take a short walk', '试着抬起头': 'Lift your head' })[value] || value;
+      };
       const applyLanguage = (snapshot) => {
-        const next = snapshot && snapshot.settings && snapshot.settings.language === 'en-US' ? 'en-US' : 'zh-CN';
+        const next = snapshot && snapshot.settings
+          ? (snapshot.settings.language === 'en-US' ? 'en-US' : 'zh-CN')
+          : language;
         language = next;
         document.documentElement.lang = next;
         document.title = tr('健康提醒', 'Health Reminder');
@@ -239,15 +251,17 @@
         meta.textContent = value;
         weatherMini.hidden = !weatherSummary;
         if (!weatherSummary) return;
-        weatherText.textContent = `${weatherSummary.condition} ${Math.round(Number(weatherSummary.temperature) || 0)}°`;
-        weatherMini.title = `${weatherSummary.location} · ${weatherSummary.condition} · ${Math.round(Number(weatherSummary.temperature) || 0)}°`;
+        const condition = localizeCondition(weatherSummary.condition);
+        weatherText.textContent = `${condition} ${Math.round(Number(weatherSummary.temperature) || 0)}°`;
+        weatherMini.title = `${weatherSummary.location} · ${condition} · ${Math.round(Number(weatherSummary.temperature) || 0)}°`;
       };
       const renderWeatherDetail = () => {
         const node = document.querySelector('#d-weather');
         node.hidden = !weatherSummary;
         if (!weatherSummary) return;
-        document.querySelector('#d-weather-main').textContent = `${weatherSummary.location} · ${weatherSummary.condition} ${Math.round(Number(weatherSummary.temperature) || 0)}°`;
-        document.querySelector('#d-weather-meta').textContent = `湿度 ${Math.round(Number(weatherSummary.humidity) || 0)}% · UV ${Number(weatherSummary.uvIndex || 0).toFixed(1)}`;
+        const condition = localizeCondition(weatherSummary.condition);
+        document.querySelector('#d-weather-main').textContent = `${weatherSummary.location} · ${condition} ${Math.round(Number(weatherSummary.temperature) || 0)}°`;
+        document.querySelector('#d-weather-meta').textContent = `${tr('湿度', 'Humidity')} ${Math.round(Number(weatherSummary.humidity) || 0)}% · UV ${Number(weatherSummary.uvIndex || 0).toFixed(1)}`;
       };
       const updateWeather = (summary) => {
         if (!summary || typeof summary !== 'object' || !summary.location) {
@@ -334,7 +348,7 @@
         if (!reminder) return;
         setIcon('bell');
         renderMeta(`${tr('已连续', 'Continuous')} ${duration(reminder.durationSeconds)}`);
-        title.textContent = reminder.title || tr('该舒展一下了', 'Time to stretch');
+        title.textContent = localizeReminderTitle(reminder.title) || tr('该舒展一下了', 'Time to stretch');
         enterMode('reminder');
       };
       const renderBreak = (snapshot) => {
@@ -429,15 +443,17 @@
         return language === 'en-US' ? (englishLabels[snapshot.behavior] || 'Monitoring locally') : (labels[snapshot.behavior] || '本地监测中');
       };
       const nextLabel = (snapshot) => {
-        if (snapshot.lifecycle === 'break') return `休息剩余 ${duration(snapshot.breakRemainingSeconds)}`;
-        if (snapshot.lifecycle === 'paused') return '恢复检测后继续';
-        if (snapshot.currentReminder) return '提醒等待处理';
+        if (snapshot.lifecycle === 'break') return `${tr('休息剩余', 'Break remaining')} ${duration(snapshot.breakRemainingSeconds)}`;
+        if (snapshot.lifecycle === 'paused') return tr('恢复检测后继续', 'Continues after resuming');
+        if (snapshot.currentReminder) return tr('提醒等待处理', 'Reminder awaiting action');
         if (snapshot.nextReminderAt) {
           const date = new Date(snapshot.nextReminderAt);
-          if (!Number.isNaN(date.getTime())) return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+          if (!Number.isNaN(date.getTime())) return date.toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
         }
-        if (snapshot.monitoringMode === 'camera') return '稳定坐姿后开始计时';
-        return snapshot.reminderRemainingSeconds == null ? '按当前规则暂停' : `还需 ${duration(snapshot.reminderRemainingSeconds)}`;
+        if (snapshot.monitoringMode === 'camera') return tr('稳定坐姿后开始计时', 'Starts after stable posture');
+        return snapshot.reminderRemainingSeconds == null
+          ? tr('按当前规则暂停', 'Paused by current schedule')
+          : `${tr('还需', 'Remaining')} ${duration(snapshot.reminderRemainingSeconds)}`;
       };
       const fillDetail = (snapshot) => {
         if (!snapshot) return;
@@ -446,8 +462,10 @@
         permanentCloseAllowed = Boolean(snapshot.settings && snapshot.settings.islandPermanentCloseEnabled);
         permanentClose.hidden = !permanentCloseAllowed;
         const now = new Date();
-        document.querySelector('#d-date').textContent = `${now.getMonth() + 1}月${now.getDate()}日`;
-        document.querySelector('#d-state').textContent = stateLabel(snapshot);
+        document.querySelector('#d-date').textContent = new Intl.DateTimeFormat(language, { month: 'short', day: 'numeric' }).format(now);
+        const currentState = stateLabel(snapshot);
+        document.querySelector('#d-state').textContent = currentState;
+        title.textContent = currentState;
         document.querySelector('#d-seated').textContent = duration(snapshot.seatedSeconds);
         document.querySelector('#d-next').textContent = nextLabel(snapshot);
         document.querySelector('#d-today').textContent = duration(snapshot.today.seatedSeconds);
@@ -501,25 +519,31 @@
       buttons.forEach((button) => button.addEventListener('click', () => void perform(button)));
 
       if (!api) {
-        updateWeather({ location: '南京', condition: '多云', temperature: 27, humidity: 68, uvIndex: 4.2, weatherCode: 2 });
+        const previewParams = new URLSearchParams(location.search);
+        const previewLanguage = previewParams.get('lang') === 'en-US' ? 'en-US' : 'zh-CN';
+        const previewMode = previewParams.get('preview') || location.hash.slice(1);
         const preview = {
           lifecycle: 'monitoring', behavior: 'sitting_normal', monitoringMode: 'camera', seatedSeconds: 1530,
           nextReminderAt: new Date(Date.now() + 1170 * 1000).toISOString(), reminderRemainingSeconds: 1170,
           today: { seatedSeconds: 8100, breakCount: 2, awaySeconds: 540 },
           pausedUntil: null,
-          settings: { language: 'zh-CN', islandPersistentStatusEnabled: true, islandPausedStatusEnabled: true, islandPeekThroughEnabled: true, islandPermanentCloseEnabled: true },
+          settings: { language: previewLanguage, islandPersistentStatusEnabled: true, islandPausedStatusEnabled: true, islandPeekThroughEnabled: true, islandPermanentCloseEnabled: true },
         };
-        if (location.hash === '#detail') renderDetail(preview);
-        else if (location.hash === '#status') renderStatus(preview);
-        else if (location.hash === '#timer') renderStatus({ ...preview, lifecycle: 'degraded', monitoringMode: 'timer', behavior: 'unknown' });
-        else if (location.hash === '#paused') renderStatus({ ...preview, lifecycle: 'paused', pausedUntil: new Date(Date.now() + 15 * 60 * 1000).toISOString() });
-        else if (location.hash === '#away') renderAway();
-        else if (location.hash === '#returned') renderReturned();
-        else if (location.hash === '#head') renderBehavior({ behavior: 'head_down' });
-        else if (location.hash === '#standing') renderBehavior({ behavior: 'standing_break' });
-        else if (location.hash === '#break') renderBreak({ lifecycle: 'break', breakRemainingSeconds: 178 });
-        else if (location.hash === '#break-done') renderBreak({ lifecycle: 'break', breakRemainingSeconds: 0 });
-        else renderReminder({ durationSeconds: 1530, title: '该舒展一下了' });
+        applyLanguage(preview);
+        permanentCloseAllowed = Boolean(preview.settings.islandPermanentCloseEnabled);
+        permanentClose.hidden = !permanentCloseAllowed;
+        updateWeather({ location: tr('南京', 'Nanjing'), condition: '局部多云', temperature: 27, humidity: 68, uvIndex: 4.2, weatherCode: 2 });
+        if (previewMode === 'detail') renderDetail(preview);
+        else if (previewMode === 'status') renderStatus(preview);
+        else if (previewMode === 'timer') renderStatus({ ...preview, lifecycle: 'degraded', monitoringMode: 'timer', behavior: 'unknown' });
+        else if (previewMode === 'paused') renderStatus({ ...preview, lifecycle: 'paused', pausedUntil: new Date(Date.now() + 15 * 60 * 1000).toISOString() });
+        else if (previewMode === 'away') renderAway();
+        else if (previewMode === 'returned') renderReturned();
+        else if (previewMode === 'head') renderBehavior({ behavior: 'head_down' });
+        else if (previewMode === 'standing') renderBehavior({ behavior: 'standing_break' });
+        else if (previewMode === 'break') renderBreak({ lifecycle: 'break', breakRemainingSeconds: 178 });
+        else if (previewMode === 'break-done') renderBreak({ lifecycle: 'break', breakRemainingSeconds: 0 });
+        else renderReminder({ durationSeconds: 1530, title: tr('该舒展一下了', 'Time to stretch') });
         return;
       }
 

@@ -1,10 +1,12 @@
 import { Activity, Cloud, CloudSun, Droplets, MapPin, RefreshCw, SunMedium, Trash2, Umbrella, Wind } from 'lucide-react'
+import type { Language } from '../../i18n'
+import { translateNow } from '../../runtimeI18n'
 import { formatWeatherUpdatedAt, locationSubtitle, uvIndexLabel, weatherHealthAdvice, windLevelLabel } from './presentation'
 import { weatherCodeLabel } from './openMeteo'
 import type { WeatherForecast, WeatherLocation } from './types'
 import { WeatherGlyph } from './WeatherGlyph'
 
-export function WeatherDetail({ location, forecast, error, loading, onRefresh, onRemove }: { location: WeatherLocation | undefined; forecast: WeatherForecast | undefined; error: string | undefined; loading: boolean; onRefresh: () => void; onRemove: () => void }) {
+export function WeatherDetail({ language, location, forecast, error, loading, onRefresh, onRemove }: { language: Language; location: WeatherLocation | undefined; forecast: WeatherForecast | undefined; error: string | undefined; loading: boolean; onRefresh: () => void; onRemove: () => void }) {
   if (!location) {
     return (
       <article className="grid min-h-0 place-content-center justify-items-center rounded-2xl border border-dashed border-edge bg-panel-muted text-center">
@@ -26,7 +28,7 @@ export function WeatherDetail({ location, forecast, error, loading, onRefresh, o
           </span>
           <div className="min-w-0">
             <h2 className="truncate text-[clamp(13px,1vw,17px)] font-black">{location.name}</h2>
-            <p className="mt-0.5 truncate text-[clamp(9px,.65vw,12px)] text-muted">{locationSubtitle(location)}</p>
+            <p className="mt-0.5 truncate text-[clamp(9px,.65vw,12px)] text-muted">{locationSubtitle(location, language)}</p>
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
@@ -54,13 +56,14 @@ export function WeatherDetail({ location, forecast, error, loading, onRefresh, o
           </button>
         </div>
       )}
-      {forecast && <WeatherDetailContent forecast={forecast} />}
+      {forecast && <WeatherDetailContent language={language} forecast={forecast} />}
     </article>
   )
 }
 
-function WeatherDetailContent({ forecast }: { forecast: WeatherForecast }) {
+function WeatherDetailContent({ language, forecast }: { language: Language; forecast: WeatherForecast }) {
   const today = forecast.daily[0]
+  const t = (value: string) => translateNow(value, language)
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2.5 p-3">
       <div className="grid h-[clamp(138px,24vh,190px)] shrink-0 grid-cols-[152px_minmax(0,1fr)] gap-2.5">
@@ -69,18 +72,18 @@ function WeatherDetailContent({ forecast }: { forecast: WeatherForecast }) {
             <span className="grid size-10 place-items-center rounded-xl bg-panel">
               <WeatherGlyph code={forecast.current.weatherCode} size={24} />
             </span>
-            <small className="text-[clamp(8px,.6vw,11px)] font-bold">{forecast.stale ? '离线缓存' : formatWeatherUpdatedAt(forecast)}</small>
+            <small className="text-[clamp(8px,.6vw,11px)] font-bold">{forecast.stale ? t('离线缓存') : formatWeatherUpdatedAt(forecast, language)}</small>
           </div>
           <strong className="mt-3 block text-[clamp(38px,3.2vw,54px)] leading-none tracking-[-.06em]">{Math.round(forecast.current.temperature)}°</strong>
-          <span className="mt-1.5 block text-[clamp(11px,.9vw,15px)] font-bold">{weatherCodeLabel(forecast.current.weatherCode)}</span>
+          <span className="mt-1.5 block text-[clamp(11px,.9vw,15px)] font-bold">{t(weatherCodeLabel(forecast.current.weatherCode))}</span>
           <small className="mt-0.5 block text-[clamp(9px,.65vw,12px)]">
             体感 {Math.round(forecast.current.apparentTemperature)}° · 云量 {Math.round(forecast.current.cloudCover)}%
           </small>
         </div>
         <div className="grid min-w-0 grid-cols-3 grid-rows-2 gap-2">
           <WeatherMetric icon={Droplets} label="湿度" value={`${Math.round(forecast.current.humidity)}%`} />
-          <WeatherMetric icon={SunMedium} label={`紫外线 · ${uvIndexLabel(forecast.current.uvIndex)}`} value={forecast.current.uvIndex.toFixed(1)} />
-          <WeatherMetric icon={Wind} label={windLevelLabel(forecast.current.windSpeed)} value={`${Math.round(forecast.current.windSpeed)} km/h`} />
+          <WeatherMetric icon={SunMedium} label={`${t('紫外线')} · ${t(uvIndexLabel(forecast.current.uvIndex))}`} value={forecast.current.uvIndex.toFixed(1)} />
+          <WeatherMetric icon={Wind} label={t(windLevelLabel(forecast.current.windSpeed))} value={`${Math.round(forecast.current.windSpeed)} km/h`} />
           <WeatherMetric icon={Umbrella} label="今日降水量" value={`${(today?.precipitationSum ?? 0).toFixed(1)} mm`} />
           <WeatherMetric icon={Cloud} label="云量" value={`${Math.round(forecast.current.cloudCover)}%`} />
           <WeatherMetric icon={Umbrella} label="降水概率" value={`${Math.round(today?.precipitationProbability ?? 0)}%`} />
@@ -93,7 +96,7 @@ function WeatherDetailContent({ forecast }: { forecast: WeatherForecast }) {
           </span>
           <div className="min-w-0">
             <strong className="block text-[clamp(10px,.72vw,13px)]">结合天气的休息建议</strong>
-            <p className="mt-1 text-[clamp(10px,.72vw,13px)] leading-[1.55]">{weatherHealthAdvice(forecast)}</p>
+            <p className="mt-1 text-[clamp(10px,.72vw,13px)] leading-[1.55]">{t(weatherHealthAdvice(forecast))}</p>
           </div>
         </div>
         <div className="flex min-w-0 items-center gap-3 rounded-xl border border-edge bg-panel-muted px-3 py-2">
@@ -114,7 +117,7 @@ function WeatherDetailContent({ forecast }: { forecast: WeatherForecast }) {
       <div className="grid h-[clamp(82px,13vh,104px)] shrink-0 grid-cols-5 overflow-hidden rounded-xl border border-edge bg-panel-muted/70">
         {forecast.daily.map((day, index) => (
           <div key={day.date} className="grid min-w-0 place-content-center justify-items-center gap-1 border-r border-edge px-1 text-center last:border-r-0">
-            <span className="text-[clamp(9px,.65vw,11px)] font-bold text-muted">{index === 0 ? '今天' : new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(new Date(`${day.date}T12:00:00`))}</span>
+            <span className="text-[clamp(9px,.65vw,11px)] font-bold text-muted">{index === 0 ? t('今天') : new Intl.DateTimeFormat(language, { weekday: 'short' }).format(new Date(`${day.date}T12:00:00`))}</span>
             <span className="text-info">
               <WeatherGlyph code={day.weatherCode} size={17} />
             </span>
