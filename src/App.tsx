@@ -1,6 +1,6 @@
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Calibration } from './features/calibration/Calibration'
 import { Dashboard } from './features/dashboard/Dashboard'
 import { Onboarding } from './features/onboarding/Onboarding'
@@ -14,11 +14,23 @@ import type { AppSettings, AppSnapshot, CalibrationResult, VisionObservation } f
 import { downloadText } from './utils'
 import { useVisionMonitor } from './vision/useVisionMonitor'
 import { languageOf, localizeBackendMessage, type Language } from './i18n'
-import { useRuntimeI18n } from './runtimeI18n'
+import { defineMessages, localizeMessages, translateNow } from './runtimeI18n'
 import { UpdateDialog, useAppUpdater } from './features/updates/UpdatePanel'
 
-function errorMessage(reason: unknown): string {
-  return reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : '操作暂时无法完成'
+const appMessages = defineMessages({
+  operationUnavailable: '操作暂时无法完成',
+  title: '健康提醒 · 姿态与久坐',
+  cameraFailure: '摄像头或姿态模型无法启动',
+  unavailableMark: '健',
+  unavailableTitle: '本地状态暂不可用',
+  unavailableHint: '请关闭后重新打开应用',
+  exportFilename: '健康提醒统计',
+  confirmDelete: '确认删除全部本地统计数据？此操作无法撤销。设置和校准信息会保留。',
+  previewReminder: '预览提醒'
+})
+
+function errorMessage(reason: unknown, fallback: string): string {
+  return reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : fallback
 }
 
 function currentLocalDateKey(): string {
@@ -37,9 +49,9 @@ export function App() {
   const lastReminderId = useRef<string | null>(null)
   const fallbackStarted = useRef(false)
   const calibrationOrigin = useRef<'onboarding' | 'dashboard'>('onboarding')
-  const language = languageOf(snapshot?.settings.language)
+  const language = languageOf(snapshot?.settings.language ?? window.localStorage.getItem('cervical-guard-language'))
+  const messages = useMemo(() => localizeMessages(appMessages, language), [language])
   const updater = useAppUpdater(language)
-  useRuntimeI18n(language)
 
   const run = useCallback(
     async (operation: () => Promise<AppSnapshot>) => {
@@ -50,13 +62,13 @@ export function App() {
         if (epoch === snapshotEpoch.current) setSnapshot(next)
         return next
       } catch (reason) {
-        setError(errorMessage(reason))
+        setError(errorMessage(reason, messages.operationUnavailable))
         return null
       } finally {
         setBusy(false)
       }
     },
-    [setBusy, setError, setSnapshot]
+    [messages.operationUnavailable, setBusy, setError, setSnapshot]
   )
 
   useEffect(() => {
@@ -68,12 +80,12 @@ export function App() {
         if (!cancelled && epoch === snapshotEpoch.current) setSnapshot(value)
       })
       .catch((reason: unknown) => {
-        if (!cancelled) setError(errorMessage(reason))
+        if (!cancelled) setError(errorMessage(reason, messages.operationUnavailable))
       })
     return () => {
       cancelled = true
     }
-  }, [setError, setSnapshot])
+  }, [messages.operationUnavailable, setError, setSnapshot])
 
   useEffect(() => {
     if (!isTauri()) return
@@ -87,13 +99,13 @@ export function App() {
         else dispose()
       })
       .catch((reason: unknown) => {
-        if (active) setError(errorMessage(reason))
+        if (active) setError(errorMessage(reason, messages.operationUnavailable))
       })
     return () => {
       active = false
       unlisten?.()
     }
-  }, [setError, setSnapshot])
+  }, [messages.operationUnavailable, setError, setSnapshot])
 
   useEffect(() => {
     // Tauri 后台每秒广播完整快照；同时轮询会产生重复 IPC，并可能让较早发出的
@@ -118,16 +130,16 @@ export function App() {
         setStatistics(rows)
         setBehaviorHistory(events)
       })
-      .catch((reason: unknown) => setError(errorMessage(reason)))
-  }, [page, setBehaviorHistory, setError, setStatistics])
+      .catch((reason: unknown) => setError(errorMessage(reason, messages.operationUnavailable)))
+  }, [messages.operationUnavailable, page, setBehaviorHistory, setError, setStatistics])
 
   const loadBehaviorHistoryDate = useCallback(async (localDate: string) => {
     try {
       setBehaviorHistory(await coreClient.getBehaviorHistoryForDate(localDate))
     } catch (reason) {
-      setError(errorMessage(reason))
+      setError(errorMessage(reason, messages.operationUnavailable))
     }
-  }, [setBehaviorHistory, setError])
+  }, [messages.operationUnavailable, setBehaviorHistory, setError])
 
   useEffect(() => {
     const reminder = snapshot?.currentReminder
@@ -135,9 +147,9 @@ export function App() {
     lastReminderId.current = reminder.id
     if (!isTauri()) {
       const silent = !snapshot.settings.soundEnabled || snapshot.settings.meetingMode
-      void coreClient.notify(reminder.title, reminder.message, silent)
+      void coreClient.notify(translateNow(reminder.title, language), translateNow(reminder.message, language), silent)
     }
-  }, [snapshot?.currentReminder, snapshot?.settings.meetingMode, snapshot?.settings.soundEnabled])
+  }, [language, snapshot?.currentReminder, snapshot?.settings.meetingMode, snapshot?.settings.soundEnabled])
 
   const onObservation = useCallback(
     (observation: VisionObservation) => {
@@ -149,12 +161,12 @@ export function App() {
         .then(value => {
           if (epoch === snapshotEpoch.current) setSnapshot(value)
         })
-        .catch((reason: unknown) => setCameraFailure(errorMessage(reason)))
+        .catch((reason: unknown) => setCameraFailure(errorMessage(reason, messages.operationUnavailable)))
         .finally(() => {
           ingesting.current = false
         })
     },
-    [setSnapshot]
+    [messages.operationUnavailable, setSnapshot]
   )
 
   // 休息期间也保持摄像头低功耗运行：既能在休息中感知离座行为，
@@ -171,8 +183,8 @@ export function App() {
   useEffect(() => {
     if (!snapshot) return
     document.documentElement.lang = language
-    document.title = language === 'en-US' ? 'Health Reminder · Posture & Sitting' : '健康提醒 · 姿态与久坐'
-  }, [snapshot?.settings.language])
+    document.title = messages.title
+  }, [language, messages.title])
 
   // 摄像头管线恢复就绪后，清除上一轮残留的失败提示（如休息切换期间的瞬时错误）。
   useEffect(() => {
@@ -182,12 +194,12 @@ export function App() {
   useEffect(() => {
     if (!cameraActive || vision.status !== 'error' || fallbackStarted.current) return
     fallbackStarted.current = true
-    setCameraFailure(vision.error ?? '摄像头或姿态模型无法启动')
+    setCameraFailure(vision.error ?? messages.cameraFailure)
     void coreClient
       .startMonitoring('timer')
       .then(setSnapshot)
-      .catch((reason: unknown) => setError(errorMessage(reason)))
-  }, [cameraActive, setError, setSnapshot, vision.error, vision.status])
+      .catch((reason: unknown) => setError(errorMessage(reason, messages.operationUnavailable)))
+  }, [cameraActive, messages.cameraFailure, messages.operationUnavailable, setError, setSnapshot, vision.error, vision.status])
 
   useEffect(() => {
     if (cameraActive) fallbackStarted.current = false
@@ -202,10 +214,10 @@ export function App() {
   if (!snapshot) {
     return (
       <div className="grid h-full place-content-center justify-items-center gap-3.5 bg-canvas text-xs text-muted">
-        <div className="grid size-13 place-items-center rounded-[17px_17px_17px_6px] bg-accent text-[19px] font-extrabold text-inverse shadow-panel">健</div>
-        <strong>本地状态暂不可用</strong>
-        <span>请关闭后重新打开应用</span>
-        {error && <small className="text-danger">{error}</small>}
+        <div className="grid size-13 place-items-center rounded-[17px_17px_17px_6px] bg-accent text-[19px] font-extrabold text-inverse shadow-panel">{messages.unavailableMark}</div>
+        <strong>{messages.unavailableTitle}</strong>
+        <span>{messages.unavailableHint}</span>
+        {error && <small className="text-danger">{localizeBackendMessage(error, language)}</small>}
       </div>
     )
   }
@@ -221,7 +233,7 @@ export function App() {
       setShowIntro(false)
       await run(() => coreClient.finishOnboarding('camera', 'prompt'))
     } catch (reason) {
-      setCameraSetupError(errorMessage(reason))
+      setCameraSetupError(errorMessage(reason, messages.operationUnavailable))
     } finally {
       setBusy(false)
     }
@@ -246,13 +258,13 @@ export function App() {
   const exportStatistics = async () => {
     try {
       const csv = await coreClient.exportStatistics()
-      downloadText(`健康提醒统计_${new Date().toISOString().slice(0, 10)}.csv`, csv)
+      downloadText(`${messages.exportFilename}_${new Date().toISOString().slice(0, 10)}.csv`, csv)
     } catch (reason) {
-      setError(errorMessage(reason))
+      setError(errorMessage(reason, messages.operationUnavailable))
     }
   }
   const deleteData = async () => {
-    if (!window.confirm('确认删除全部本地统计数据？此操作无法撤销。设置和校准信息会保留。')) return
+    if (!window.confirm(messages.confirmDelete)) return
     await run(() => coreClient.deleteLocalData())
     setStatistics([])
     setBehaviorHistory([])
@@ -267,7 +279,7 @@ export function App() {
       const next = await run(() => coreClient.startCalibration())
       if (next) setPage('today')
     } catch (reason) {
-      setError(errorMessage(reason))
+      setError(errorMessage(reason, messages.operationUnavailable))
     } finally {
       setBusy(false)
     }
@@ -289,7 +301,7 @@ export function App() {
       }
       if (next) setPage('today')
     } catch (reason) {
-      setError(errorMessage(reason))
+      setError(errorMessage(reason, messages.operationUnavailable))
     } finally {
       setBusy(false)
     }
@@ -309,7 +321,7 @@ export function App() {
   }
 
   if (snapshot.lifecycle === 'calibrating') {
-    return <Calibration initialCameraId={snapshot.settings.cameraId} busy={busy} onComplete={(baseline, cameraId) => void finishCalibration(baseline, cameraId)} onTimerFallback={() => void startTimerOnboarding('denied')} onBack={() => void leaveCalibration()} />
+    return <Calibration initialCameraId={snapshot.settings.cameraId} language={language} busy={busy} onComplete={(baseline, cameraId) => void finishCalibration(baseline, cameraId)} onTimerFallback={() => void startTimerOnboarding('denied')} onBack={() => void leaveCalibration()} />
   }
 
   return (
@@ -352,8 +364,8 @@ export function App() {
       <UpdateDialog updater={updater} language={language} />
       {/* 浏览器开发环境保留页面内预览；桌面端只允许 Rust 创建的独立
           reminder-island 窗口承载提醒，避免在主窗口顶部重复渲染“伪灵动岛”。 */}
-      {!isTauri() && snapshot.currentReminder && <ReminderOverlay reminder={snapshot.currentReminder} onBreak={() => void run(() => coreClient.startBreak())} onSnooze={() => void run(() => coreClient.snoozeReminder(10))} onDismiss={() => void run(() => coreClient.dismissReminder())} onPause={() => void run(() => coreClient.pauseMonitoring(60))} />}
-      {!isTauri() && snapshot.lifecycle === 'break' && <BreakIsland snapshot={snapshot} onEnd={() => void run(() => coreClient.endBreak())} />}
+      {!isTauri() && snapshot.currentReminder && <ReminderOverlay reminder={snapshot.currentReminder} language={language} onBreak={() => void run(() => coreClient.startBreak())} onSnooze={() => void run(() => coreClient.snoozeReminder(10))} onDismiss={() => void run(() => coreClient.dismissReminder())} onPause={() => void run(() => coreClient.pauseMonitoring(60))} />}
+      {!isTauri() && snapshot.lifecycle === 'break' && <BreakIsland snapshot={snapshot} language={language} onEnd={() => void run(() => coreClient.endBreak())} />}
       {!isTauri() && import.meta.env.DEV && (
         <button
           className="fixed bottom-3 right-3 z-80 rounded-lg border border-dashed border-edge bg-panel/85 px-2 py-1 text-[8px] text-muted"
@@ -362,7 +374,7 @@ export function App() {
             void coreClient.getSnapshot().then(setSnapshot)
           }}
         >
-          预览提醒
+          {messages.previewReminder}
         </button>
       )}
     </>

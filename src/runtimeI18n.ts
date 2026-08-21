@@ -1,10 +1,68 @@
-import { useLayoutEffect } from 'react'
 import type { Language } from './i18n'
 
-// Source-copy catalog for legacy screens. New components should use keyed copy from i18n.ts;
-// this bridge keeps the existing dashboard/calibration/weather surfaces fully bilingual without
-// coupling product state to a third-party localization runtime.
+// Transitional source-copy catalog used only by explicit keyed messages and dynamic domain adapters.
+// Components must opt in through localizeMessages/translateNow; rendered DOM is never scanned.
 const zhToEn: Record<string, string> = {
+  '摄像头或姿态模型无法启动': 'The camera or posture model could not start',
+  健: 'H',
+  本地状态暂不可用: 'Local state is unavailable',
+  请关闭后重新打开应用: 'Close and reopen the app',
+  健康提醒统计: 'health-reminder-statistics',
+  '确认删除全部本地统计数据？此操作无法撤销。设置和校准信息会保留。': 'Delete all local statistics? This cannot be undone. Settings and calibration data will be kept.',
+  请选择: 'Select',
+  切换到浅色模式: 'Switch to light mode',
+  切换到深色模式: 'Switch to dark mode',
+  最小化: 'Minimize',
+  还原: 'Restore',
+  最大化: 'Maximize',
+  关闭: 'Close',
+  行为提醒工具: 'Behavior reminder tool',
+  默认摄像头: 'Default camera',
+  '。校准信息只保存一个数值基线。': '. Calibration stores only a numeric baseline.',
+  '当前不会读取摄像头，只根据启用时间提供久坐提醒。': 'The camera is not being read. Sitting reminders use elapsed time only.',
+  更快响应: 'Faster response',
+  更稳健: 'More robust',
+  减少误判: 'Reduce false detections',
+  测试时每: 'Repeat every',
+  秒重复: 'seconds during testing',
+  次提醒: 'reminders',
+  次离座: 'away events',
+  次: 'times',
+  的提醒: 'of reminders',
+  今日: 'Today',
+  全部: 'All',
+  条: 'records',
+  上一年: 'Previous year',
+  上个月: 'Previous month',
+  下个月: 'Next month',
+  下一年: 'Next year',
+  '正在读取当日记录…': 'Loading activity for this day…',
+  没有行为记录: 'No activity recorded',
+  次温和提醒: 'gentle reminders',
+  恢复提醒: 'Resume reminders',
+  剩余: 'Remaining',
+  休息剩余: 'Break remaining',
+  下次提醒: 'Next reminder',
+  距离首次提醒还有: 'Until the first reminder:',
+  距离下次提醒还有: 'Until the next reminder:',
+  还需稳定坐姿: 'Stable sitting needed for',
+  每: 'Every',
+  已连续: 'Continuous for',
+  刷新: 'Refresh',
+  天气: 'weather',
+  移除: 'Remove',
+  正在获取: 'Loading',
+  '天气…': 'weather…',
+  正在更新: 'Updating',
+  暂不可用: 'Unavailable',
+  正在读取最近天气: 'Loading recent weather',
+  今日天气: "Today's weather",
+  已在关注列表中: 'is already saved',
+  最多关注: 'You can save up to',
+  '个地点，请先移除一个': 'places; remove one first',
+  已添加: 'Added',
+  '，并设为概览天气': ' and set it as overview weather',
+  等待天气: 'Waiting for weather',
   健康提醒: 'Health Reminder',
   姿态与久坐: 'Posture & Sitting',
   今日概览: 'Today',
@@ -491,45 +549,19 @@ export function translateDynamic(value: string, language: Language): string {
     .replace(/(\d+(?:\.\d+)?)\s*分钟/g, '$1 minutes')
 }
 
-function translateElement(root: ParentNode, language: Language) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-  const textNodes: Text[] = []
-  while (walker.nextNode()) textNodes.push(walker.currentNode as Text)
-  for (const node of textNodes) {
-    if (node.parentElement?.closest('script,style')) continue
-    const raw = node.data
-    const trimmed = raw.trim()
-    if (!trimmed) continue
-    const translated = translateDynamic(trimmed, language)
-    if (translated !== trimmed) node.data = raw.replace(trimmed, translated)
-  }
-  for (const element of root.querySelectorAll<HTMLElement>('[aria-label],[title],[placeholder]')) {
-    for (const attr of ['aria-label', 'title', 'placeholder'] as const) {
-      const value = element.getAttribute(attr)
-      if (value) element.setAttribute(attr, translateDynamic(value, language))
-    }
-  }
-}
-
 export function translateNow(value: string, language: Language): string {
   return translateDynamic(value, language)
 }
 
-export function useRuntimeI18n(language: Language) {
-  useLayoutEffect(() => {
-    translateElement(document.body, language)
-    const observer = new MutationObserver(records => {
-      observer.disconnect()
-      for (const record of records) {
-        if (record.type === 'characterData' && record.target.parentNode) translateElement(record.target.parentNode, language)
-        for (const node of record.addedNodes) {
-          if (node.nodeType === Node.ELEMENT_NODE) translateElement(node as Element, language)
-          else if (node.parentNode) translateElement(node.parentNode, language)
-        }
-      }
-      observer.observe(document.body, { childList: true, subtree: true, characterData: true })
-    })
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true })
-    return () => observer.disconnect()
-  }, [language])
+export function defineMessages<const T extends Record<string, string>>(messages: T): T {
+  return messages
+}
+
+export function localizeMessages<T extends Record<string, string>>(
+  messages: T,
+  language: Language
+): { [K in keyof T]: string } {
+  return Object.fromEntries(
+    Object.entries(messages).map(([key, value]) => [key, translateDynamic(value, language)])
+  ) as { [K in keyof T]: string }
 }

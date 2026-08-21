@@ -5,10 +5,22 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { preferredTheme, saveTheme, type UiTheme } from "../theme";
 import type { Language } from "../i18n";
 import { languageOf } from "../i18n";
+import { defineMessages, localizeMessages } from "../runtimeI18n";
 import { useAppStore } from "../store";
+
+const chromeMessages = defineMessages({
+  title: "健康提醒 · 姿态与久坐",
+  lightTheme: "切换到浅色模式",
+  darkTheme: "切换到深色模式",
+  minimize: "最小化",
+  restore: "还原",
+  maximize: "最大化",
+  close: "关闭",
+});
 
 export function WindowChrome() {
   const language: Language = languageOf(useAppStore((state) => state.snapshot?.settings.language));
+  const messages = localizeMessages(chromeMessages, language);
   const [maximized, setMaximized] = useState(false);
   const [theme, setTheme] = useState<UiTheme>(() => preferredTheme());
 
@@ -63,14 +75,14 @@ export function WindowChrome() {
     <header className="fixed inset-x-0 top-0 z-[250] flex h-9 select-none items-center border-b border-edge bg-sidebar/95 pl-3 backdrop-blur-xl dark:bg-sidebar/98" data-tauri-drag-region onPointerDown={startDragging}>
       <div className="flex min-w-0 flex-1 items-center gap-2 self-stretch" data-tauri-drag-region>
         <span className="size-2 rounded-full bg-accent" aria-hidden="true" />
-        <span className="truncate text-[11px] font-bold text-foreground" data-tauri-drag-region>{language === "en-US" ? "Health Reminder · Posture & Sitting" : "健康提醒 · 姿态与久坐"}</span>
+        <span className="truncate text-[11px] font-bold text-foreground" data-tauri-drag-region>{messages.title}</span>
       </div>
-      <button className={controlClass} title={language === "en-US" ? (theme === "dark" ? "Switch to light theme" : "Switch to dark theme") : (theme === "dark" ? "切换到浅色模式" : "切换到深色模式")} aria-label={language === "en-US" ? (theme === "dark" ? "Switch to light theme" : "Switch to dark theme") : (theme === "dark" ? "切换到浅色模式" : "切换到深色模式")} onClick={toggleTheme}>
+      <button className={controlClass} title={theme === "dark" ? messages.lightTheme : messages.darkTheme} aria-label={theme === "dark" ? messages.lightTheme : messages.darkTheme} onClick={toggleTheme}>
         {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
       </button>
-      <button className={controlClass} title={language === "en-US" ? "Minimize" : "最小化"} aria-label={language === "en-US" ? "Minimize" : "最小化"} onClick={() => void getCurrentWindow().minimize()}><Minus size={15} /></button>
-      <button className={controlClass} title={language === "en-US" ? (maximized ? "Restore" : "Maximize") : (maximized ? "还原" : "最大化")} aria-label={language === "en-US" ? (maximized ? "Restore" : "Maximize") : (maximized ? "还原" : "最大化")} onClick={() => void toggleMaximize()}>{maximized ? <Copy size={13} /> : <Square size={13} />}</button>
-      <button className={`${controlClass} hover:bg-danger hover:text-inverse`} title={language === "en-US" ? "Close" : "关闭"} aria-label={language === "en-US" ? "Close" : "关闭"} onClick={() => void getCurrentWindow().close()}><X size={16} /></button>
+      <button className={controlClass} title={messages.minimize} aria-label={messages.minimize} onClick={() => void getCurrentWindow().minimize()}><Minus size={15} /></button>
+      <button className={controlClass} title={maximized ? messages.restore : messages.maximize} aria-label={maximized ? messages.restore : messages.maximize} onClick={() => void toggleMaximize()}>{maximized ? <Copy size={13} /> : <Square size={13} />}</button>
+      <button className={`${controlClass} hover:bg-danger hover:text-inverse`} title={messages.close} aria-label={messages.close} onClick={() => void getCurrentWindow().close()}><X size={16} /></button>
     </header>
   );
 }

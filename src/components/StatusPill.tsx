@@ -1,7 +1,9 @@
 import { Camera, CameraOff, CirclePause, ShieldCheck, Sparkles } from "lucide-react";
+import { languageOf } from "../i18n";
+import { defineMessages, localizeMessages } from "../runtimeI18n";
 import type { AppSnapshot } from "../types";
 
-const labels: Record<AppSnapshot["lifecycle"], string> = {
+const statusMessages = defineMessages({
   unavailable: "尚未启用",
   initializing: "正在启动",
   calibrating: "正在校准",
@@ -9,9 +11,10 @@ const labels: Record<AppSnapshot["lifecycle"], string> = {
   paused: "检测已暂停",
   break: "休息中",
   degraded: "定时提醒模式",
-};
+});
 
 export function StatusPill({ snapshot }: { snapshot: AppSnapshot }) {
+  const labels = localizeMessages(statusMessages, languageOf(snapshot.settings.language));
   const Icon =
     snapshot.lifecycle === "monitoring"
       ? snapshot.monitoringMode === "camera"

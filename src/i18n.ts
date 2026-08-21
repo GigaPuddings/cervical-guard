@@ -25,7 +25,7 @@ export const copy = {
       unsupported: '当前设备不支持摄像头姿态检测',
       retry: '重新检测'
     },
-    settings: { language: '界面语言', chinese: '简体中文', english: 'English' },
+    settings: { language: '界面语言', chinese: '简体中文', chineseShort: '中', english: 'English' },
     updater: {
       title: '应用更新',
       description: '通过 GitHub Releases 检查并安装签名更新。',
@@ -78,7 +78,7 @@ export const copy = {
       unsupported: 'Camera posture detection is unavailable on this device',
       retry: 'Check again'
     },
-    settings: { language: 'Interface language', chinese: '简体中文', english: 'English' },
+    settings: { language: 'Interface language', chinese: '简体中文', chineseShort: '中', english: 'English' },
     updater: {
       title: 'App updates',
       description: 'Check and install signed updates from GitHub Releases.',

@@ -47,7 +47,7 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
             </h2>
             <p className="mb-0 mt-1 text-xs leading-5 text-muted">{status}</p>
           </div>
-          <button className="grid size-9 shrink-0 place-items-center rounded-lg text-muted hover:bg-panel-muted hover:text-foreground" aria-label={language === 'en-US' ? 'Close' : '关闭'} onClick={updater.close}>
+          <button className="grid size-9 shrink-0 place-items-center rounded-lg text-muted hover:bg-panel-muted hover:text-foreground" aria-label={t.close} onClick={updater.close}>
             <X size={18} />
           </button>
         </header>

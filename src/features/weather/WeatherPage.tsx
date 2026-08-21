@@ -2,7 +2,7 @@ import { CloudSun, MapPin, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '../../utils'
 import type { Language } from '../../i18n'
-import { translateNow } from '../../runtimeI18n'
+import { defineMessages, localizeMessages, translateNow } from '../../runtimeI18n'
 import { searchChineseCities, weatherCodeLabel } from './openMeteo'
 import { locationSubtitle } from './presentation'
 import { getWeatherForecast, loadPreferredWeatherLocation, loadWeatherLocations, removeCachedForecast, savePreferredWeatherLocation, saveWeatherLocations } from './repository'
@@ -11,13 +11,42 @@ import { publishWeatherToReminderIsland } from './usePrimaryWeather'
 import { WeatherGlyph } from './WeatherGlyph'
 import { WeatherDetail } from './WeatherDetail'
 
+const weatherPageMessages = defineMessages({
+  requestCancelled: '请求已取消',
+  operationUnavailable: '操作暂时无法完成',
+  alreadySaved: '已在关注列表中',
+  maxPrefix: '最多关注',
+  maxSuffix: '个地点，请先移除一个',
+  added: '已添加',
+  addedSuffix: '，并设为概览天气',
+  searchTooShort: '请输入至少 2 个字符，例如“北京”或“杭州市”',
+  noSearchResults: '没有找到匹配的中国城市，请尝试输入完整城市名',
+  eyebrow: '天气与活动',
+  title: '今天适合怎么动一动',
+  refreshAll: '刷新全部',
+  searchCity: '搜索中国城市',
+  searchPlaceholder: '输入城市名，例如：南京、杭州、深圳',
+  search: '搜索',
+  cityLimit: '仅展示中国城市行政中心',
+  selected: '已选',
+  noDeviceLocation: '搜索并选择城市，不读取设备位置',
+  results: '城市搜索结果',
+  city: '城市',
+  savedPlaces: '关注地点',
+  noPlaces: '还没有地点',
+  addCityHint: '输入城市名称并搜索添加',
+  waitingWeather: '等待天气',
+  remove: '移除',
+  preferredHint: '点击地点会设为今日概览和灵动岛的首选天气。'
+})
+
 export function reasonMessage(reason: unknown): string {
-  if (reason instanceof DOMException && reason.name === 'AbortError') return '请求已取消'
+  if (reason instanceof DOMException && reason.name === 'AbortError') return weatherPageMessages.requestCancelled
   if (reason instanceof Error) return reason.message
   // Tauri `invoke` 会直接以 Rust command 返回的 String 作为 rejection，
   // 不是 JavaScript Error。必须保留该文本，才能显示 Windows 权限/来源诊断。
   if (typeof reason === 'string' && reason.trim()) return reason.trim()
-  return '操作暂时无法完成'
+  return weatherPageMessages.operationUnavailable
 }
 
 export function locationNeedsLanguageRefresh(location: WeatherLocation, language: Language): boolean {
@@ -29,6 +58,7 @@ export function locationNeedsLanguageRefresh(location: WeatherLocation, language
 }
 
 export function WeatherPage({ language }: { language: Language }) {
+  const messages = localizeMessages(weatherPageMessages, language)
   const t = (value: string) => translateNow(value, language)
   const [locations, setLocations] = useState<WeatherLocation[]>(loadWeatherLocations)
   const [activeLocationId, setActiveLocationId] = useState<string | null>(() => loadPreferredWeatherLocation()?.id ?? null)
@@ -147,17 +177,17 @@ export function WeatherPage({ language }: { language: Language }) {
 
   const addLocation = (location: WeatherLocation) => {
     if (selectedIds.has(location.id)) {
-      setNotice(`${location.name} 已在关注列表中`)
+      setNotice(`${location.name} ${messages.alreadySaved}`)
       return
     }
     if (atLimit) {
-      setNotice(`最多关注 ${MAX_WEATHER_LOCATIONS} 个地点，请先移除一个`)
+      setNotice(`${messages.maxPrefix} ${MAX_WEATHER_LOCATIONS} ${messages.maxSuffix}`)
       return
     }
     persistLocations([...locations, location])
     setActiveLocationId(location.id)
     window.setTimeout(() => savePreferredWeatherLocation(location.id), 0)
-    setNotice(`已添加 ${location.name}，并设为概览天气`)
+    setNotice(`${messages.added} ${location.name}${messages.addedSuffix}`)
     setResults([])
     setQuery('')
   }
@@ -181,7 +211,7 @@ export function WeatherPage({ language }: { language: Language }) {
 
   const search = async () => {
     if (query.trim().length < 2) {
-      setSearchError('请输入至少 2 个字符，例如“北京”或“杭州市”')
+      setSearchError(messages.searchTooShort)
       return
     }
     setSearching(true)
@@ -190,7 +220,7 @@ export function WeatherPage({ language }: { language: Language }) {
     try {
       const next = await searchChineseCities(query, undefined, language)
       setResults(next)
-      if (next.length === 0) setSearchError('没有找到匹配的中国城市，请尝试输入完整城市名')
+      if (next.length === 0) setSearchError(messages.noSearchResults)
     } catch (reason) {
       setSearchError(reasonMessage(reason))
     } finally {
@@ -206,23 +236,23 @@ export function WeatherPage({ language }: { language: Language }) {
     <div className="mx-auto flex h-full min-h-0 max-w-375 flex-col gap-3 overflow-hidden px-[clamp(16px,3vw,34px)] py-4">
       <header className="flex shrink-0 items-end justify-between gap-4">
         <div className="min-w-0">
-          <span className="text-[clamp(10px,.72vw,13px)] font-extrabold tracking-[.16em] text-info">天气与活动</span>
-          <h1 className="mt-1 truncate text-[clamp(24px,2.2vw,35px)] font-black leading-none tracking-[-.035em]">今天适合怎么动一动</h1>
+          <span className="text-[clamp(10px,.72vw,13px)] font-extrabold tracking-[.16em] text-info">{messages.eyebrow}</span>
+          <h1 className="mt-1 truncate text-[clamp(24px,2.2vw,35px)] font-black leading-none tracking-[-.035em]">{messages.title}</h1>
         </div>
         <button className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-edge bg-panel px-3 text-[clamp(10px,.72vw,13px)] font-bold shadow-control hover:bg-panel-muted disabled:opacity-50" disabled={locations.length === 0 || loadingIds.size > 0} onClick={refreshAll}>
-          <RefreshCw size={16} className={loadingIds.size > 0 ? 'animate-spin' : ''} /> 刷新全部
+          <RefreshCw size={16} className={loadingIds.size > 0 ? 'animate-spin' : ''} /> {messages.refreshAll}
         </button>
       </header>
 
       <section className="relative z-20 shrink-0 rounded-2xl border border-edge bg-panel p-2.5 shadow-panel">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
           <label className="relative min-w-0">
-            <span className="sr-only">搜索中国城市</span>
+            <span className="sr-only">{messages.searchCity}</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={15} />
             <input
               className="h-10 w-full rounded-xl border border-edge bg-field pl-9 pr-3 text-[clamp(11px,.82vw,15px)] outline-none placeholder:text-subtle focus:border-accent"
               value={query}
-              placeholder="输入城市名，例如：南京、杭州、深圳"
+              placeholder={messages.searchPlaceholder}
               onChange={event => {
                 setQuery(event.target.value)
                 setResults([])
@@ -234,15 +264,15 @@ export function WeatherPage({ language }: { language: Language }) {
             />
           </label>
           <button className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-accent px-3 text-[clamp(10px,.76vw,14px)] font-bold text-inverse hover:bg-accent-strong disabled:opacity-50" disabled={searching} onClick={() => void search()}>
-            {searching ? <RefreshCw className="animate-spin" size={15} /> : <Search size={15} />} 搜索
+            {searching ? <RefreshCw className="animate-spin" size={15} /> : <Search size={15} />} {messages.search}
           </button>
         </div>
         <div className="mt-1.5 flex h-4 items-center justify-between gap-3 px-1 text-[clamp(8px,.62vw,11px)] text-muted">
-          <span className={cn('truncate', searchError && 'text-danger', notice && !searchError && 'text-info')}>{searchError ?? notice ?? `仅展示中国城市行政中心 · 已选 ${locations.length}/${MAX_WEATHER_LOCATIONS}`}</span>
-          <span className="shrink-0">搜索并选择城市，不读取设备位置</span>
+          <span className={cn('truncate', searchError && 'text-danger', notice && !searchError && 'text-info')}>{searchError ? t(searchError) : notice ?? `${messages.cityLimit} · ${messages.selected} ${locations.length}/${MAX_WEATHER_LOCATIONS}`}</span>
+          <span className="shrink-0">{messages.noDeviceLocation}</span>
         </div>
         {results.length > 0 && (
-          <div className="absolute left-2.5 right-2.5 top-[calc(100%-2px)] grid max-h-57.5 grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-edge bg-panel p-2.5 shadow-[0_20px_50px_rgba(25,48,31,.16)] scrollbar-none [&::-webkit-scrollbar]:hidden" aria-label="城市搜索结果">
+          <div className="absolute left-2.5 right-2.5 top-[calc(100%-2px)] grid max-h-57.5 grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-edge bg-panel p-2.5 shadow-[0_20px_50px_rgba(25,48,31,.16)] scrollbar-none [&::-webkit-scrollbar]:hidden" aria-label={messages.results}>
             {results.map(result => (
               <button key={result.id} className="flex min-w-0 items-center gap-2 rounded-xl border border-edge bg-panel-muted px-3 py-2 text-left hover:border-accent disabled:opacity-50" disabled={selectedIds.has(result.id)} onClick={() => addLocation(result)}>
                 <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">{selectedIds.has(result.id) ? <MapPin size={14} /> : <Plus size={14} />}</span>
@@ -250,7 +280,7 @@ export function WeatherPage({ language }: { language: Language }) {
                   <strong className="block truncate text-[clamp(11px,.78vw,14px)]">{result.name}</strong>
                   <small className="mt-0.5 block truncate text-[clamp(8px,.62vw,11px)] text-muted">{locationSubtitle(result, language)}</small>
                 </span>
-                <span className="ml-auto shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[clamp(7px,.52vw,9px)] font-bold text-accent">城市</span>
+                <span className="ml-auto shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[clamp(7px,.52vw,9px)] font-bold text-accent">{messages.city}</span>
               </button>
             ))}
           </div>
@@ -260,7 +290,7 @@ export function WeatherPage({ language }: { language: Language }) {
       <section className="grid min-h-0 flex-1 grid-cols-[clamp(188px,16vw,250px)_minmax(0,1fr)] gap-3">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-panel shadow-panel">
           <div className="flex h-11 shrink-0 items-center justify-between border-b border-edge px-3">
-            <strong className="text-[clamp(11px,.82vw,15px)]">关注地点</strong>
+            <strong className="text-[clamp(11px,.82vw,15px)]">{messages.savedPlaces}</strong>
             <span className="text-[clamp(9px,.64vw,11px)] text-muted">
               {locations.length}/{MAX_WEATHER_LOCATIONS}
             </span>
@@ -270,8 +300,8 @@ export function WeatherPage({ language }: { language: Language }) {
               <span className="grid size-10 place-items-center rounded-2xl bg-info-soft text-info">
                 <MapPin size={18} />
               </span>
-              <strong className="mt-3 text-[clamp(11px,.8vw,14px)]">还没有地点</strong>
-              <p className="mt-1 text-[clamp(9px,.65vw,11px)] leading-4 text-muted">输入城市名称并搜索添加</p>
+              <strong className="mt-3 text-[clamp(11px,.8vw,14px)]">{messages.noPlaces}</strong>
+              <p className="mt-1 text-[clamp(9px,.65vw,11px)] leading-4 text-muted">{messages.addCityHint}</p>
             </div>
           ) : (
             <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto p-2 scrollbar-none [&::-webkit-scrollbar]:hidden">
@@ -284,10 +314,10 @@ export function WeatherPage({ language }: { language: Language }) {
                       <span className={cn('grid size-[clamp(28px,2.4vw,36px)] shrink-0 place-items-center rounded-lg', selected ? 'bg-panel text-accent' : 'bg-panel-muted text-muted')}>{forecast ? <WeatherGlyph code={forecast.current.weatherCode} size={15} /> : <MapPin size={15} />}</span>
                       <span className="min-w-0">
                         <strong className="block truncate text-[clamp(11px,.8vw,14px)]">{location.name}</strong>
-                        <small className="block truncate text-[clamp(8px,.6vw,11px)] text-muted">{forecast ? `${Math.round(forecast.current.temperature)}° · ${t(weatherCodeLabel(forecast.current.weatherCode))}` : t(location.admin1 || '等待天气')}</small>
+                        <small className="block truncate text-[clamp(8px,.6vw,11px)] text-muted">{forecast ? `${Math.round(forecast.current.temperature)}° · ${t(weatherCodeLabel(forecast.current.weatherCode))}` : t(location.admin1 || messages.waitingWeather)}</small>
                       </span>
                     </button>
-                    <button className="grid size-6 shrink-0 place-items-center rounded-md text-subtle opacity-0 hover:bg-danger-soft hover:text-danger group-hover:opacity-100 focus:opacity-100" aria-label={`移除${location.name}`} onClick={() => removeLocation(location)}>
+                    <button className="grid size-6 shrink-0 place-items-center rounded-md text-subtle opacity-0 hover:bg-danger-soft hover:text-danger group-hover:opacity-100 focus:opacity-100" aria-label={`${messages.remove} ${location.name}`} onClick={() => removeLocation(location)}>
                       <Trash2 size={12} />
                     </button>
                   </div>
@@ -295,7 +325,7 @@ export function WeatherPage({ language }: { language: Language }) {
               })}
             </div>
           )}
-          <div className="shrink-0 border-t border-edge px-3 py-2 text-[clamp(8px,.58vw,10px)] leading-4 text-muted">点击地点会设为今日概览和灵动岛的首选天气。</div>
+          <div className="shrink-0 border-t border-edge px-3 py-2 text-[clamp(8px,.58vw,10px)] leading-4 text-muted">{messages.preferredHint}</div>
         </aside>
 
         <WeatherDetail

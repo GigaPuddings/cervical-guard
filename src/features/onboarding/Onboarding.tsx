@@ -1,6 +1,6 @@
 import { AlertTriangle, ArrowRight, Camera, Check, Clock3, EyeOff, LoaderCircle, ShieldCheck, WifiOff } from 'lucide-react'
 import { Brand } from '../../components/Brand'
-import { copy, type Language } from '../../i18n'
+import { copy, localizeBackendMessage, type Language } from '../../i18n'
 
 interface OnboardingProps {
   busy: boolean
@@ -22,7 +22,7 @@ export function Onboarding({ busy, language, cameraError, onCamera, onTimer, onL
           <Brand language={language} />
           <div className="inline-flex rounded-full border border-edge bg-panel p-1 text-[10px] font-bold shadow-control" aria-label={t.settings.language}>
             <button className={`rounded-full px-2.5 py-1 ${language === 'zh-CN' ? 'bg-accent text-inverse' : 'text-muted'}`} onClick={() => onLanguage('zh-CN')}>
-              中
+              {copy['zh-CN'].settings.chineseShort}
             </button>
             <button className={`rounded-full px-2.5 py-1 ${language === 'en-US' ? 'bg-accent text-inverse' : 'text-muted'}`} onClick={() => onLanguage('en-US')}>
               EN
@@ -44,7 +44,7 @@ export function Onboarding({ busy, language, cameraError, onCamera, onTimer, onL
               <AlertTriangle className="mt-0.5 shrink-0" size={16} />
               <div>
                 <strong className="block text-xs">{t.camera.unsupported}</strong>
-                <span className="mt-1 block text-[10px] leading-4">{cameraError}</span>
+                <span className="mt-1 block text-[10px] leading-4">{localizeBackendMessage(cameraError, language)}</span>
                 <small className="mt-1 block text-[9px] opacity-80">{t.onboarding.fallback}</small>
               </div>
             </div>

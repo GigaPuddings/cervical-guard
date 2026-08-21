@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Brand } from '../../components/Brand'
 import { StatusPill } from '../../components/StatusPill'
 import { copy, languageOf } from '../../i18n'
+import { defineMessages, localizeMessages } from '../../runtimeI18n'
 import type { AppPage } from '../../types'
 import { cn } from '../../utils'
 import { WeatherPage } from '../weather/WeatherPage'
@@ -15,25 +16,46 @@ import { TodayPage } from './pages/TodayPage'
 
 export type { DashboardProps } from './dashboardTypes'
 
-const navItems: Array<{ page: AppPage; label: string; icon: typeof LayoutDashboard }> = [
-  { page: 'today', label: '今日概览', icon: LayoutDashboard },
-  { page: 'statistics', label: '习惯趋势', icon: BarChart3 },
-  { page: 'weather', label: '天气与活动', icon: CloudSun },
-  { page: 'settings', label: '偏好设置', icon: Settings }
-]
+const dashboardMessages = defineMessages({
+  today: '今日概览',
+  statistics: '习惯趋势',
+  weather: '天气与活动',
+  settings: '偏好设置',
+  closeNavigation: '关闭导航',
+  endBreak: '结束休息',
+  pauseDetection: '暂停检测',
+  pause30: '暂停 30 分钟',
+  pauseHour: '暂停 1 小时',
+  pauseManual: '暂停到手动恢复',
+  resume: '恢复检测',
+  mainNavigation: '主导航',
+  workspace: '空间',
+  privacyMode: '本地隐私模式',
+  privacyNote: '画面不保存、不上传',
+  help: '使用帮助',
+  behaviorReminder: '行为提醒工具',
+  openNavigation: '打开导航'
+})
 
 export function Dashboard(props: DashboardProps) {
   const { snapshot, page, onPage } = props
   const language = languageOf(snapshot.settings.language)
+  const messages = localizeMessages(dashboardMessages, language)
   const updaterCopy = copy[language].updater
+  const navItems: Array<{ page: AppPage; label: string; icon: typeof LayoutDashboard }> = [
+    { page: 'today', label: messages.today, icon: LayoutDashboard },
+    { page: 'statistics', label: messages.statistics, icon: BarChart3 },
+    { page: 'weather', label: messages.weather, icon: CloudSun },
+    { page: 'settings', label: messages.settings, icon: Settings }
+  ]
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [pauseOpen, setPauseOpen] = useState(false)
   return (
     <main className="grid h-full min-h-0 overflow-hidden bg-canvas text-foreground md:grid-cols-[232px_minmax(0,1fr)] 2xl:grid-cols-[260px_minmax(0,1fr)]">
       <aside className={cn('fixed inset-y-0 left-0 z-30 flex w-58 flex-col border-r border-edge bg-sidebar/90 px-5 py-6 backdrop-blur-xl transition-transform md:static md:translate-x-0 2xl:w-65 2xl:px-6 2xl:py-8', sidebarOpen ? 'translate-x-0' : '-translate-x-full')}>
         <div className="flex items-center justify-between px-2">
-          <Brand />
-          <button className="grid size-9 place-items-center rounded-xl hover:bg-accent-soft md:hidden" aria-label="关闭导航" onClick={() => setSidebarOpen(false)}>
+          <Brand language={language} />
+          <button className="grid size-9 place-items-center rounded-xl hover:bg-accent-soft md:hidden" aria-label={messages.closeNavigation} onClick={() => setSidebarOpen(false)}>
             <X size={18} />
           </button>
         </div>
@@ -43,12 +65,12 @@ export function Dashboard(props: DashboardProps) {
           <div className="mt-3">
             {snapshot.lifecycle === 'break' ? (
               <button className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-info-soft text-xs font-bold text-info hover:bg-accent-soft-strong" onClick={props.onEndBreak}>
-                <Coffee size={15} /> 结束休息
+                <Coffee size={15} /> {messages.endBreak}
               </button>
             ) : snapshot.lifecycle === 'monitoring' || snapshot.lifecycle === 'degraded' ? (
               <>
                 <button className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-accent-soft text-xs font-bold text-accent-strong hover:bg-accent-soft-strong" onClick={() => setPauseOpen(value => !value)}>
-                  <Pause size={15} /> 暂停检测 <ChevronDown size={14} />
+                  <Pause size={15} /> {messages.pauseDetection} <ChevronDown size={14} />
                 </button>
                 {pauseOpen && (
                   <div className="absolute left-3 right-3 top-20.5 z-20 grid overflow-hidden rounded-xl border border-edge bg-panel p-1 text-xs shadow-panel">
@@ -59,7 +81,7 @@ export function Dashboard(props: DashboardProps) {
                         setPauseOpen(false)
                       }}
                     >
-                      暂停 30 分钟
+                      {messages.pause30}
                     </button>
                     <button
                       className="rounded-lg px-3 py-2 text-left hover:bg-panel-muted"
@@ -68,7 +90,7 @@ export function Dashboard(props: DashboardProps) {
                         setPauseOpen(false)
                       }}
                     >
-                      暂停 1 小时
+                      {messages.pauseHour}
                     </button>
                     <button
                       className="rounded-lg px-3 py-2 text-left hover:bg-panel-muted"
@@ -77,21 +99,21 @@ export function Dashboard(props: DashboardProps) {
                         setPauseOpen(false)
                       }}
                     >
-                      暂停到手动恢复
+                      {messages.pauseManual}
                     </button>
                   </div>
                 )}
               </>
             ) : (
               <button className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-accent text-xs font-bold text-inverse hover:bg-accent-strong" onClick={props.onResume}>
-                <Play size={15} /> 恢复检测
+                <Play size={15} /> {messages.resume}
               </button>
             )}
           </div>
         </div>
 
-        <nav className="mt-7 grid gap-1" aria-label="主导航">
-          <span className="px-3 pb-2 text-xs font-bold tracking-[.16em] text-muted">空间</span>
+        <nav className="mt-7 grid gap-1" aria-label={messages.mainNavigation}>
+          <span className="px-3 pb-2 text-xs font-bold tracking-[.16em] text-muted">{messages.workspace}</span>
           {navItems.map(({ page: target, label, icon: Icon }) => (
             <button
               key={target}
@@ -113,8 +135,8 @@ export function Dashboard(props: DashboardProps) {
               <LockKeyhole size={17} />
             </span>
             <div className="min-w-0">
-              <strong className="block text-sm">本地隐私模式</strong>
-              <small className="mt-0.5 block truncate text-[11px] text-muted">画面不保存、不上传</small>
+              <strong className="block text-sm">{messages.privacyMode}</strong>
+              <small className="mt-0.5 block truncate text-[11px] text-muted">{messages.privacyNote}</small>
             </div>
           </div>
         </div>
@@ -122,11 +144,11 @@ export function Dashboard(props: DashboardProps) {
           <div className="mb-1 flex h-9 items-center justify-between gap-2 text-xs font-semibold text-muted">
             <span className="flex items-center gap-2">
               <Languages size={16} />
-              {language === 'en-US' ? 'Language' : '界面语言'}
+              {copy[language].settings.language}
             </span>
-            <span className="flex rounded-lg border border-edge bg-panel-muted p-0.5" role="group" aria-label={language === 'en-US' ? 'Interface language' : '界面语言'}>
+            <span className="flex rounded-lg border border-edge bg-panel-muted p-0.5" role="group" aria-label={copy[language].settings.language}>
               <button className={cn('rounded-md px-2 py-1 text-[10px] font-bold transition', language === 'zh-CN' ? 'bg-panel text-accent shadow-control' : 'text-subtle hover:text-foreground')} aria-pressed={language === 'zh-CN'} onClick={() => props.onLanguage('zh-CN')}>
-                中
+                {copy['zh-CN'].settings.chineseShort}
               </button>
               <button className={cn('rounded-md px-2 py-1 text-[10px] font-bold transition', language === 'en-US' ? 'bg-panel text-accent shadow-control' : 'text-subtle hover:text-foreground')} aria-pressed={language === 'en-US'} onClick={() => props.onLanguage('en-US')}>
                 EN
@@ -143,16 +165,16 @@ export function Dashboard(props: DashboardProps) {
             )}
           </button>
           <button className="flex h-9 items-center gap-2 text-xs font-semibold text-muted hover:text-accent" onClick={props.onHelp}>
-            <CircleHelp size={16} /> {language === 'en-US' ? 'Help' : '使用帮助'}
+            <CircleHelp size={16} /> {messages.help}
           </button>
-          <p className="mt-1 text-[10px] text-subtle">{language === 'en-US' ? `Health Reminder v${packageJson.version} · Behavior reminder` : `健康提醒 v${packageJson.version} · 行为提醒工具`}</p>
+          <p className="mt-1 text-[10px] text-subtle">{copy[language].appName} v{packageJson.version} · {messages.behaviorReminder}</p>
         </div>
       </aside>
 
-      {sidebarOpen && <button className="fixed inset-0 z-20 bg-panel-strong/25 md:hidden" aria-label="关闭导航" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && <button className="fixed inset-0 z-20 bg-panel-strong/25 md:hidden" aria-label={messages.closeNavigation} onClick={() => setSidebarOpen(false)} />}
 
       <section className="relative min-h-0 min-w-0 overflow-hidden">
-        <button className="absolute left-3 top-3 z-10 grid size-9 place-items-center rounded-xl border border-edge bg-panel shadow-control md:hidden" aria-label="打开导航" onClick={() => setSidebarOpen(true)}>
+        <button className="absolute left-3 top-3 z-10 grid size-9 place-items-center rounded-xl border border-edge bg-panel shadow-control md:hidden" aria-label={messages.openNavigation} onClick={() => setSidebarOpen(true)}>
           <Menu size={18} />
         </button>
         <div className={cn('h-full min-h-0', page === 'privacy' ? 'overflow-y-auto' : 'overflow-hidden')}>

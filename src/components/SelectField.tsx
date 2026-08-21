@@ -1,6 +1,12 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { languageOf } from "../i18n";
+import { defineMessages, localizeMessages } from "../runtimeI18n";
 import { cn } from "../utils";
+
+const selectMessages = defineMessages({
+  empty: "请选择",
+});
 
 export interface SelectOption<T extends string | number> {
   value: T;
@@ -34,6 +40,7 @@ export function SelectField<T extends string | number>({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selected = options[selectedIndex];
+  const messages = localizeMessages(selectMessages, languageOf(document.documentElement.lang));
 
   useEffect(() => {
     if (!open) return;
@@ -99,7 +106,7 @@ export function SelectField<T extends string | number>({
           }
         }}
       >
-        <span className="truncate">{selected?.label ?? "请选择"}</span>
+        <span className="truncate">{selected?.label ?? messages.empty}</span>
         <span className={cn("grid size-6 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent transition", disabled && "bg-transparent text-subtle")}>
           <ChevronDown size={14} strokeWidth={2.4} className={cn("transition-transform duration-200", open && "rotate-180")} />
         </span>
