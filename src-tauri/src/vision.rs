@@ -455,6 +455,7 @@ impl VisionService {
         app: &tauri::AppHandle,
         camera_id: &str,
         baseline: Option<f64>,
+        head_down_enabled: bool,
     ) -> Result<(), String> {
         self.stop_pipeline();
         if let Ok(mut guard) = self.latest_capture.lock() {
@@ -499,6 +500,7 @@ impl VisionService {
                 model_inference,
                 latest_capture_inference,
                 baseline,
+                head_down_enabled,
                 stop_flag_inference,
                 epoch,
             );
@@ -636,6 +638,7 @@ fn run_inference_loop(
     model: Arc<Mutex<Option<Session>>>,
     latest_capture: Arc<Mutex<Option<CapturedFrame>>>,
     baseline: f64,
+    head_down_enabled: bool,
     stop_flag: Arc<AtomicBool>,
     _epoch: Instant,
 ) {
@@ -692,7 +695,13 @@ fn run_inference_loop(
 
         // ── 4. 观测融合 ──
         let brightness = mean_brightness(&rgb);
-        let observation = create_observation(&pose, baseline, brightness, pose_ms);
+        let observation = create_observation_with_head_detection(
+            &pose,
+            baseline,
+            brightness,
+            pose_ms,
+            head_down_enabled,
+        );
         let head_ratio = head_ratio_of(&pose);
 
         sequence += 1;
@@ -1089,11 +1098,22 @@ fn posture_of(pose: &PoseResult) -> (PostureState, f64) {
     (PostureState::Sitting, confidence)
 }
 
+#[cfg(test)]
 fn create_observation(
     pose: &PoseResult,
     baseline: f64,
     brightness: f64,
     pose_ms: f64,
+) -> VisionObservation {
+    create_observation_with_head_detection(pose, baseline, brightness, pose_ms, true)
+}
+
+fn create_observation_with_head_detection(
+    pose: &PoseResult,
+    baseline: f64,
+    brightness: f64,
+    pose_ms: f64,
+    head_down_enabled: bool,
 ) -> VisionObservation {
     let head_position = head_centroid(pose);
     let visibility = visibility_of(pose);
@@ -1173,11 +1193,13 @@ fn create_observation(
     };
     // 只有“相对校准位置下移”和“耳-眼-鼻低头折线”同时成立才输出低头分数。
     // 这样整个人下沉、靠近镜头或五点整体漂移不会单独累积成低头提醒。
-    let down_score = if frame_quality == FrameQuality::Good && has_head_down_geometry(pose) {
-        clamp01(clamp01((delta - 0.025) / 0.12) * 0.85)
-    } else {
-        0.0
-    };
+    let down_score =
+        if head_down_enabled && frame_quality == FrameQuality::Good && has_head_down_geometry(pose)
+        {
+            clamp01(clamp01((delta - 0.025) / 0.12) * 0.85)
+        } else {
+            0.0
+        };
     let (state, posture_confidence) = posture_of(pose);
 
     VisionObservation {

@@ -83,8 +83,8 @@ export const coreClient = {
     return command<CameraDevice[]>('list_cameras')
   },
 
-  async startVision(cameraId: string, baseline: number | null): Promise<void> {
-    await command<void>('start_vision', { cameraId, baseline })
+  async startVision(cameraId: string, baseline: number | null, headDownEnabled: boolean): Promise<void> {
+    await command<void>('start_vision', { cameraId, baseline, headDownEnabled })
   },
 
   async stopVision(): Promise<void> {

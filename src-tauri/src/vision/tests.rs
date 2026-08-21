@@ -102,6 +102,15 @@ fn uses_calibrated_head_position_and_face_geometry() {
 }
 
 #[test]
+fn disabling_head_detection_skips_the_head_down_algorithm() {
+    let normal = seated(0.4);
+    let down = head_down(0.56);
+    let baseline = head_ratio_of(&normal).expect("normal ratio");
+    let observation = create_observation_with_head_detection(&down, baseline, 120.0, 20.0, false);
+    assert_eq!(observation.head.down_score, 0.0);
+}
+
+#[test]
 fn downward_translation_without_face_geometry_is_not_head_down() {
     let normal = seated(0.4);
     let shifted_normal = seated(0.52);

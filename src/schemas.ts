@@ -11,6 +11,7 @@ const settingsSchema = z.object({
   repeatReminderMinutes: z.number().int().min(1).max(30),
   breakMinutes: z.number().int().min(1).max(10),
   headDownMinutes: z.number().int().min(1).max(10),
+  headDownConfirmationSeconds: z.number().int().min(1).max(10).default(2),
   headDownStrongMinutes: z.number().int().min(5).max(30),
   repeatReminders: z.boolean(),
   autostart: z.boolean(),

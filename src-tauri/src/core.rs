@@ -276,7 +276,9 @@ impl RuntimeState {
             self.snapshot.today.away_seconds =
                 self.snapshot.today.away_seconds.saturating_add(elapsed);
         }
-        if self.snapshot.behavior == BehaviorState::HeadDown {
+        if self.snapshot.settings.island_head_down_enabled
+            && self.snapshot.behavior == BehaviorState::HeadDown
+        {
             self.snapshot.head_down_seconds =
                 self.snapshot.head_down_seconds.saturating_add(elapsed);
             if self.snapshot.settings.statistics_enabled {
@@ -317,7 +319,8 @@ impl RuntimeState {
                     self.snapshot.settings.repeat_reminders && now.duration_since(last) >= repeat
                 }
             };
-        let head_due = self.snapshot.head_down_seconds >= head_threshold
+        let head_due = self.snapshot.settings.island_head_down_enabled
+            && self.snapshot.head_down_seconds >= head_threshold
             && match self.last_head_reminder {
                 None => true,
                 Some(last) => {
@@ -356,8 +359,9 @@ impl RuntimeState {
             (false, true) => (ReminderKind::HeadDown, "试着抬起头", "检测到你已经低头一段时间，可以抬高视线并放松颈肩。"),
             (false, false) => unreachable!(),
         };
-        let strong = self.snapshot.head_down_seconds
-            >= self.snapshot.settings.head_down_strong_minutes * 60
+        let strong = (self.snapshot.settings.island_head_down_enabled
+            && self.snapshot.head_down_seconds
+                >= self.snapshot.settings.head_down_strong_minutes * 60)
             || self.snapshot.today.dismissed_count >= 2;
         let level = if self.snapshot.settings.meeting_mode {
             ReminderLevel::Gentle
@@ -555,6 +559,29 @@ impl RuntimeState {
         let lifecycle = self.snapshot.lifecycle;
         self.snapshot.settings = settings;
 
+        if !self.snapshot.settings.island_head_down_enabled {
+            self.head_candidate_since = None;
+            self.normal_candidate_since = None;
+            self.last_head_reminder = None;
+            self.snapshot.head_down_seconds = 0;
+            if self.snapshot.behavior == BehaviorState::HeadDown {
+                self.snapshot.behavior = BehaviorState::SittingNormal;
+            }
+            if self
+                .snapshot
+                .current_reminder
+                .as_ref()
+                .is_some_and(|reminder| {
+                    matches!(
+                        &reminder.kind,
+                        ReminderKind::HeadDown | ReminderKind::Combined
+                    )
+                })
+            {
+                self.snapshot.current_reminder = None;
+            }
+        }
+
         if !self.snapshot.settings.camera_enabled
             && self.snapshot.monitoring_mode == MonitoringMode::Camera
         {
@@ -687,11 +714,23 @@ impl RuntimeState {
             }
         }
 
+        if !self.snapshot.settings.island_head_down_enabled {
+            self.head_candidate_since = None;
+            self.normal_candidate_since = None;
+            self.snapshot.head_down_seconds = 0;
+            if self.snapshot.behavior == BehaviorState::HeadDown {
+                self.snapshot.behavior = BehaviorState::SittingNormal;
+            }
+            return Ok(reminder);
+        }
+
         let enter = self.snapshot.settings.head_down_enter_score();
         if observation.head.confidence >= 0.55 && observation.head.down_score >= enter {
             self.normal_candidate_since = None;
             let head = *self.head_candidate_since.get_or_insert(now);
-            if now.duration_since(head) >= Duration::from_secs(3) {
+            if now.duration_since(head)
+                >= Duration::from_secs(self.snapshot.settings.head_down_confirmation_seconds)
+            {
                 self.snapshot.behavior = BehaviorState::HeadDown;
             }
         } else if observation.head.down_score <= enter - 0.14 {

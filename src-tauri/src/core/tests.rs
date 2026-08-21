@@ -89,6 +89,47 @@ fn camera_ingest_returns_a_due_head_down_reminder() {
 }
 
 #[test]
+fn disabling_head_detection_clears_state_and_blocks_future_triggers() {
+    let mut state = state();
+    state.snapshot.monitoring_mode = MonitoringMode::Camera;
+    state.snapshot.lifecycle = MonitoringLifecycle::Monitoring;
+    state.snapshot.person_present = true;
+    state.snapshot.behavior = BehaviorState::HeadDown;
+    state.snapshot.head_down_seconds = state.snapshot.settings.head_down_minutes * 60;
+
+    let mut settings = state.snapshot.settings.clone();
+    settings.camera_enabled = true;
+    settings.island_head_down_enabled = false;
+    state.update_settings(settings).unwrap();
+    state.head_candidate_since = Some(Instant::now() - Duration::from_secs(10));
+    let reminder = state
+        .ingest(observation(PostureState::Sitting, 1.0))
+        .unwrap();
+
+    assert!(reminder.is_none());
+    assert_eq!(state.snapshot.behavior, BehaviorState::SittingNormal);
+    assert_eq!(state.snapshot.head_down_seconds, 0);
+    assert!(state.head_candidate_since.is_none());
+}
+
+#[test]
+fn head_down_confirmation_uses_the_detection_tab_setting() {
+    let mut state = state();
+    state.snapshot.monitoring_mode = MonitoringMode::Camera;
+    state.snapshot.lifecycle = MonitoringLifecycle::Monitoring;
+    state.snapshot.person_present = true;
+    state.snapshot.behavior = BehaviorState::SittingNormal;
+    state.snapshot.settings.head_down_confirmation_seconds = 1;
+    state.head_candidate_since = Some(Instant::now() - Duration::from_secs(1));
+
+    state
+        .ingest(observation(PostureState::Sitting, 1.0))
+        .unwrap();
+
+    assert_eq!(state.snapshot.behavior, BehaviorState::HeadDown);
+}
+
+#[test]
 fn short_keypoint_loss_keeps_clock_running_without_publishing_away() {
     let mut state = state();
     state.snapshot.monitoring_mode = MonitoringMode::Camera;

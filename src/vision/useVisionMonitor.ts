@@ -12,6 +12,7 @@ interface UseVisionOptions {
   active: boolean
   cameraId: string
   baseline: number | null
+  headDownEnabled?: boolean
   onObservation?: (observation: VisionObservation) => void
 }
 
@@ -195,7 +196,7 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
         setDevices(cameraList)
         const cameraId = options.cameraId && options.cameraId !== 'default' ? options.cameraId : (cameraList[0]?.id ?? '0')
         setStatus('loading_model')
-        await coreClient.startVision(cameraId, options.baseline)
+        await coreClient.startVision(cameraId, options.baseline, options.headDownEnabled ?? true)
         if (cancelled) {
           await coreClient.stopVision()
           return
@@ -247,7 +248,7 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
       setLandmarks([])
       setObservation(null)
     }
-  }, [options.active, options.baseline, options.cameraId])
+  }, [options.active, options.baseline, options.cameraId, options.headDownEnabled])
 
   return { previewRef, streamUrl, status, error, observation, landmarks, calibrationSamples, devices, resetSamples, previewReady, previewError, retryPreview }
 }

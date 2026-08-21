@@ -13,6 +13,7 @@ const defaultSettings: AppSettings = {
   repeatReminderMinutes: 15,
   breakMinutes: 5,
   headDownMinutes: 3,
+  headDownConfirmationSeconds: 2,
   headDownStrongMinutes: 10,
   repeatReminders: true,
   autostart: false,
@@ -144,7 +145,7 @@ class MockCore {
         this.snapshot.awaySeconds += elapsed
         this.snapshot.today.awaySeconds += elapsed
       }
-      if (this.snapshot.behavior === 'head_down') {
+      if (this.snapshot.settings.islandHeadDownEnabled && this.snapshot.behavior === 'head_down') {
         this.snapshot.headDownSeconds += elapsed
         this.snapshot.today.headDownSeconds += elapsed
       }
@@ -217,9 +218,9 @@ class MockCore {
         this.snapshot.lastObservationAt = new Date().toISOString()
         if (!observation.person.present) this.snapshot.behavior = 'no_person'
         else if (observation.posture.state === 'standing') this.snapshot.behavior = 'standing_break'
-        else if (observation.head.downScore > 0.62 && observation.frameQuality === 'good') {
+        else if (this.snapshot.settings.islandHeadDownEnabled && observation.head.downScore > 0.62 && observation.frameQuality === 'good') {
           this.headCandidateSeconds += 0.25
-          this.snapshot.behavior = this.headCandidateSeconds > 2 ? 'head_down' : 'sitting_normal'
+          this.snapshot.behavior = this.headCandidateSeconds >= this.snapshot.settings.headDownConfirmationSeconds ? 'head_down' : 'sitting_normal'
         } else {
           this.headCandidateSeconds = 0
           this.snapshot.behavior = 'sitting_normal'
@@ -270,6 +271,12 @@ class MockCore {
           const lifecycle = this.snapshot.lifecycle
           this.snapshot.settings = settings
           if (this.snapshot.seatedSeconds < settings.sedentarySeconds) this.lastSedentaryReminderAt = null
+          if (!settings.islandHeadDownEnabled) {
+            this.headCandidateSeconds = 0
+            this.snapshot.headDownSeconds = 0
+            if (this.snapshot.behavior === 'head_down') this.snapshot.behavior = 'sitting_normal'
+            if (this.snapshot.currentReminder?.kind === 'head_down' || this.snapshot.currentReminder?.kind === 'combined') this.snapshot.currentReminder = null
+          }
           if (!settings.cameraEnabled && this.snapshot.monitoringMode === 'camera') {
             this.snapshot.monitoringMode = 'timer'
             if (lifecycle === 'monitoring' || lifecycle === 'degraded') {

@@ -41,6 +41,7 @@ export interface AppSettings {
   repeatReminderMinutes: number
   breakMinutes: number
   headDownMinutes: number
+  headDownConfirmationSeconds: number
   headDownStrongMinutes: number
   repeatReminders: boolean
   autostart: boolean

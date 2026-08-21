@@ -151,6 +151,7 @@ export function App() {
     active: cameraActive,
     cameraId: snapshot?.settings.cameraId ?? 'default',
     baseline: snapshot?.calibrationBaseline ?? null,
+    headDownEnabled: snapshot?.settings.islandHeadDownEnabled ?? false,
     onObservation
   })
 

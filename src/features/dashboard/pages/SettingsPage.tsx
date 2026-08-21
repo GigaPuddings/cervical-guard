@@ -272,7 +272,7 @@ export function SettingsPage({
           {activeTab === 'detection' && (
             <div>
               <Toggle checked={draft.cameraEnabled} onChange={value => set('cameraEnabled', value)} label="使用摄像头进行姿态检测" description="关闭后自动切换到普通定时久坐提醒" />
-              <div className={fieldGridClass}>
+              <div className={cn(fieldGridClass, 'lg:grid-cols-3')}>
                 <div className={selectFieldClass}>
                   <span>检测灵敏度</span>
                   <SelectField
@@ -289,6 +289,21 @@ export function SettingsPage({
                 <div className={selectFieldClass}>
                   <span>低头提醒阈值</span>
                   <SelectField value={draft.headDownMinutes} options={[1, 2, 3, 5, 10].map(value => ({ value, label: `${value} 分钟` }))} ariaLabel="低头提醒阈值" onChange={value => set('headDownMinutes', value)} />
+                </div>
+                <div className={selectFieldClass}>
+                  <span>低头识别确认</span>
+                  <SelectField
+                    disabled={!draft.islandHeadDownEnabled}
+                    value={draft.headDownConfirmationSeconds}
+                    options={[
+                      { value: 1, label: '1 秒 · 更快响应' },
+                      { value: 2, label: '2 秒 · 推荐' },
+                      { value: 3, label: '3 秒 · 更稳健' },
+                      { value: 5, label: '5 秒 · 减少误判' }
+                    ]}
+                    ariaLabel="低头识别确认时长"
+                    onChange={value => set('headDownConfirmationSeconds', value)}
+                  />
                 </div>
               </div>
               {snapshot.monitoringMode === 'camera' && snapshot.calibrated ? (
@@ -410,7 +425,7 @@ export function SettingsPage({
               <div className={cn('grid gap-x-5 md:grid-cols-2', !draft.islandEnabled && 'pointer-events-none opacity-50')}>
                 <Toggle checked={draft.islandReminderEnabled} onChange={value => set('islandReminderEnabled', value)} label="久坐提醒" description="显示休息、稍后和忽略操作" />
                 <Toggle checked={draft.islandAwayEnabled} onChange={value => set('islandAwayEnabled', value)} label="离座状态" description="确认无人后保持显示计时暂停" />
-                <Toggle checked={draft.islandHeadDownEnabled} onChange={value => set('islandHeadDownEnabled', value)} label="低头状态" description="持续确认低头后显示提示" />
+                <Toggle checked={draft.islandHeadDownEnabled} onChange={value => set('islandHeadDownEnabled', value)} label="低头检测" description="控制模型低头识别、状态累计、提醒与灵动岛提示" />
                 <Toggle checked={draft.islandBreakEnabled} onChange={value => set('islandBreakEnabled', value)} label="休息倒计时" description="休息期间显示倒计时与操作" />
                 <Toggle checked={draft.islandPersistentStatusEnabled} onChange={value => set('islandPersistentStatusEnabled', value)} label="持续检测状态" description="控制紧凑状态是否常驻；关闭后仍可悬停查看详情" />
                 <Toggle checked={draft.islandPausedStatusEnabled} onChange={value => set('islandPausedStatusEnabled', value)} label="暂停状态" description="暂停检测时显示恢复时间与暂停状态" />

@@ -147,6 +147,8 @@ pub struct AppSettings {
     pub repeat_reminder_minutes: u64,
     pub break_minutes: u64,
     pub head_down_minutes: u64,
+    #[serde(default = "default_head_down_confirmation_seconds")]
+    pub head_down_confirmation_seconds: u64,
     pub head_down_strong_minutes: u64,
     pub repeat_reminders: bool,
     pub autostart: bool,
@@ -200,6 +202,7 @@ impl Default for AppSettings {
             repeat_reminder_minutes: 15,
             break_minutes: 5,
             head_down_minutes: 3,
+            head_down_confirmation_seconds: default_head_down_confirmation_seconds(),
             head_down_strong_minutes: 10,
             repeat_reminders: true,
             autostart: false,
@@ -243,6 +246,7 @@ impl AppSettings {
             || !(1..=30).contains(&self.repeat_reminder_minutes)
             || !(1..=10).contains(&self.break_minutes)
             || !(1..=10).contains(&self.head_down_minutes)
+            || !(1..=10).contains(&self.head_down_confirmation_seconds)
             || !(5..=30).contains(&self.head_down_strong_minutes)
         {
             return Err("提醒阈值超出允许范围".into());
@@ -293,6 +297,10 @@ impl AppSettings {
 
 fn default_sedentary_seconds() -> u64 {
     45 * 60
+}
+
+fn default_head_down_confirmation_seconds() -> u64 {
+    2
 }
 
 fn default_language() -> String {

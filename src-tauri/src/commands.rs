@@ -501,11 +501,14 @@ pub(crate) async fn start_vision(
     context: State<'_, AppContext>,
     camera_id: String,
     baseline: Option<f64>,
+    head_down_enabled: bool,
 ) -> Result<(), String> {
     let service = Arc::clone(&context.vision);
-    tauri::async_runtime::spawn_blocking(move || service.start(&app, &camera_id, baseline))
-        .await
-        .map_err(|error| format!("摄像头会话线程异常:{error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        service.start(&app, &camera_id, baseline, head_down_enabled)
+    })
+    .await
+    .map_err(|error| format!("摄像头会话线程异常:{error}"))?
 }
 
 #[tauri::command]
