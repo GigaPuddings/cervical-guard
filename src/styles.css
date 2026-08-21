@@ -208,6 +208,24 @@
   animation-play-state: paused;
 }
 
+.themed-scrollbar {
+  scrollbar-color: var(--theme-accent-soft-strong) transparent;
+  scrollbar-width: thin;
+}
+
+.themed-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.themed-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.themed-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--theme-accent-soft-strong);
+}
+
 @media (prefers-reduced-motion: reduce) {
 
   *,

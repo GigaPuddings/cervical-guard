@@ -298,6 +298,34 @@ impl Database {
             .map_err(|error| error.to_string())
     }
 
+    pub fn behavior_history_for_date(
+        &self,
+        local_date: &str,
+    ) -> Result<Vec<BehaviorHistoryEvent>, String> {
+        chrono::NaiveDate::parse_from_str(local_date, "%Y-%m-%d")
+            .map_err(|_| "行为记录日期格式无效".to_string())?;
+        let mut statement = self.connection.prepare(
+            "SELECT id, event_type, started_at, ended_at, COALESCE(duration_seconds, 0), reminder_action
+             FROM behavior_events
+             WHERE date(started_at, 'localtime') = date(?1)
+             ORDER BY started_at DESC",
+        ).map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([local_date], |row| {
+                Ok(BehaviorHistoryEvent {
+                    id: row.get(0)?,
+                    event_type: row.get(1)?,
+                    started_at: row.get(2)?,
+                    ended_at: row.get(3)?,
+                    duration_seconds: row.get(4)?,
+                    action: row.get(5)?,
+                })
+            })
+            .map_err(|error| error.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())
+    }
+
     pub fn export_events(&self, days: u32) -> Result<Vec<BehaviorHistoryEvent>, String> {
         self.behavior_history(days)
     }

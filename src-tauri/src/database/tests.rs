@@ -35,6 +35,20 @@ fn behavior_history_returns_structured_events_newest_first() {
 }
 
 #[test]
+fn behavior_history_for_date_returns_every_event_from_that_local_day() {
+    let database = Database::memory();
+    for _ in 0..7 {
+        database
+            .record_event("head_down", 60, Some("recovered"))
+            .unwrap();
+    }
+    let today = chrono::Local::now().date_naive().to_string();
+    let events = database.behavior_history_for_date(&today).unwrap();
+    assert_eq!(events.len(), 7);
+    assert!(database.behavior_history_for_date("not-a-date").is_err());
+}
+
+#[test]
 fn persists_custom_sedentary_seconds() {
     let database = Database::memory();
     let settings = AppSettings {

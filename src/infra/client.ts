@@ -67,6 +67,9 @@ export const coreClient = {
   async getBehaviorHistory(days: number): Promise<BehaviorHistoryEvent[]> {
     return behaviorHistorySchema.parse(await command<unknown>('get_behavior_history', { days }))
   },
+  async getBehaviorHistoryForDate(localDate: string): Promise<BehaviorHistoryEvent[]> {
+    return behaviorHistorySchema.parse(await command<unknown>('get_behavior_history_for_date', { localDate }))
+  },
 
   async exportStatistics(): Promise<string> {
     return command<string>('export_statistics')

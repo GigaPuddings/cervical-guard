@@ -14,6 +14,7 @@ export interface DashboardProps {
   landmarks: LandmarkPoint[]
   error: string | null
   onPage: (page: AppPage) => void
+  onBehaviorHistoryDate: (localDate: string) => Promise<void>
   onPause: (minutes: number | null) => void
   onResume: () => void
   onStartBreak: () => void

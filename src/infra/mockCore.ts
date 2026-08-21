@@ -297,6 +297,12 @@ class MockCore {
         return this.demoStatistics(args?.days as number) as T
       case 'get_behavior_history':
         return this.demoBehaviorHistory() as T
+      case 'get_behavior_history_for_date':
+        return this.demoBehaviorHistory().filter(event => {
+          const date = new Date(event.startedAt)
+          const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+          return key === args?.localDate
+        }) as T
       case 'export_statistics':
         return this.csv() as T
       case 'delete_local_data':
@@ -378,7 +384,10 @@ class MockCore {
       { id: 'demo-1', eventType: 'proactive_break', startedAt: at(18), endedAt: at(13), durationSeconds: 300, action: 'completed' },
       { id: 'demo-2', eventType: 'away', startedAt: at(64), endedAt: at(58), durationSeconds: 360, action: 'returned' },
       { id: 'demo-3', eventType: 'head_down', startedAt: at(92), endedAt: at(87), durationSeconds: 300, action: 'recovered' },
-      { id: 'demo-4', eventType: 'proactive_pause', startedAt: at(150), endedAt: null, durationSeconds: 1800, action: '30_minutes' }
+      { id: 'demo-4', eventType: 'proactive_pause', startedAt: at(150), endedAt: null, durationSeconds: 1800, action: '30_minutes' },
+      { id: 'demo-5', eventType: 'early_break', startedAt: at(220), endedAt: at(216), durationSeconds: 240, action: 'completed' },
+      { id: 'demo-6', eventType: 'head_down', startedAt: at(285), endedAt: at(282), durationSeconds: 180, action: 'recovered' },
+      { id: 'demo-7', eventType: 'away', startedAt: at(340), endedAt: at(334), durationSeconds: 360, action: 'returned' }
     ]
   }
 

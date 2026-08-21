@@ -719,6 +719,7 @@ pub(crate) fn run() {
             update_settings,
             get_statistics,
             get_behavior_history,
+            get_behavior_history_for_date,
             export_statistics,
             delete_local_data,
             list_cameras,

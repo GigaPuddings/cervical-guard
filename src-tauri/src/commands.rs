@@ -359,6 +359,18 @@ pub(crate) fn get_behavior_history(
 }
 
 #[tauri::command]
+pub(crate) fn get_behavior_history_for_date(
+    context: State<'_, AppContext>,
+    local_date: String,
+) -> Result<Vec<BehaviorHistoryEvent>, String> {
+    context
+        .database
+        .lock()
+        .map_err(|_| "数据库锁已损坏".to_string())?
+        .behavior_history_for_date(&local_date)
+}
+
+#[tauri::command]
 pub(crate) fn set_island_menu_open(
     window: tauri::WebviewWindow,
     context: State<'_, AppContext>,

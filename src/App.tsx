@@ -21,6 +21,11 @@ function errorMessage(reason: unknown): string {
   return reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : '操作暂时无法完成'
 }
 
+function currentLocalDateKey(): string {
+  const date = new Date()
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
 export function App() {
   const { snapshot, page, statistics, behaviorHistory, busy, error, setSnapshot, setPage, setStatistics, setBehaviorHistory, setBusy, setError } = useAppStore()
   const [showIntro, setShowIntro] = useState(false)
@@ -108,13 +113,21 @@ export function App() {
 
   useEffect(() => {
     if (page !== 'statistics') return
-    void Promise.all([coreClient.getStatistics(30), coreClient.getBehaviorHistory(30)])
+    void Promise.all([coreClient.getStatistics(30), coreClient.getBehaviorHistoryForDate(currentLocalDateKey())])
       .then(([rows, events]) => {
         setStatistics(rows)
         setBehaviorHistory(events)
       })
       .catch((reason: unknown) => setError(errorMessage(reason)))
   }, [page, setBehaviorHistory, setError, setStatistics])
+
+  const loadBehaviorHistoryDate = useCallback(async (localDate: string) => {
+    try {
+      setBehaviorHistory(await coreClient.getBehaviorHistoryForDate(localDate))
+    } catch (reason) {
+      setError(errorMessage(reason))
+    }
+  }, [setBehaviorHistory, setError])
 
   useEffect(() => {
     const reminder = snapshot?.currentReminder
@@ -318,6 +331,7 @@ export function App() {
         landmarks={vision.landmarks}
         error={localizeBackendMessage(snapshot.lifecycle === 'paused' ? null : (cameraFailure ?? error), language)}
         onPage={setPage}
+        onBehaviorHistoryDate={loadBehaviorHistoryDate}
         onPause={minutes => {
           setCameraFailure(null)
           void run(() => coreClient.pauseMonitoring(minutes))
