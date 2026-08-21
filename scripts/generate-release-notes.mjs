@@ -9,6 +9,15 @@ function capture(command, args) {
   return execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
+function existingTagRef(tag) {
+  try {
+    capture("git", ["rev-parse", "--verify", `refs/tags/${tag}`]);
+    return tag;
+  } catch {
+    return "HEAD";
+  }
+}
+
 export function previousStableTag(currentTag, tags) {
   const currentVersion = currentTag.replace(/^v/, "");
   parseVersion(currentVersion);
@@ -74,7 +83,10 @@ function runCli() {
   if (!tag || !/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error("--tag vX.Y.Z is required.");
   const tags = capture("git", ["tag", "--list", "v*", "--merged", "HEAD"]).split(/\r?\n/).filter(Boolean);
   const previousTag = previousStableTag(tag, tags);
-  const notes = renderReleaseNotes({ tag, previousTag, commits: readCommits(previousTag) });
+  // Installed-version notes must stop at that version's tag even when a local
+  // branch already contains work for the next release. Before a new tag exists,
+  // the release preview intentionally falls back to HEAD.
+  const notes = renderReleaseNotes({ tag, previousTag, commits: readCommits(previousTag, existingTagRef(tag)) });
   if (outputPath) writeFileSync(outputPath, notes, "utf8");
   else process.stdout.write(notes);
 }

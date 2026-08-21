@@ -40,16 +40,18 @@ export const copy = {
       failed: '更新检查失败',
       currentVersion: '当前版本',
       latestVersion: '最新版本',
-      releaseNotes: '本次更新内容',
+      latestBadge: '最新版本',
+      releaseNotes: '更新内容',
       noReleaseNotes: '此版本没有提供更新日志。',
-      loadingReleaseNotes: '正在渲染更新日志…',
       downloadProgress: '下载进度',
       preparingDownload: '正在准备下载…',
       later: '稍后处理',
       backgroundDownload: '转入后台下载',
       backgroundHint: '可以关闭此弹窗或主窗口，下载会在托盘后台继续。',
       speed: '下载速度',
-      badge: '有新版本'
+      badge: '有新版本',
+      close: '完成',
+      recheck: '重新检查'
     }
   },
   'en-US': {
@@ -91,16 +93,18 @@ export const copy = {
       failed: 'Update check failed',
       currentVersion: 'Current version',
       latestVersion: 'Latest version',
+      latestBadge: 'Latest',
       releaseNotes: 'What’s new',
       noReleaseNotes: 'No release notes were provided for this version.',
-      loadingReleaseNotes: 'Rendering release notes…',
       downloadProgress: 'Download progress',
       preparingDownload: 'Preparing download…',
       later: 'Later',
       backgroundDownload: 'Continue in background',
       backgroundHint: 'You can close this dialog or the main window; the download will continue in the tray.',
       speed: 'Download speed',
-      badge: 'Update available'
+      badge: 'Update available',
+      close: 'Done',
+      recheck: 'Check again'
     }
   }
 } as const

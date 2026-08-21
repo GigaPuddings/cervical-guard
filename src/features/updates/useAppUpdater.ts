@@ -54,8 +54,13 @@ export function useAppUpdater(language: Language): AppUpdater {
       if (reveal) setDialogOpen(true)
       if (checkingRef.current || stageRef.current === 'downloading' || stageRef.current === 'restarting') return
       if (!isTauri()) {
-        setError(t.browserOnly)
-        changeStage('error')
+        // 浏览器仅用于本地界面开发：用“已是最新版本”呈现完整更新页，
+        // 生产桌面构建仍通过 Tauri updater 获取真实版本和签名更新。
+        setError('')
+        setVersion('')
+        setNotes('')
+        setDate('')
+        changeStage('latest')
         return
       }
       checkingRef.current = true
