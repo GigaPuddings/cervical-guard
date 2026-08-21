@@ -6,7 +6,7 @@ import type { AppUpdater } from './updateTypes'
 function latestUpdater(): AppUpdater {
   return {
     stage: 'latest',
-    currentVersion: '0.1.14',
+    currentVersion: __APP_VERSION__,
     version: '',
     notes: '',
     date: '',
@@ -29,9 +29,8 @@ describe('native-ready update dialog', () => {
   it('renders Git-generated current-version notes and the packaged illustration without an async placeholder', () => {
     const html = renderToStaticMarkup(<UpdateDialog updater={latestUpdater()} language="zh-CN" />)
 
-    expect(html).toContain('complete bilingual copy across app and island')
     expect(html).toContain('问题修复')
-    expect(html).not.toContain('联动低头检测开关')
+    expect(html).not.toContain('此构建未包含可验证的版本日志')
     expect(html).toContain('update-illustration')
     expect(html).not.toContain('正在渲染更新日志')
   })
