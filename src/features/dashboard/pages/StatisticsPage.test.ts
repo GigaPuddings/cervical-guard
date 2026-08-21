@@ -7,20 +7,20 @@ describe('habit history date filtering', () => {
     const events: BehaviorHistoryEvent[] = Array.from({ length: 7 }, (_, index) => ({
       id: String(index),
       eventType: 'head_down',
-      startedAt: `2026-08-21T0${index}:00:00+08:00`,
+      startedAt: new Date(2026, 7, 21, index, 0, 0).toISOString(),
       endedAt: null,
       durationSeconds: 60,
       action: 'recovered'
     }))
     expect(historyForDate(events, '2026-08-21')).toHaveLength(7)
-    expect(localDateKey(new Date('2026-08-21T23:30:00+08:00'))).toBe('2026-08-21')
+    expect(localDateKey(new Date(2026, 7, 21, 23, 30, 0))).toBe('2026-08-21')
   })
 
   it('excludes records from another day', () => {
     const events: BehaviorHistoryEvent[] = [{
       id: 'earlier',
       eventType: 'away',
-      startedAt: '2026-08-20T23:59:00+08:00',
+      startedAt: new Date(2026, 7, 20, 23, 59, 0).toISOString(),
       endedAt: null,
       durationSeconds: 30,
       action: 'returned'
