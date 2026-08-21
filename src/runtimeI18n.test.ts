@@ -3,8 +3,9 @@ import { translateDynamic } from "./runtimeI18n";
 
 describe("runtime language switching", () => {
   it("restores dynamically formatted English counters to Chinese", () => {
-    expect(translateDynamic("Longest session: <1m", "zh-CN")).toBe("最长连续 <1m");
+    expect(translateDynamic("Longest session: Less than 1 minute", "zh-CN")).toBe("最长连续 少于 1 分钟");
     expect(translateDynamic("0 gentle reminders", "zh-CN")).toBe("0 次温和提醒");
+    expect(translateDynamic("17% of reminders", "zh-CN")).toBe("17% 的提醒");
     expect(translateDynamic("0 times", "zh-CN")).toBe("0 次");
   });
 
@@ -18,6 +19,7 @@ describe("runtime language switching", () => {
     expect(translateDynamic("45 分钟 · 推荐", "en-US")).toBe("45 minutes · recommended");
     expect(translateDynamic("04:18 PM · 手动恢复", "en-US")).toBe("04:18 PM · Manual resume");
     expect(translateDynamic("0% 的提醒", "en-US")).toBe("0% of reminders");
+    expect(translateDynamic("坐姿与低头分钟趋势柱状图", "en-US")).toBe("Sitting and head-down duration bar chart");
   });
 
   it("localizes composite weather and status copy", () => {

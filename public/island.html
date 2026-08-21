@@ -225,14 +225,16 @@
         document.querySelector('[data-command="dismiss_reminder"]').title = document.querySelector('[data-command="dismiss_reminder"]').ariaLabel = tr('忽略本次', 'Dismiss');
       };
 
+      const plural = (value, unit) => `${value} ${unit}${value === 1 ? '' : 's'}`;
       const duration = (seconds) => {
         const value = Math.max(0, Math.floor(Number(seconds) || 0));
-        if (value < 60) return language === 'en-US' ? `${value}s` : `${value}秒`;
+        if (value < 60) return language === 'en-US' ? plural(value, 'second') : `${value} 秒`;
         const minutes = Math.floor(value / 60);
-        if (minutes < 60) return language === 'en-US' ? `${minutes}m` : `${minutes}分钟`;
+        if (minutes < 60) return language === 'en-US' ? plural(minutes, 'minute') : `${minutes} 分钟`;
         const hours = Math.floor(minutes / 60);
         const rest = minutes % 60;
-        return language === 'en-US' ? (rest ? `${hours}h ${rest}m` : `${hours}h`) : (rest ? `${hours}时${rest}分` : `${hours}小时`);
+        if (language === 'en-US') return rest ? `${plural(hours, 'hour')} ${plural(rest, 'minute')}` : plural(hours, 'hour');
+        return rest ? `${hours} 小时 ${rest} 分钟` : `${hours} 小时`;
       };
       const clearTimers = () => {
         clearTimeout(hideTimer); clearTimeout(collapseTimer); clearInterval(refreshTimer);

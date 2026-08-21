@@ -9,6 +9,7 @@ import { cn, compactDuration, formatDuration, percent } from '../../../utils'
 import type { DashboardProps } from '../dashboardTypes'
 
 export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks, error, onStartBreak, onEndBreak, onPage, onRetryPreview, onEnableCamera }: DashboardProps) {
+  const language = languageOf(snapshot.settings.language)
   const thresholdSeconds = snapshot.settings.sedentarySeconds
   const isReminderTest = thresholdSeconds <= 30
   const schedulePause = reminderSchedulePause(snapshot.settings)
@@ -43,13 +44,13 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
     <div className="today-page-layout relative grid h-full min-h-0 grid-rows-[162px_12px_minmax(0,1fr)_23px_124px] overflow-hidden px-6 pb-14.5 pt-5">
       <header className="grid min-h-0 grid-cols-1 gap-5 min-[1180px]:grid-cols-[minmax(340px,1fr)_minmax(430px,514px)]">
         <div className="min-w-0 self-start pt-3">
-          <span className="text-[11px] font-extrabold tracking-[.14em] text-accent">今天 · {new Intl.DateTimeFormat(languageOf(snapshot.settings.language), { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}</span>
+          <span className="text-[11px] font-extrabold tracking-[.14em] text-accent">今天 · {new Intl.DateTimeFormat(language, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}</span>
           <h1 className="mt-5 text-[32px] font-black leading-none tracking-[-.04em]">照顾好当下的姿势</h1>
           <p className="mt-5 text-[13px] text-muted">保持专注即可，健康提醒只在需要时出现。</p>
         </div>
         <div className="hidden h-full min-w-0 items-center justify-end gap-4 min-[1180px]:flex">
           <div className="w-55 shrink-0 translate-y-1.5 empty:hidden">
-            <TodayWeatherHeader language={languageOf(snapshot.settings.language)} />
+            <TodayWeatherHeader language={language} />
           </div>
           <button className="inline-flex h-11 w-42 shrink-0 translate-y-4 items-center justify-center gap-2 rounded-full bg-accent-soft px-5 text-[12px] font-bold text-foreground transition-colors hover:bg-accent-soft-strong" onClick={snapshot.lifecycle === 'break' ? onEndBreak : onStartBreak}>
             <Coffee size={17} /> {snapshot.lifecycle === 'break' ? '结束休息' : '主动休息'} <ChevronRight size={15} />
@@ -82,7 +83,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
             <div className="mx-auto grid aspect-square w-[min(28vh,220px)] min-w-45.5 -translate-y-1 place-items-center rounded-full bg-[conic-gradient(var(--theme-accent)_var(--session-progress),var(--theme-edge)_0)] p-2" style={{ '--session-progress': `${progress * 3.6}deg` } as CSSProperties}>
               <div className="grid size-full place-content-center rounded-full bg-panel text-center shadow-inner">
                 <span className="text-[11px] text-muted">连续坐姿</span>
-                <strong className="my-2 text-[40px] leading-none tracking-tighter">{formatDuration(snapshot.seatedSeconds)}</strong>
+                <strong className={cn('my-2 whitespace-nowrap leading-none tracking-[-.035em]', language === 'en-US' ? 'text-[18px]' : 'text-[28px]')}>{formatDuration(snapshot.seatedSeconds, language)}</strong>
                 <small className="max-w-40 text-[10px] font-bold text-accent" aria-live="polite">
                   {reminderTiming.status}
                 </small>
@@ -187,13 +188,13 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
       </div>
 
       <div className={cn('row-start-5 grid min-h-0 gap-3', isCamera ? 'grid-cols-4 min-[1180px]:grid-cols-5' : 'grid-cols-4')}>
-        <MetricCard icon={Clock3} label="今日坐姿" value={compactDuration(snapshot.today.seatedSeconds)} note={`最长连续 ${compactDuration(snapshot.today.longestSeatedSeconds)}`} tone="sage" />
-        <MetricCard icon={Gauge} label="累计低头" value={compactDuration(snapshot.today.headDownSeconds)} note={`${snapshot.today.reminderCount} 次温和提醒`} tone="sand" />
-        <MetricCard icon={Coffee} label="完成休息" value={`${snapshot.today.breakCount} 次`} note={snapshot.today.breakCount ? '正在形成好习惯' : '主动休息也会被记录'} tone="blue" />
-        <MetricCard icon={BellOff} label="忽略提醒" value={`${snapshot.today.dismissedCount} 次`} note="我们会控制提醒频率" tone="rose" />
+        <MetricCard icon={Clock3} label="今日坐姿" value={compactDuration(snapshot.today.seatedSeconds, language)} note={`最长连续 ${compactDuration(snapshot.today.longestSeatedSeconds, language)}`} tone="sage" language={language} />
+        <MetricCard icon={Gauge} label="累计低头" value={compactDuration(snapshot.today.headDownSeconds, language)} note={`${snapshot.today.reminderCount} 次温和提醒`} tone="sand" language={language} />
+        <MetricCard icon={Coffee} label="完成休息" value={`${snapshot.today.breakCount} 次`} note={snapshot.today.breakCount ? '正在形成好习惯' : '主动休息也会被记录'} tone="blue" language={language} />
+        <MetricCard icon={BellOff} label="忽略提醒" value={`${snapshot.today.dismissedCount} 次`} note="我们会控制提醒频率" tone="rose" language={language} />
         {isCamera ? (
           <div className="hidden min-[1180px]:contents">
-            <MetricCard icon={Activity} label="离座活动" value={compactDuration(snapshot.today.awaySeconds)} note={snapshot.today.awaySeconds > 0 ? '短暂离开也被记录' : '起身接水也算活动'} tone="sage" />
+            <MetricCard icon={Activity} label="离座活动" value={compactDuration(snapshot.today.awaySeconds, language)} note={snapshot.today.awaySeconds > 0 ? '短暂离开也被记录' : '起身接水也算活动'} tone="sage" language={language} />
           </div>
         ) : null}
       </div>
@@ -201,16 +202,16 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
   )
 }
 
-function MetricCard({ icon: Icon, label, value, note, tone }: { icon: typeof Clock3; label: string; value: string; note: string; tone: string }) {
+function MetricCard({ icon: Icon, label, value, note, tone, language = 'zh-CN' }: { icon: typeof Clock3; label: string; value: string; note: string; tone: string; language?: 'zh-CN' | 'en-US' }) {
   const tones: Record<string, string> = { sage: 'bg-accent-soft text-accent', sand: 'bg-warning-soft text-warning', blue: 'bg-info-soft text-info', rose: 'bg-danger-soft text-danger' }
   return (
-    <section className="flex min-h-0 min-w-0 items-center gap-3 rounded-2xl border border-edge bg-panel px-4 shadow-panel">
-      <span className={cn('grid size-12 shrink-0 place-items-center rounded-2xl', tones[tone])}>
-        <Icon size={23} />
+    <section className="flex min-h-0 min-w-0 items-center gap-2.5 rounded-2xl border border-edge bg-panel px-3 shadow-panel">
+      <span className={cn('grid size-11 shrink-0 place-items-center rounded-[15px]', tones[tone])}>
+        <Icon size={21} />
       </span>
       <div className="min-w-0">
         <span className="block text-[10px] text-muted">{label}</span>
-        <strong className="my-1 block text-[22px] leading-none tracking-[-.03em]">{value}</strong>
+        <strong className={cn('my-1 block whitespace-nowrap leading-none tracking-[-.025em]', language === 'en-US' ? 'text-[10px] min-[1360px]:text-[12px]' : 'text-[14px] min-[1360px]:text-[16px]')} title={value}>{value}</strong>
         <small className="block truncate text-[9px] text-subtle">{note}</small>
       </div>
     </section>

@@ -3,16 +3,17 @@ import { compactDuration, formatDuration, percent } from "./utils";
 
 describe("duration formatting", () => {
   it("formats seconds and minutes", () => {
-    expect(formatDuration(59)).toBe("59秒");
-    expect(formatDuration(125)).toBe("2分 05秒");
-    expect(formatDuration(3_720)).toBe("1小时 2分");
+    expect(formatDuration(59, "zh-CN")).toBe("59 秒");
+    expect(formatDuration(125, "zh-CN")).toBe("2 分钟 5 秒");
+    expect(formatDuration(3_720, "zh-CN")).toBe("1 小时 2 分钟");
+    expect(formatDuration(3_720, "en-US")).toBe("1 hour 2 minutes");
   });
 
-  it("creates compact chart labels", () => {
-    expect(compactDuration(1)).toBe("<1m");
-    expect(compactDuration(59)).toBe("<1m");
-    expect(compactDuration(1_800)).toBe("30m");
-    expect(compactDuration(5_400)).toBe("1h 30m");
+  it("creates concise labels without abbreviated units", () => {
+    expect(compactDuration(1, "zh-CN")).toBe("少于 1 分钟");
+    expect(compactDuration(59, "en-US")).toBe("Less than 1 minute");
+    expect(compactDuration(1_800, "zh-CN")).toBe("30 分钟");
+    expect(compactDuration(5_400, "en-US")).toBe("1 hour 30 minutes");
   });
 });
 

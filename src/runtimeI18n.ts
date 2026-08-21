@@ -108,6 +108,7 @@ const zhToEn: Record<string, string> = {
   暂无提醒: 'No reminders yet',
   每日行为: 'Daily behavior',
   坐姿与低头变化: 'Sitting and head-down trends',
+  坐姿与低头分钟趋势柱状图: 'Sitting and head-down duration bar chart',
   坐姿: 'Sitting',
   低头: 'Head down',
   本期观察: 'Observation',
@@ -116,6 +117,15 @@ const zhToEn: Record<string, string> = {
   行为历史: 'Behavior history',
   最近记录: 'Recent activity',
   行为发生后会记录在这里: 'Behavior events will appear here',
+  选择行为记录日期: 'Select behavior history date',
+  选择日期: 'Select date',
+  行为记录日期: 'Behavior history date',
+  '可查看最近 30 天内任一天的行为记录。': 'View behavior history for any day in the last 30 days.',
+  返回今日记录: "Return to today's activity",
+  '仅展示当天最近 5 条': 'Showing the latest 5 records for this day',
+  今日还没有行为记录: 'No activity recorded today',
+  '坐姿（分钟）': 'Sitting (minutes)',
+  '低头（分钟）': 'Head down (minutes)',
   离开座位: 'Away from seat',
   持续低头: 'Head down',
   提醒后休息: 'Break after reminder',
@@ -166,6 +176,12 @@ const zhToEn: Record<string, string> = {
   关闭后自动切换到普通定时久坐提醒: 'Turning this off switches to timer reminders',
   检测灵敏度: 'Detection sensitivity',
   低头提醒阈值: 'Head-down threshold',
+  低头识别确认: 'Head-down confirmation',
+  低头识别确认时长: 'Head-down confirmation duration',
+  '1 秒 · 更快响应': '1 second · faster response',
+  '2 秒 · 推荐': '2 seconds · recommended',
+  '3 秒 · 更稳健': '3 seconds · more stable',
+  '5 秒 · 减少误判': '5 seconds · fewer false positives',
   '较低 · 减少误报': 'Low · fewer false alerts',
   '平衡 · 推荐': 'Balanced · recommended',
   '较高 · 更早识别': 'High · earlier detection',
@@ -230,8 +246,9 @@ const zhToEn: Record<string, string> = {
   '显示休息、稍后和忽略操作': 'Show break, snooze, and dismiss actions',
   离座状态: 'Away status',
   确认无人后保持显示计时暂停: 'Show paused timing after absence is confirmed',
-  低头状态: 'Head-down status',
-  持续确认低头后显示提示: 'Show after head-down posture is confirmed',
+  低头检测: 'Head-down detection',
+  '控制模型低头识别、状态累计、提醒与灵动岛提示': 'Controls head-down analysis, tracking, reminders, and Dynamic Island notices',
+  '少于 1 分钟': 'Less than 1 minute',
   休息倒计时: 'Break countdown',
   休息期间显示倒计时与操作: 'Show countdown and controls during breaks',
   持续检测状态: 'Persistent detection status',
@@ -429,6 +446,10 @@ export function translateDynamic(value: string, language: Language): string {
       .replace(/^Remaining:\s+/, '剩余 ')
       .replace(/^Today · /, '今天 · ')
       .replace(/^Longest session:\s+/, '最长连续 ')
+      .replace(/^Today · Latest (\d+) records$/, '今日 · 最近 $1 条')
+      .replace(/ · Latest (\d+) records$/, ' · 最近 $1 条')
+      .replace(/ No activity recorded$/, ' 没有行为记录')
+      .replace(/(\d+(?:\.\d+)?)% of reminders/g, '$1% 的提醒')
       .replace(/\s+gentle reminders$/, ' 次温和提醒')
       .replace(/\s+reminders$/, ' 次提醒')
       .replace(/\s+away events$/, ' 次离座')
@@ -437,7 +458,6 @@ export function translateDynamic(value: string, language: Language): string {
     return replacePhrases(dynamic, enPhrases)
       .replace(/(\d+(?:\.\d+)?)\s+seconds?\b/g, '$1 秒')
       .replace(/(\d+(?:\.\d+)?)\s+minutes?\b/g, '$1 分钟')
-      .replace(/(\d+(?:\.\d+)?)% of reminders/g, '$1% 的提醒')
   }
   const exact = zhToEn[value]
   if (exact) return exact
@@ -458,6 +478,9 @@ export function translateDynamic(value: string, language: Language): string {
     .replace(/^已选 /, 'Selected ')
     .replace(/^连续坐姿 /, 'Continuous sitting: ')
     .replace(/^最长连续\s+/, 'Longest session: ')
+    .replace(/^今日 · 最近 (\d+) 条$/, 'Today · Latest $1 records')
+    .replace(/ · 最近 (\d+) 条$/, ' · Latest $1 records')
+    .replace(/ 没有行为记录$/, ' No activity recorded')
     .replace(/(\d+(?:\.\d+)?)%\s*的提醒/g, '$1% of reminders')
     .replace(/^已添加 (.+)，并设为概览天气$/, 'Added $1 and set it as overview weather')
     .replace(/^(.+) 已在关注列表中$/, '$1 is already in saved places')
