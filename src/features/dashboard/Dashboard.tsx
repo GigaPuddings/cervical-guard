@@ -177,7 +177,7 @@ export function Dashboard(props: DashboardProps) {
         <button className="absolute left-3 top-3 z-10 grid size-9 place-items-center rounded-xl border border-edge bg-panel shadow-control md:hidden" aria-label={messages.openNavigation} onClick={() => setSidebarOpen(true)}>
           <Menu size={18} />
         </button>
-        <div className={cn('h-full min-h-0', page === 'privacy' ? 'overflow-y-auto' : 'overflow-hidden')}>
+        <div className={cn('h-full min-h-0', page === 'today' && 'flex items-center', page === 'privacy' ? 'overflow-y-auto' : 'overflow-hidden')}>
           {page === 'today' && <TodayPage {...props} />}
           {page === 'statistics' && <StatisticsPage statistics={props.statistics} history={props.behaviorHistory} snapshot={snapshot} onHistoryDate={props.onBehaviorHistoryDate} />}
           {page === 'weather' && <WeatherPage language={language} />}

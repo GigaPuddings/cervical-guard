@@ -151,15 +151,15 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
   const behavior = snapshot.lifecycle === 'break' ? { title: messages.breakActive, text: messages.islandCountdown, tone: 'blue' } : isCamera ? behaviorCopy[snapshot.behavior] : { title: messages.timerEnabled, text: messages.timerThresholdHint, tone: 'healthy' }
 
   return (
-    <div className="today-page-layout relative grid h-full min-h-0 grid-rows-[162px_12px_minmax(0,1fr)_23px_124px] overflow-hidden px-6 pb-14.5 pt-5">
-      <header className="grid min-h-0 grid-cols-1 gap-5 min-[1180px]:grid-cols-[minmax(340px,1fr)_minmax(430px,514px)]">
+    <div className="today-page-layout relative mx-auto grid h-full min-h-0 w-full max-w-[2040px] grid-rows-[162px_12px_minmax(0,1fr)_23px_124px] overflow-hidden px-6 pb-14.5 pt-5">
+      <header className="grid min-h-0 grid-cols-1 gap-5 min-[1180px]:grid-cols-[minmax(340px,1fr)_minmax(430px,514px)] min-[1500px]:grid-cols-[minmax(340px,1fr)_470px]">
         <div className="min-w-0 self-start pt-3">
           <span className="text-[11px] font-extrabold tracking-[.14em] text-accent">{messages.today} · {new Intl.DateTimeFormat(language, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}</span>
           <h1 className="mt-5 text-[32px] font-black leading-none tracking-[-.04em]">{messages.title}</h1>
           <p className="mt-5 text-[13px] text-muted">{messages.subtitle}</p>
         </div>
-        <div className="hidden h-full min-w-0 items-center justify-end gap-4 min-[1180px]:flex">
-          <div className="w-55 shrink-0 translate-y-1.5 empty:hidden">
+        <div className="hidden h-full min-w-0 items-center justify-end gap-4 min-[1180px]:flex min-[1500px]:justify-between">
+          <div className="w-55 shrink-0 translate-y-1.5 empty:hidden min-[1500px]:w-62">
             <TodayWeatherHeader language={language} />
           </div>
           <button className="inline-flex h-11 w-42 shrink-0 translate-y-4 items-center justify-center gap-2 rounded-full bg-accent-soft px-5 text-[12px] font-bold text-foreground transition-colors hover:bg-accent-soft-strong" onClick={snapshot.lifecycle === 'break' ? onEndBreak : onStartBreak}>
@@ -181,33 +181,33 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
         </div>
       )}
 
-      <div className="row-start-3 grid min-h-0 gap-4 min-[1180px]:grid-cols-[minmax(0,1fr)_343px]">
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-card border border-edge bg-panel shadow-panel">
+      <div className="row-start-3 grid min-h-0 gap-4 min-[1180px]:grid-cols-[minmax(0,1fr)_343px] min-[1500px]:grid-cols-[minmax(0,1fr)_470px]">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-panel shadow-panel">
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-edge px-5">
             <span className="flex items-center gap-2 text-xs font-extrabold">
               <Activity size={17} /> {messages.currentSession}
             </span>
             <small className="text-[9px] text-muted">{isReminderTest ? `${thresholdSeconds} ${messages.testSeconds}` : (schedulePause ?? (isCamera ? messages.cameraLowPower : messages.timerMode))}</small>
           </div>
-          <div className="grid min-h-0 flex-1 grid-cols-[minmax(230px,.82fr)_minmax(260px,1.18fr)] items-center gap-7 px-6 py-4">
-            <div className="mx-auto grid aspect-square w-[min(28vh,220px)] min-w-45.5 -translate-y-1 place-items-center rounded-full bg-[conic-gradient(var(--theme-accent)_var(--session-progress),var(--theme-edge)_0)] p-2" style={{ '--session-progress': `${progress * 3.6}deg` } as CSSProperties}>
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(230px,.82fr)_minmax(260px,1.18fr)] items-center gap-7 px-6 py-4 min-[1500px]:grid-cols-[minmax(300px,.9fr)_minmax(340px,1.1fr)] min-[1500px]:gap-10 min-[1500px]:px-10">
+            <div className="mx-auto grid aspect-square w-[min(28vh,220px)] min-w-45.5 -translate-y-1 place-items-center rounded-full bg-[conic-gradient(var(--theme-accent)_var(--session-progress),var(--theme-edge)_0)] p-2.5 min-[1500px]:w-[min(32vh,280px)]" style={{ '--session-progress': `${progress * 3.6}deg` } as CSSProperties}>
               <div className="grid size-full place-content-center rounded-full bg-panel text-center shadow-inner">
-                <span className="text-[11px] text-muted">{messages.continuousSitting}</span>
-                <strong className={cn('my-2 whitespace-nowrap leading-none tracking-[-.035em]', language === 'en-US' ? 'text-[18px]' : 'text-[28px]')}>{formatDuration(snapshot.seatedSeconds, language)}</strong>
-                <small className="max-w-40 text-[10px] font-bold text-accent" aria-live="polite">
+                <span className="text-[11px] text-muted min-[1500px]:text-sm">{messages.continuousSitting}</span>
+                <strong className={cn('my-2 whitespace-nowrap leading-none tracking-[-.035em]', language === 'en-US' ? 'text-[18px] min-[1500px]:text-[24px]' : 'text-[28px] min-[1500px]:text-[34px]')}>{formatDuration(snapshot.seatedSeconds, language)}</strong>
+                <small className="max-w-40 text-[10px] font-bold text-accent min-[1500px]:max-w-48 min-[1500px]:text-sm" aria-live="polite">
                   {reminderTiming.status}
                 </small>
               </div>
             </div>
-            <div className="min-w-0">
-              <span className={cn('grid size-12 -translate-y-4 place-items-center rounded-2xl', behavior.tone === 'healthy' ? 'bg-accent-soft text-accent' : behavior.tone === 'warning' ? 'bg-warning-soft text-warning' : 'bg-neutral-soft text-muted')}>
-                <UserRound size={27} />
+            <div className="min-w-0 max-w-150">
+              <span className={cn('grid size-12 -translate-y-4 place-items-center rounded-2xl min-[1500px]:size-14', behavior.tone === 'healthy' ? 'bg-accent-soft text-accent' : behavior.tone === 'warning' ? 'bg-warning-soft text-warning' : 'bg-neutral-soft text-muted')}>
+                <UserRound className="size-7 min-[1500px]:size-8" />
               </span>
-              <span className="mt-2 block text-[11px] font-extrabold tracking-[.14em] text-accent">{messages.currentPosture}</span>
-              <h2 className="mt-4 truncate text-[30px] font-black leading-tight tracking-[-.04em]">{behavior.title}</h2>
-              <p className="mt-2 truncate text-[11px] text-muted">{behavior.text}</p>
+              <span className="mt-2 block text-[11px] font-extrabold tracking-[.14em] text-accent min-[1500px]:text-sm">{messages.currentPosture}</span>
+              <h2 className="mt-4 truncate text-[30px] font-black leading-tight tracking-[-.04em] min-[1500px]:text-[32px]">{behavior.title}</h2>
+              <p className="mt-2 truncate text-[11px] text-muted min-[1500px]:text-sm">{behavior.text}</p>
               {isCamera && (
-                <div className="mt-7 grid grid-cols-[auto_1fr_auto] items-center gap-3 text-[10px] text-muted">
+                <div className="mt-7 grid grid-cols-[auto_1fr_auto] items-center gap-3 text-[10px] text-muted min-[1500px]:mt-9 min-[1500px]:text-sm">
                   <span>{messages.stability}</span>
                   <div className="h-2 overflow-hidden rounded-full bg-edge">
                     <i className="block h-full rounded-full bg-accent" style={{ width: `${Math.round(snapshot.postureConfidence * 100)}%` }} />
@@ -219,17 +219,17 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
           </div>
           <div className="flex h-16 shrink-0 items-center justify-between gap-4 border-t border-edge px-5 text-[10px] text-muted">
             <span className="flex min-w-0 items-center gap-2 truncate">
-              <ShieldCheck size={14} /> {isCamera ? messages.localMultiFrame : messages.timerReminder}
+              <ShieldCheck size={15} /> {isCamera ? messages.localMultiFrame : messages.timerReminder}
             </span>
             <span className="flex shrink-0 items-center gap-2">
-              <Clock3 size={14} />
+              <Clock3 size={15} />
               <b className="text-accent">{reminderTiming.clock}</b>
               <em className="not-italic">{reminderTiming.countdown}</em>
             </span>
           </div>
         </section>
 
-        <section className="hidden min-h-0 grid-rows-[62px_minmax(0,1fr)_68px_68px] overflow-hidden rounded-card border border-edge bg-panel shadow-panel min-[1180px]:grid">
+        <section className="hidden min-h-0 grid-rows-[62px_minmax(0,1fr)_68px_68px] overflow-hidden rounded-2xl border border-edge bg-panel shadow-panel min-[1180px]:grid">
           <div className="flex items-center justify-between px-5">
             <span className="flex items-center gap-2 text-xs font-extrabold">
               <Camera size={17} /> {messages.detectionStatus}
@@ -315,8 +315,8 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
 function MetricCard({ icon: Icon, label, value, note, tone, language = 'zh-CN' }: { icon: typeof Clock3; label: string; value: string; note: string; tone: string; language?: 'zh-CN' | 'en-US' }) {
   const tones: Record<string, string> = { sage: 'bg-accent-soft text-accent', sand: 'bg-warning-soft text-warning', blue: 'bg-info-soft text-info', rose: 'bg-danger-soft text-danger' }
   return (
-    <section className="flex min-h-0 min-w-0 items-center gap-2.5 rounded-2xl border border-edge bg-panel px-3 shadow-panel">
-      <span className={cn('grid size-11 shrink-0 place-items-center rounded-[15px]', tones[tone])}>
+    <section className="flex min-h-0 min-w-0 items-center gap-2.5 rounded-xl border border-edge bg-panel px-3 shadow-panel">
+      <span className={cn('grid size-10 shrink-0 place-items-center rounded-xl', tones[tone])}>
         <Icon size={21} />
       </span>
       <div className="min-w-0">
