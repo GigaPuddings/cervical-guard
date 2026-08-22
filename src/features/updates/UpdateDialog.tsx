@@ -36,9 +36,9 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
         if (event.target === event.currentTarget) updater.close()
       }}
     >
-      <section className="flex max-h-[min(720px,calc(100vh-32px))] w-full max-w-190 flex-col overflow-hidden rounded-[22px] border border-edge bg-panel shadow-[0_28px_90px_rgba(24,43,30,.24)]" role="dialog" aria-modal="true" aria-labelledby="update-dialog-title">
+      <section className="flex max-h-[min(720px,calc(100vh-32px))] w-full max-w-190 flex-col overflow-hidden rounded-[18px] border border-edge bg-panel shadow-[0_28px_90px_rgba(24,43,30,.24)]" role="dialog" aria-modal="true" aria-labelledby="update-dialog-title">
         <header className="flex items-start gap-4 px-8 pb-5 pt-7">
-          <span className="grid size-13 shrink-0 place-items-center rounded-[17px] bg-accent-soft text-accent">
+          <span className="grid size-13 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
             <Sparkles size={22} />
           </span>
           <div className="min-w-0 flex-1">
@@ -53,7 +53,7 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
         </header>
 
         <div className="min-h-0 overflow-y-auto px-8 pb-6">
-          <div className="relative grid min-h-30 overflow-hidden rounded-[18px] border border-edge bg-panel-muted px-6 py-5 sm:grid-cols-[minmax(0,1fr)_26px_minmax(0,1fr)_200px] sm:items-center sm:gap-4">
+          <div className="relative grid min-h-30 overflow-hidden rounded-[14px] border border-edge bg-panel-muted px-6 py-5 sm:grid-cols-[minmax(0,1fr)_26px_minmax(0,1fr)_200px] sm:items-center sm:gap-4">
             <div className="relative z-1">
               <small className="block text-[10px] font-bold text-subtle">{t.currentVersion}</small>
               <strong className="mt-2 block text-lg">v{updater.currentVersion}</strong>
@@ -79,7 +79,7 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
             <Sparkles className="pointer-events-none absolute bottom-5 right-50 text-[#62c982]" size={11} strokeWidth={2.2} aria-hidden="true" />
           </div>
 
-          <div className="mt-5 rounded-[18px] border border-edge bg-panel-muted p-6">
+          <div className="mt-5 rounded-[14px] border border-edge bg-panel-muted p-6">
             <div>
               <div className="mb-2 flex items-center justify-between gap-3">
                 <h3 className="m-0 text-base font-black">{t.releaseNotes}</h3>
@@ -92,14 +92,14 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
           </div>
 
           {updater.stage === 'downloading' && !updater.downloadStarted && (
-            <div className="mt-5 flex items-center gap-3 rounded-2xl border border-accent/20 bg-accent-soft/45 p-4 text-[10px] font-bold text-accent" role="status" aria-live="polite">
+            <div className="mt-5 flex items-center gap-3 rounded-xl border border-accent/20 bg-accent-soft/45 p-4 text-[10px] font-bold text-accent" role="status" aria-live="polite">
               <LoaderCircle className="animate-spin" size={17} />
               <span>{t.preparingDownload}</span>
             </div>
           )}
 
           {shouldShowActualDownloadProgress(updater.stage, updater.downloadStarted) && (
-            <div className="mt-5 rounded-2xl border border-accent/20 bg-accent-soft/45 p-4" role="status" aria-live="polite">
+            <div className="mt-5 rounded-xl border border-accent/20 bg-accent-soft/45 p-4" role="status" aria-live="polite">
               <div className="flex items-center justify-between text-[10px] font-bold">
                 <span>{t.downloadProgress}</span>
                 <span>{updater.totalBytes > 0 ? `${formatBytes(updater.downloadedBytes, language)} / ${formatBytes(updater.totalBytes, language)}` : formatBytes(updater.downloadedBytes, language)}</span>
@@ -120,23 +120,23 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
 
         <footer className="flex flex-wrap justify-end gap-3 border-t border-edge bg-panel px-8 py-5">
           {shouldShowDeferredUpdateAction(updater.stage, updater.updateAvailable) && (
-            <button className="inline-flex min-h-12 min-w-36 items-center justify-center rounded-[14px] border border-edge bg-panel px-5 text-xs font-bold text-muted hover:bg-panel-muted" onClick={updater.close}>
+            <button className="inline-flex min-h-12 min-w-36 items-center justify-center rounded-xl border border-edge bg-panel px-5 text-xs font-bold text-muted hover:bg-panel-muted" onClick={updater.close}>
               {updater.stage === 'downloading' ? t.backgroundDownload : t.later}
             </button>
           )}
           {updater.updateAvailable && updater.stage !== 'downloading' && updater.stage !== 'restarting' ? (
-            <button className="inline-flex min-h-12 min-w-38 items-center justify-center gap-2 rounded-[14px] bg-accent px-6 text-xs font-bold text-inverse shadow-control hover:bg-accent-strong" onClick={() => void updater.install()}>
+            <button className="inline-flex min-h-12 min-w-38 items-center justify-center gap-2 rounded-xl bg-accent px-6 text-xs font-bold text-inverse shadow-control hover:bg-accent-strong" onClick={() => void updater.install()}>
               <DownloadCloud size={16} />
               {t.install}
             </button>
           ) : updater.stage !== 'downloading' && updater.stage !== 'restarting' ? (
-            <button className="inline-flex min-h-12 min-w-38 items-center justify-center gap-2 rounded-[14px] bg-accent px-6 text-xs font-bold text-inverse shadow-control hover:bg-accent-strong disabled:opacity-45" disabled={busy} onClick={() => void updater.check(true)}>
+            <button className="inline-flex min-h-12 min-w-38 items-center justify-center gap-2 rounded-xl bg-accent px-6 text-xs font-bold text-inverse shadow-control hover:bg-accent-strong disabled:opacity-45" disabled={busy} onClick={() => void updater.check(true)}>
               {updater.stage === 'checking' ? <LoaderCircle className="animate-spin" size={16} /> : <RefreshCw size={16} />}
               {updater.stage === 'latest' ? t.recheck : t.check}
             </button>
           ) : null}
           {!updater.updateAvailable && (updater.stage === 'error' || updater.stage === 'idle' || updater.stage === 'latest') && (
-            <button className="order-first inline-flex min-h-12 items-center justify-center rounded-[14px] border border-edge bg-panel px-6 text-xs font-bold text-muted hover:bg-panel-muted" onClick={updater.close}>{t.close}</button>
+            <button className="order-first inline-flex min-h-12 items-center justify-center rounded-xl border border-edge bg-panel px-6 text-xs font-bold text-muted hover:bg-panel-muted" onClick={updater.close}>{t.close}</button>
           )}
         </footer>
       </section>

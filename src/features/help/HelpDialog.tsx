@@ -44,13 +44,13 @@ export function HelpDialog({ open, language, onClose }: { open: boolean; languag
       }}
     >
       <section
-        className="flex max-h-[min(700px,calc(100vh-32px))] w-full max-w-180 flex-col overflow-hidden rounded-3xl border border-edge bg-panel shadow-panel"
+        className="flex max-h-[min(700px,calc(100vh-32px))] w-full max-w-180 flex-col overflow-hidden rounded-[18px] border border-edge bg-panel shadow-panel"
         role="dialog"
         aria-modal="true"
         aria-labelledby="help-dialog-title"
       >
         <header className="flex items-start gap-4 border-b border-edge px-6 py-5">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent-soft text-accent">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
             <CircleHelp size={23} />
           </span>
           <div className="min-w-0 flex-1">
@@ -66,7 +66,7 @@ export function HelpDialog({ open, language, onClose }: { open: boolean; languag
         <div className="min-h-0 overflow-y-auto px-6 py-5">
           <div className="grid gap-3 sm:grid-cols-2">
             {t.tips.map(([title, description, Icon]) => (
-              <article className="flex gap-3 rounded-2xl border border-edge-soft bg-panel-muted p-4" key={title}>
+              <article className="flex gap-3 rounded-xl border border-edge-soft bg-panel-muted p-4" key={title}>
                 <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-panel text-accent shadow-control">
                   <Icon size={17} />
                 </span>
@@ -77,7 +77,7 @@ export function HelpDialog({ open, language, onClose }: { open: boolean; languag
               </article>
             ))}
           </div>
-          <p className="mb-0 mt-4 rounded-2xl bg-warning-soft px-4 py-3 text-[9px] leading-5 text-warning-foreground">{t.note}</p>
+          <p className="mb-0 mt-4 rounded-xl bg-warning-soft px-4 py-3 text-[9px] leading-5 text-warning-foreground">{t.note}</p>
         </div>
         <footer className="flex justify-end border-t border-edge bg-panel-muted/55 px-6 py-4">
           <button className="min-h-10 rounded-xl bg-accent px-5 text-[11px] font-bold text-inverse hover:bg-accent-strong" onClick={onClose}>

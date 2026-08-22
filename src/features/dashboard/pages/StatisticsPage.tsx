@@ -295,7 +295,7 @@ export function StatisticsPage({ statistics, history, snapshot, onHistoryDate }:
       </div>
 
       <div className="grid min-h-0 gap-4 min-[1080px]:grid-cols-[minmax(0,1.7fr)_minmax(310px,.78fr)]">
-        <section className="flex min-h-0 flex-col rounded-[22px] border border-edge bg-panel px-5 pb-4 pt-2.5 shadow-panel 2xl:px-6">
+        <section className="flex min-h-0 flex-col rounded-2xl border border-edge bg-panel px-5 pb-4 pt-2.5 shadow-panel 2xl:px-6">
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-edge-soft">
             <div className="flex items-baseline gap-3"><span className="text-[10px] font-extrabold tracking-[.12em] text-accent">{messages.dailyBehavior}</span><h2 className="m-0 text-[15px] font-black">{messages.trendTitle}</h2></div>
             <span className="flex items-center gap-3 text-[10px] text-muted"><i className="size-2.5 rounded-full bg-accent" /> {messages.sitting} <i className="ml-2 size-2.5 rounded-full bg-warning" /> {messages.headDownShort}</span>
@@ -340,7 +340,7 @@ export function StatisticsPage({ statistics, history, snapshot, onHistoryDate }:
           </div>
         </section>
 
-        <section className="flex min-h-0 flex-col overflow-visible rounded-[22px] border border-edge bg-panel px-5 pb-4 pt-2.5 shadow-panel">
+        <section className="flex min-h-0 flex-col overflow-visible rounded-2xl border border-edge bg-panel px-5 pb-4 pt-2.5 shadow-panel">
           <div className="relative z-20 flex h-12 shrink-0 items-center justify-between border-b border-edge-soft" ref={calendarRef}>
             <div><h2 className="m-0 text-[15px] font-black">{messages.recent}</h2><span className="mt-0.5 block text-[9px] text-muted">{selectedDate === today ? messages.today : selectedDateLabel} · {messages.all} {dayHistory.length} {messages.records}</span></div>
             <button className={cn('grid size-9 place-items-center rounded-[10px] border border-edge bg-panel text-accent shadow-control transition hover:border-accent/45 hover:bg-accent-soft', calendarOpen && 'border-accent bg-accent-soft')} aria-label={messages.chooseDate} aria-expanded={calendarOpen} aria-haspopup="dialog" onClick={toggleCalendar}><CalendarDays size={17} /></button>

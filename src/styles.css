@@ -115,7 +115,7 @@
 
   --font-sans: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
   --font-serif: "STSong", "SimSun", serif;
-  --radius-card: 1.25rem;
+  --radius-card: 1rem;
   --shadow-panel: var(--theme-shadow-panel);
   --shadow-control: var(--theme-shadow-control);
 }
@@ -245,8 +245,8 @@
 
 @media (max-height: 760px) {
   .today-page-layout {
-    grid-template-rows: 138px 10px minmax(0, 1fr) 14px 100px;
+    grid-template-rows: 126px 8px minmax(0, 1fr) 12px 96px;
     padding-top: 16px;
-    padding-bottom: 24px;
+    padding-bottom: 18px;
   }
 }
