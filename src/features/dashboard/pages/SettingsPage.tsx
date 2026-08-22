@@ -16,8 +16,6 @@ const settingsMessages = defineMessages({
   minutes: '分钟',
   unitAria: '久坐提醒时间单位',
   quickDuration: '快速时长',
-  test10: '10 秒测试',
-  test30: '30 秒测试',
   active30: '30 分钟 · 积极',
   recommended45: '45 分钟 · 推荐',
   gentle60: '60 分钟 · 温和',
@@ -28,11 +26,11 @@ const settingsMessages = defineMessages({
   detection: '检测',
   detectionDescription: '摄像头、识别灵敏度与行为阈值',
   reminder: '提醒',
-  reminderDescription: '久坐节奏、午间静默与通知方式',
+  reminderDescription: '久坐节奏与通知方式',
   island: '灵动岛',
   islandDescription: '顶部状态、行为提醒与窗口协同',
   runtime: '运行',
-  runtimeDescription: '工作时段、后台运行与开机启动',
+  runtimeDescription: '静默时段、工作时段与后台运行',
   privacy: '数据与隐私',
   privacyDescription: '本地统计、导出与数据清理',
   saving: '正在保存…',
@@ -110,6 +108,10 @@ const settingsMessages = defineMessages({
   allowPermanentCloseDescription: '开启后关闭菜单才显示彻底关闭选项',
   workStart: '工作开始',
   workEnd: '工作结束',
+  workSchedule: '工作时段',
+  workScheduleDescription: '设置每天允许提醒生效的时间范围',
+  backgroundAndStartup: '后台与启动',
+  backgroundAndStartupDescription: '管理窗口关闭、登录启动与周末运行规则',
   background: '关闭窗口后在后台运行',
   backgroundDescription: '隐藏后继续低功耗监测',
   autostart: '开机自动启动',
@@ -154,32 +156,59 @@ function Toggle({ checked, onChange, label, description, className, disabled = f
 }
 
 const primaryButtonClass =
-  'inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl bg-accent px-5 text-sm font-bold text-inverse shadow-control transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50'
-const settingsPanelClass = 'rounded-[18px] border border-edge bg-panel p-6 shadow-panel'
+  'inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-accent px-5 text-sm font-bold text-inverse shadow-control transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50'
+const settingsPanelClass = 'rounded-2xl border border-edge bg-panel p-6 shadow-panel'
 const sectionTitleClass =
-  'mb-1 flex items-center gap-4 border-b border-edge-soft pb-5 [&_h2]:mb-1 [&_h2]:text-[22px] [&_h2]:font-black [&_p]:m-0 [&_p]:text-xs [&_p]:leading-5 [&_p]:text-muted 2xl:[&_h2]:text-[24px] 2xl:[&_p]:text-[13px]'
+  'mb-1 flex items-center gap-4 border-b border-edge-soft pb-5 [&_h2]:mb-1 [&_h2]:text-xl [&_h2]:font-black [&_p]:m-0 [&_p]:text-xs [&_p]:leading-5 [&_p]:text-muted'
 const fieldGridClass =
   'grid grid-cols-1 gap-4 border-b border-edge-soft py-5 sm:grid-cols-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-2.5 [&_label>span]:text-xs [&_label>span]:font-bold [&_label>span]:text-muted [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-edge [&_input]:bg-field [&_input]:px-4 [&_input]:text-[13px] disabled:[&_input]:cursor-not-allowed'
+const timeFieldGridClass =
+  'grid grid-cols-1 gap-4 sm:grid-cols-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-2.5 [&_label>span]:text-xs [&_label>span]:font-bold [&_label>span]:text-muted [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-edge [&_input]:bg-field [&_input]:px-4 [&_input]:text-[13px] disabled:[&_input]:cursor-not-allowed'
 const selectFieldClass = 'flex min-w-0 flex-col gap-2.5 [&>span]:text-xs [&>span]:font-bold [&>span]:text-muted'
 const eyebrowClass = 'text-xs font-extrabold tracking-[.14em] text-accent'
 
+type DurationUnit = 'seconds' | 'minutes'
+
+export function sedentaryDurationInputValue(seconds: number, unit: DurationUnit): string {
+  return unit === 'seconds' ? String(seconds) : String(Number((seconds / 60).toFixed(1)))
+}
+
+export function parseSedentaryDurationInput(raw: string, unit: DurationUnit): number | null {
+  if (!raw.trim()) return null
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) return null
+  const seconds = unit === 'seconds' ? value : value * 60
+  return Math.min(14_400, Math.max(5, Math.round(seconds)))
+}
+
 function SedentaryThresholdControl({ seconds, onChange, language, messages }: { seconds: number; onChange: (seconds: number) => void; language: 'zh-CN' | 'en-US'; messages: SettingsMessages }) {
-  const [unit, setUnit] = useState<'seconds' | 'minutes'>(seconds < 60 ? 'seconds' : 'minutes')
-  const displayValue = unit === 'seconds' ? seconds : Number((seconds / 60).toFixed(1))
+  const [unit, setUnit] = useState<DurationUnit>(seconds < 60 ? 'seconds' : 'minutes')
+  const [inputValue, setInputValue] = useState(() => sedentaryDurationInputValue(seconds, unit))
+  const editingRef = useRef(false)
+  useEffect(() => {
+    if (!editingRef.current) setInputValue(sedentaryDurationInputValue(seconds, unit))
+  }, [seconds, unit])
   const presets = [
-    { label: messages.test10, seconds: 10 },
-    { label: messages.test30, seconds: 30 },
     { label: messages.active30, seconds: 1_800 },
     { label: messages.recommended45, seconds: 2_700, recommended: true },
     { label: messages.gentle60, seconds: 3_600 }
   ]
-  const commit = (raw: number) => {
-    const next = unit === 'seconds' ? raw : raw * 60
-    onChange(Math.min(14_400, Math.max(5, Math.round(next))))
+  const commit = (raw: string) => {
+    const next = parseSedentaryDurationInput(raw, unit)
+    if (next === null) {
+      setInputValue(sedentaryDurationInputValue(seconds, unit))
+      return
+    }
+    onChange(next)
+    setInputValue(sedentaryDurationInputValue(next, unit))
+  }
+  const changeUnit = (nextUnit: DurationUnit) => {
+    setUnit(nextUnit)
+    setInputValue(sedentaryDurationInputValue(seconds, nextUnit))
   }
 
   return (
-    <div className="rounded-[14px] border border-warning/25 bg-warning-soft p-3">
+    <div className="rounded-xl border border-warning/25 bg-warning-soft p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-baseline gap-2">
           <span className="text-[10px] font-bold text-muted">{messages.firstReminder}</span>
@@ -188,8 +217,8 @@ function SedentaryThresholdControl({ seconds, onChange, language, messages }: { 
         <HeartPulse className="shrink-0 text-warning" size={16} />
       </div>
       <p className="mb-0 mt-1 text-[8px] leading-3.5 text-muted">{messages.healthReference}</p>
-      <div className="mt-2.5 grid grid-cols-[minmax(0,1fr)_92px] gap-2">
-        <label className="grid gap-1.5">
+      <div className="mt-2.5 grid gap-3 sm:grid-cols-[minmax(180px,320px)_minmax(120px,140px)] sm:justify-start">
+        <label className="grid min-w-0 gap-1.5">
           <span className="text-[9px] font-bold text-muted">{messages.customDuration}</span>
           <input
             className="h-10 w-full rounded-lg border border-edge bg-field px-3 text-[11px]"
@@ -197,9 +226,28 @@ function SedentaryThresholdControl({ seconds, onChange, language, messages }: { 
             type="number"
             min={unit === 'seconds' ? 5 : 0.1}
             max={unit === 'seconds' ? 14_400 : 240}
-            step={unit === 'seconds' ? 1 : 0.5}
-            value={displayValue}
-            onChange={event => commit(Number(event.target.value))}
+            step={unit === 'seconds' ? 1 : 0.1}
+            value={inputValue}
+            onFocus={() => {
+              editingRef.current = true
+            }}
+            onChange={event => {
+              const raw = event.target.value
+              setInputValue(raw)
+              const next = parseSedentaryDurationInput(raw, unit)
+              if (next !== null) onChange(next)
+            }}
+            onBlur={event => {
+              editingRef.current = false
+              commit(event.target.value)
+            }}
+            onKeyDown={event => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+              if (event.key === 'Escape') {
+                setInputValue(sedentaryDurationInputValue(seconds, unit))
+                event.currentTarget.blur()
+              }
+            }}
           />
         </label>
         <div className="grid gap-1.5">
@@ -211,7 +259,7 @@ function SedentaryThresholdControl({ seconds, onChange, language, messages }: { 
               { value: 'minutes', label: messages.minutes }
             ]}
             ariaLabel={messages.unitAria}
-            onChange={setUnit}
+            onChange={changeUnit}
           />
         </div>
       </div>
@@ -225,7 +273,8 @@ function SedentaryThresholdControl({ seconds, onChange, language, messages }: { 
               seconds === preset.seconds && 'border-warning bg-warning-soft text-warning'
             )}
             onClick={() => {
-              setUnit(preset.seconds < 60 ? 'seconds' : 'minutes')
+              setUnit('minutes')
+              setInputValue(sedentaryDurationInputValue(preset.seconds, 'minutes'))
               onChange(preset.seconds)
             }}
           >
@@ -344,11 +393,11 @@ export function SettingsPage({
   const ActiveIcon = activeMeta.icon
 
   return (
-    <div className="relative mx-auto grid h-full min-h-0 w-full max-w-[1680px] grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden px-[clamp(18px,3vw,56px)] py-[clamp(16px,2.4vh,32px)]">
+    <div className="relative mx-auto grid h-full min-h-0 w-full max-w-[2040px] grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden px-[clamp(18px,3vw,56px)] py-[clamp(16px,2.4vh,32px)]">
       <header className="flex min-h-17 items-center justify-between gap-6">
         <div className="min-w-0">
           <span className={eyebrowClass}>{messages.eyebrow}</span>
-          <h1 className="mb-1 mt-1.5 truncate text-[clamp(28px,2.2vw,38px)] font-black leading-tight tracking-[-.035em]">{messages.title}</h1>
+          <h1 className="mb-1 mt-1.5 truncate text-[clamp(26px,1.8vw,32px)] font-black leading-tight tracking-[-.035em]">{messages.title}</h1>
           <p className="m-0 truncate text-xs leading-5 text-muted 2xl:text-sm">{messages.subtitle}</p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
@@ -363,7 +412,7 @@ export function SettingsPage({
       </header>
 
       <div className="grid min-h-0 grid-cols-[88px_minmax(0,1fr)] gap-4 min-[1040px]:grid-cols-[200px_minmax(0,1fr)] 2xl:grid-cols-[240px_minmax(0,1fr)] 2xl:gap-6">
-        <nav className="flex min-h-0 flex-col gap-1.5 rounded-[18px] border border-edge bg-panel-muted p-2" role="tablist" aria-label={messages.categoriesAria} aria-orientation="vertical">
+        <nav className="flex min-h-0 flex-col gap-1.5 rounded-2xl border border-edge bg-panel-muted p-2" role="tablist" aria-label={messages.categoriesAria} aria-orientation="vertical">
           <span className="hidden px-3 pb-1 pt-2 text-xs font-extrabold tracking-[.14em] text-subtle min-[1040px]:block">{messages.categories}</span>
           {settingsTabs.map(({ id, label, icon: Icon }) => (
             <button
@@ -371,7 +420,7 @@ export function SettingsPage({
               id={`settings-tab-${id}`}
               title={label}
               className={cn(
-                'relative flex h-16 min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl px-2 text-[11px] font-bold text-muted transition hover:bg-panel hover:text-foreground min-[1040px]:h-14 min-[1040px]:flex-row min-[1040px]:justify-start min-[1040px]:gap-3 min-[1040px]:px-4 min-[1040px]:text-sm 2xl:h-16 2xl:text-base',
+                'relative flex h-16 min-w-0 flex-col items-center justify-center gap-1.5 rounded-lg px-2 text-[11px] font-bold text-muted transition hover:bg-panel hover:text-foreground min-[1040px]:h-14 min-[1040px]:flex-row min-[1040px]:justify-start min-[1040px]:gap-3 min-[1040px]:px-4 min-[1040px]:text-sm',
                 activeTab === id && 'bg-panel text-accent shadow-control before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-accent'
               )}
               role="tab"
@@ -393,7 +442,7 @@ export function SettingsPage({
 
         <section className={cn(settingsPanelClass, 'min-h-0 overflow-y-auto p-[clamp(20px,2.2vw,36px)]')} id={`settings-panel-${activeTab}`} role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`}>
           <div className={sectionTitleClass}>
-            <span className={cn('grid size-12 place-items-center rounded-[15px] 2xl:size-14', activeMeta.tone)}>
+            <span className={cn('grid size-12 place-items-center rounded-xl', activeMeta.tone)}>
               <ActiveIcon size={24} />
             </span>
             <div className="min-w-0">
@@ -452,13 +501,13 @@ export function SettingsPage({
           )}
 
           {activeTab === 'reminder' && (
-            <div className="grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(310px,.85fr)]">
-              <section className="min-w-0 rounded-[16px] border border-edge-soft bg-panel-muted/65 p-4 2xl:p-5" aria-labelledby="reminder-cadence-title">
+            <div className="grid min-h-0 gap-4">
+              <section className="min-w-0 rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="reminder-cadence-title">
                 <div className="mb-4">
-                  <h3 className="m-0 text-base font-black 2xl:text-lg" id="reminder-cadence-title">
+                  <h3 className="m-0 text-base font-black" id="reminder-cadence-title">
                     {messages.cadence}
                   </h3>
-                  <p className="mb-0 mt-1 text-[11px] leading-5 text-muted 2xl:text-xs">{messages.cadenceDescription}</p>
+                  <p className="mb-0 mt-1 text-[11px] leading-5 text-muted">{messages.cadenceDescription}</p>
                 </div>
                 <SedentaryThresholdControl seconds={draft.sedentarySeconds} onChange={setSedentarySeconds} language={language} messages={messages} />
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -499,40 +548,15 @@ export function SettingsPage({
                 </div>
               </section>
 
-              <section className="min-w-0 rounded-[16px] border border-edge-soft bg-panel-muted/65 p-4 2xl:p-5" aria-labelledby="quiet-hours-title">
-                <div className="mb-4">
-                  <h3 className="m-0 text-base font-black 2xl:text-lg" id="quiet-hours-title">
-                    {messages.quietHours}
-                  </h3>
-                  <p className="mb-0 mt-1 text-[11px] leading-5 text-muted 2xl:text-xs">{messages.quietDescription}</p>
-                </div>
-                <Toggle className="min-h-0 border-0 py-0" checked={draft.quietHoursEnabled} onChange={value => set('quietHoursEnabled', value)} label={messages.splitDayMode} description={messages.splitDayDescription} />
-                <div
-                  className={cn(
-                    'mt-5 grid grid-cols-1 gap-4 border-t border-edge-soft pt-5 sm:grid-cols-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-2.5 [&_label>span]:text-xs [&_label>span]:font-bold [&_label>span]:text-muted [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-edge [&_input]:bg-field [&_input]:px-4 [&_input]:text-[13px] disabled:[&_input]:cursor-not-allowed',
-                    !draft.quietHoursEnabled && 'opacity-50'
-                  )}
-                >
-                  <label>
-                    <span>{messages.quietStart}</span>
-                    <input type="time" disabled={!draft.quietHoursEnabled} value={draft.quietStart} onChange={event => set('quietStart', event.target.value)} />
-                  </label>
-                  <label>
-                    <span>{messages.quietEnd}</span>
-                    <input type="time" disabled={!draft.quietHoursEnabled} value={draft.quietEnd} onChange={event => set('quietEnd', event.target.value)} />
-                  </label>
-                </div>
-              </section>
-
-              <section className="rounded-[16px] border border-edge-soft bg-panel-muted/65 p-4 xl:col-span-2 2xl:p-5" aria-labelledby="notification-style-title">
+              <section className="rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="notification-style-title">
                 <div>
-                  <h3 className="m-0 text-base font-black 2xl:text-lg" id="notification-style-title">
+                  <h3 className="m-0 text-base font-black" id="notification-style-title">
                     {messages.notificationStyle}
                   </h3>
-                  <p className="mb-0 mt-1 text-[11px] leading-5 text-muted 2xl:text-xs">{messages.notificationDescription}</p>
+                  <p className="mb-0 mt-1 text-[11px] leading-5 text-muted">{messages.notificationDescription}</p>
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl border border-edge-soft bg-panel px-4 py-3">
+                  <div className="rounded-lg border border-edge-soft bg-panel px-4 py-3">
                     <Toggle
                       className="min-h-0 border-0 py-0"
                       checked={draft.repeatReminders}
@@ -541,10 +565,10 @@ export function SettingsPage({
                       description={draft.sedentarySeconds <= 30 ? `${messages.testRepeatPrefix} ${draft.sedentarySeconds} ${messages.repeatSuffix}` : messages.cooldown}
                     />
                   </div>
-                  <div className="rounded-xl border border-edge-soft bg-panel px-4 py-3">
+                  <div className="rounded-lg border border-edge-soft bg-panel px-4 py-3">
                     <Toggle className="min-h-0 border-0 py-0" checked={draft.meetingMode} onChange={value => set('meetingMode', value)} label={messages.meetingMode} description={messages.quietNotifications} />
                   </div>
-                  <div className="rounded-xl border border-edge-soft bg-panel px-4 py-3">
+                  <div className="rounded-lg border border-edge-soft bg-panel px-4 py-3">
                     <Toggle className="min-h-0 border-0 py-0" checked={draft.soundEnabled} onChange={value => set('soundEnabled', value)} label={messages.notificationSound} description={messages.mutedInMeeting} />
                   </div>
                 </div>
@@ -570,23 +594,60 @@ export function SettingsPage({
           )}
 
           {activeTab === 'runtime' && (
-            <div>
-              <div className={fieldGridClass}>
-                <label>
-                  <span>{messages.workStart}</span>
-                  <input type="time" value={draft.workdayStart} onChange={event => set('workdayStart', event.target.value)} />
-                </label>
-                <label>
-                  <span>{messages.workEnd}</span>
-                  <input type="time" value={draft.workdayEnd} onChange={event => set('workdayEnd', event.target.value)} />
-                </label>
-              </div>
-              <div className="grid gap-x-5 md:grid-cols-2">
-                <Toggle checked={draft.runInBackground} onChange={value => set('runInBackground', value)} label={messages.background} description={messages.backgroundDescription} />
-                <Toggle checked={draft.autostart} onChange={value => set('autostart', value)} label={messages.autostart} description={messages.autostartDescription} />
-                <Toggle checked={draft.silentAutostart} disabled={!draft.autostart} onChange={value => set('silentAutostart', value)} label={messages.silentAutostart} description={messages.silentAutostartDescription} />
-                <Toggle checked={draft.weekendEnabled} onChange={value => set('weekendEnabled', value)} label={messages.weekend} description={messages.weekendDescription} />
-              </div>
+            <div className="grid min-h-0 gap-4">
+              <section className="min-w-0 rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="quiet-hours-title">
+                <div className="grid gap-4 lg:grid-cols-[minmax(280px,.85fr)_minmax(360px,1.15fr)] lg:items-end">
+                  <div className="min-w-0">
+                    <div className="mb-4">
+                      <h3 className="m-0 text-base font-black" id="quiet-hours-title">{messages.quietHours}</h3>
+                      <p className="mb-0 mt-1 text-[11px] leading-5 text-muted">{messages.quietDescription}</p>
+                    </div>
+                    <Toggle className="min-h-0 border-0 py-0" checked={draft.quietHoursEnabled} onChange={value => set('quietHoursEnabled', value)} label={messages.splitDayMode} description={messages.splitDayDescription} />
+                  </div>
+                  <div className={cn(timeFieldGridClass, 'border-t border-edge-soft pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0', !draft.quietHoursEnabled && 'opacity-50')}>
+                    <label>
+                      <span>{messages.quietStart}</span>
+                      <input type="time" disabled={!draft.quietHoursEnabled} value={draft.quietStart} onChange={event => set('quietStart', event.target.value)} />
+                    </label>
+                    <label>
+                      <span>{messages.quietEnd}</span>
+                      <input type="time" disabled={!draft.quietHoursEnabled} value={draft.quietEnd} onChange={event => set('quietEnd', event.target.value)} />
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section className="min-w-0 rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="work-schedule-title">
+                <div className="grid gap-4 lg:grid-cols-[minmax(280px,.85fr)_minmax(360px,1.15fr)] lg:items-end">
+                  <div className="min-w-0">
+                    <h3 className="m-0 text-base font-black" id="work-schedule-title">{messages.workSchedule}</h3>
+                    <p className="mb-0 mt-1 text-[11px] leading-5 text-muted">{messages.workScheduleDescription}</p>
+                  </div>
+                  <div className={cn(timeFieldGridClass, 'border-t border-edge-soft pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0')}>
+                    <label>
+                      <span>{messages.workStart}</span>
+                      <input type="time" value={draft.workdayStart} onChange={event => set('workdayStart', event.target.value)} />
+                    </label>
+                    <label>
+                      <span>{messages.workEnd}</span>
+                      <input type="time" value={draft.workdayEnd} onChange={event => set('workdayEnd', event.target.value)} />
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="background-startup-title">
+                <div>
+                  <h3 className="m-0 text-base font-black" id="background-startup-title">{messages.backgroundAndStartup}</h3>
+                  <p className="mb-0 mt-1 text-[11px] leading-5 text-muted">{messages.backgroundAndStartupDescription}</p>
+                </div>
+                <div className="mt-3 grid gap-x-5 md:grid-cols-2">
+                  <Toggle checked={draft.runInBackground} onChange={value => set('runInBackground', value)} label={messages.background} description={messages.backgroundDescription} />
+                  <Toggle checked={draft.autostart} onChange={value => set('autostart', value)} label={messages.autostart} description={messages.autostartDescription} />
+                  <Toggle checked={draft.silentAutostart} disabled={!draft.autostart} onChange={value => set('silentAutostart', value)} label={messages.silentAutostart} description={messages.silentAutostartDescription} />
+                  <Toggle checked={draft.weekendEnabled} onChange={value => set('weekendEnabled', value)} label={messages.weekend} description={messages.weekendDescription} />
+                </div>
+              </section>
             </div>
           )}
 
