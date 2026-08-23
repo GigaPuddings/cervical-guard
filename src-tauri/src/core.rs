@@ -725,7 +725,8 @@ impl RuntimeState {
         }
 
         let enter = self.snapshot.settings.head_down_enter_score();
-        if observation.head.confidence >= 0.55 && observation.head.down_score >= enter {
+        let exit = enter - 0.14;
+        if observation.head.confidence >= 0.65 && observation.head.down_score >= enter {
             self.normal_candidate_since = None;
             let head = *self.head_candidate_since.get_or_insert(now);
             if now.duration_since(head)
@@ -733,7 +734,7 @@ impl RuntimeState {
             {
                 self.snapshot.behavior = BehaviorState::HeadDown;
             }
-        } else if observation.head.down_score <= enter - 0.14 {
+        } else if observation.head.down_score <= exit {
             self.head_candidate_since = None;
             let normal = *self.normal_candidate_since.get_or_insert(now);
             if self.snapshot.behavior == BehaviorState::HeadDown
@@ -743,6 +744,11 @@ impl RuntimeState {
                 self.snapshot.head_down_seconds = 0;
                 self.last_head_reminder = None;
             }
+        } else if self.snapshot.behavior != BehaviorState::HeadDown {
+            // 进入低头状态前必须是连续的强证据。旧实现会让处于进入/退出阈值
+            // 之间的普通帧保留候选起点，导致零散高分帧被按整段时间累计。
+            self.head_candidate_since = None;
+            self.normal_candidate_since = None;
         }
         Ok(reminder)
     }

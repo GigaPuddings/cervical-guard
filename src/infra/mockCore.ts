@@ -13,7 +13,7 @@ const defaultSettings: AppSettings = {
   repeatReminderMinutes: 15,
   breakMinutes: 5,
   headDownMinutes: 3,
-  headDownConfirmationSeconds: 2,
+  headDownConfirmationSeconds: 3,
   headDownStrongMinutes: 10,
   repeatReminders: true,
   autostart: false,

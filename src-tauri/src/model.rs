@@ -263,9 +263,12 @@ impl AppSettings {
 
     pub fn head_down_enter_score(&self) -> f64 {
         match self.sensitivity.as_str() {
-            "low" => 0.74,
-            "high" => 0.52,
-            _ => 0.62,
+            // MoveNet 的低头分数最高为 0.85。把“平衡”档放到旧版“较低”档
+            // 的位置，只有更明确的相对位移才进入候选，降低轻微点头和模型
+            // 漂移造成的频繁触发；“较高”档仍保留更早识别的空间。
+            "low" => 0.82,
+            "high" => 0.64,
+            _ => 0.74,
         }
     }
 
@@ -300,7 +303,7 @@ fn default_sedentary_seconds() -> u64 {
 }
 
 fn default_head_down_confirmation_seconds() -> u64 {
-    2
+    3
 }
 
 fn default_language() -> String {

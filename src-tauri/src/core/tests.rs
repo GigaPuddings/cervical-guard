@@ -130,6 +130,35 @@ fn head_down_confirmation_uses_the_detection_tab_setting() {
 }
 
 #[test]
+fn head_down_entry_requires_continuous_strong_evidence() {
+    let mut state = state();
+    state.snapshot.monitoring_mode = MonitoringMode::Camera;
+    state.snapshot.lifecycle = MonitoringLifecycle::Monitoring;
+    state.snapshot.person_present = true;
+    state.snapshot.behavior = BehaviorState::SittingNormal;
+    let enter = state.snapshot.settings.head_down_enter_score();
+    state.head_candidate_since = Some(Instant::now() - Duration::from_secs(10));
+
+    state
+        .ingest(observation(PostureState::Sitting, enter - 0.05))
+        .unwrap();
+
+    assert_eq!(state.snapshot.behavior, BehaviorState::SittingNormal);
+    assert!(state.head_candidate_since.is_none());
+}
+
+#[test]
+fn head_down_sensitivity_uses_conservative_entry_thresholds() {
+    let mut settings = AppSettings::default();
+    settings.sensitivity = "high".into();
+    assert_eq!(settings.head_down_enter_score(), 0.64);
+    settings.sensitivity = "balanced".into();
+    assert_eq!(settings.head_down_enter_score(), 0.74);
+    settings.sensitivity = "low".into();
+    assert_eq!(settings.head_down_enter_score(), 0.82);
+}
+
+#[test]
 fn short_keypoint_loss_keeps_clock_running_without_publishing_away() {
     let mut state = state();
     state.snapshot.monitoring_mode = MonitoringMode::Camera;
