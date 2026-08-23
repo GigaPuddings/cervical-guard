@@ -154,7 +154,9 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
     <div className="today-page-layout relative mx-auto grid h-full min-h-0 w-full max-w-[2040px] grid-rows-[162px_12px_minmax(0,1fr)_23px_124px] overflow-hidden px-6 pb-14.5 pt-5">
       <header className="grid min-h-0 grid-cols-1 gap-5 min-[1180px]:grid-cols-[minmax(340px,1fr)_minmax(430px,514px)] min-[1500px]:grid-cols-[minmax(340px,1fr)_470px]">
         <div className="min-w-0 self-start pt-3">
-          <span className="text-[11px] font-extrabold tracking-[.14em] text-accent">{messages.today} · {new Intl.DateTimeFormat(language, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}</span>
+          <span className="text-[11px] font-extrabold tracking-[.14em] text-accent">
+            {messages.today} · {new Intl.DateTimeFormat(language, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}
+          </span>
           <h1 className="mt-5 text-[32px] font-black leading-none tracking-[-.04em]">{messages.title}</h1>
           <p className="mt-5 text-[13px] text-muted">{messages.subtitle}</p>
         </div>
@@ -181,7 +183,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
         </div>
       )}
 
-      <div className="row-start-3 grid min-h-0 gap-4 min-[1180px]:grid-cols-[minmax(0,1fr)_343px] min-[1500px]:grid-cols-[minmax(0,1fr)_470px]">
+      <div className="row-start-3 grid min-h-0 gap-4 min-[1180px]:grid-cols-[minmax(0,1fr)_343px] min-[1500px]:grid-cols-[minmax(0,1fr)_500px]">
         <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-edge bg-panel shadow-panel">
           <div className="flex h-14 shrink-0 items-center justify-between border-b border-edge px-5">
             <span className="flex items-center gap-2 text-xs font-extrabold">
@@ -234,9 +236,11 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
             <span className="flex items-center gap-2 text-xs font-extrabold">
               <Camera size={17} /> {messages.detectionStatus}
             </span>
-            <span className={cn('rounded-full px-3 py-1 text-[9px] font-bold', snapshot.lifecycle === 'paused' ? 'bg-warning-soft text-warning' : !isCamera || snapshot.frameQuality === 'good' ? 'bg-accent-soft text-accent' : 'bg-warning-soft text-warning')}>{snapshot.lifecycle === 'paused' ? messages.silent : !isCamera ? messages.timing : snapshot.frameQuality === 'good' ? messages.detecting : messages.pendingConfirmation}</span>
+            <span className={cn('rounded-full px-3 py-1 text-[9px] font-bold', snapshot.lifecycle === 'paused' ? 'bg-warning-soft text-warning' : !isCamera || snapshot.frameQuality === 'good' ? 'bg-accent-soft text-accent' : 'bg-warning-soft text-warning')}>
+              {snapshot.lifecycle === 'paused' ? messages.silent : !isCamera ? messages.timing : snapshot.frameQuality === 'good' ? messages.detecting : messages.pendingConfirmation}
+            </span>
           </div>
-          <div className="relative mx-4 min-h-0 overflow-hidden rounded-xl bg-[linear-gradient(135deg,var(--theme-panel-strong),var(--theme-accent-strong))]">
+          <div className="relative mx-4 min-h-0 overflow-hidden rounded-xl bg-[linear-gradient(135deg,var(--theme-panel-strong),var(--theme-accent-strong))] min-[1500px]:aspect-[5/3] min-[1500px]:self-center">
             {isCamera && streamUrl ? (
               <>
                 <img src={streamUrl} className="absolute inset-0 size-full object-cover" alt={messages.cameraPreview} onLoad={() => setImgLoaded(true)} onError={() => setImgLoaded(false)} />
@@ -321,7 +325,9 @@ function MetricCard({ icon: Icon, label, value, note, tone, language = 'zh-CN' }
       </span>
       <div className="min-w-0">
         <span className="block text-[10px] text-muted">{label}</span>
-        <strong className={cn('my-1 block whitespace-nowrap leading-none tracking-[-.025em]', language === 'en-US' ? 'text-[10px] min-[1360px]:text-[12px]' : 'text-[14px] min-[1360px]:text-[16px]')} title={value}>{value}</strong>
+        <strong className={cn('my-1 block whitespace-nowrap leading-none tracking-[-.025em]', language === 'en-US' ? 'text-[10px] min-[1360px]:text-[12px]' : 'text-[14px] min-[1360px]:text-[16px]')} title={value}>
+          {value}
+        </strong>
         <small className="block truncate text-[9px] text-subtle">{note}</small>
       </div>
     </section>
