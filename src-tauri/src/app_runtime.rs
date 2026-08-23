@@ -247,17 +247,13 @@ pub(crate) fn run() {
                         // 因此即使用户先离座、随后才最小化主窗口，也能显示正确状态。
                         if confirmed_away && !ui.away_notice {
                             ui.away_notice = true;
-                            ui.away_return_candidate_since = None;
                             ui.detail_expanded = false;
                             drop(ui);
                             present_away_notice(&handle, &snapshot);
                         } else if ui.confirm_return_after_away(
                             snapshot.person_present
-                                && matches!(
-                                    snapshot.behavior,
-                                    BehaviorState::SittingNormal | BehaviorState::HeadDown
-                                ),
-                            Instant::now(),
+                                && snapshot.frame_quality == model::FrameQuality::Good
+                                && snapshot.posture_confidence >= 0.45,
                         ) {
                             drop(ui);
                             let _ =

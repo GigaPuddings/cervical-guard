@@ -17,9 +17,6 @@ pub(crate) const ISLAND_EXPAND_GRACE_MS: u64 = 1200;
 /// 收起后冷却期（毫秒）：防止收起后立即被轮询循环重新展开。
 /// 远短于宽限期，仅阻断 collapse→expand 的瞬态循环（防抖也会额外延迟）。
 pub(crate) const ISLAND_COLLAPSE_COOLDOWN_MS: u64 = 200;
-/// 已确认离座后，需要连续检测到人物一段时间才发布“已返回”。
-/// 这能过滤摄像头噪声造成的单帧误检，避免离座状态卡片自行消失。
-pub(crate) const ISLAND_RETURN_CONFIRMATION: Duration = Duration::from_secs(2);
 /// 检测到低头后，状态灵动岛的展示时长。
 pub(crate) const BEHAVIOR_NOTICE_DURATION: Duration = Duration::from_secs(6);
 /// 紧凑提醒中三个按钮的逻辑像素命中矩形。窗口其余区域保持原生鼠标穿透。
@@ -51,8 +48,6 @@ pub(crate) struct IslandUiState {
     pub(crate) detail_expanded: bool,
     /// “用户已离开”提示是否正展示在灵动岛上。
     pub(crate) away_notice: bool,
-    /// 离座提示展示期间，首次重新检测到人物的时间。
-    pub(crate) away_return_candidate_since: Option<Instant>,
     /// 低头状态卡片的有效期。状态卡片没有操作按钮，到期后自动关闭。
     pub(crate) behavior_notice_until: Option<Instant>,
     /// 详情卡片上次收起时间，用于防止收起后立即被轮询循环重新展开（闪现循环）。
@@ -79,7 +74,6 @@ impl Default for IslandUiState {
         Self {
             detail_expanded: false,
             away_notice: false,
-            away_return_candidate_since: None,
             behavior_notice_until: None,
             last_collapsed_at: None,
             hover_suppressed_until_exit: false,
@@ -118,7 +112,6 @@ impl IslandUiState {
     pub(crate) fn suppress_hover_until_cursor_exit(&mut self) {
         self.detail_expanded = false;
         self.away_notice = false;
-        self.away_return_candidate_since = None;
         self.behavior_notice_until = None;
         self.menu_open = false;
         self.last_collapsed_at = Some(Instant::now());
@@ -163,26 +156,13 @@ impl IslandUiState {
             && (lifecycle != MonitoringLifecycle::Paused || self.pause_status_requested)
     }
 
-    /// 离座提示只在连续确认人物返回后结束。返回 false 表示继续保留离座卡片。
-    pub(crate) fn confirm_return_after_away(
-        &mut self,
-        person_confirmed: bool,
-        now: Instant,
-    ) -> bool {
-        if !self.away_notice {
-            self.away_return_candidate_since = None;
-            return false;
-        }
-        if !person_confirmed {
-            self.away_return_candidate_since = None;
-            return false;
-        }
-        let started = *self.away_return_candidate_since.get_or_insert(now);
-        if now.duration_since(started) < ISLAND_RETURN_CONFIRMATION {
+    /// 核心状态已经完成画面质量和人物置信度门控；一旦收到该稳定返回信号，
+    /// 立即结束离座卡片，避免与坐姿状态机串联出额外的 4～5 秒等待。
+    pub(crate) fn confirm_return_after_away(&mut self, person_confirmed: bool) -> bool {
+        if !self.away_notice || !person_confirmed {
             return false;
         }
         self.away_notice = false;
-        self.away_return_candidate_since = None;
         true
     }
 }

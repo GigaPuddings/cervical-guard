@@ -47,7 +47,6 @@ mod island_ui_tests {
         normalized_proxy, reminder_sound_enabled, tray_icon_with_update_badge,
         tray_update_badge_visible, update_tray_text, IslandUiState, UpdateUiState,
         ISLAND_COMPACT_HEIGHT, ISLAND_DETAIL_HEIGHT, ISLAND_MENU_HEIGHT,
-        ISLAND_RETURN_CONFIRMATION,
     };
     use crate::app_runtime::guard_protocol_response;
     use crate::model::{AppSettings, MonitoringLifecycle};
@@ -327,18 +326,13 @@ mod island_ui_tests {
     }
 
     #[test]
-    fn away_notice_requires_continuous_confirmed_return_before_closing() {
+    fn away_notice_closes_as_soon_as_a_stable_return_is_confirmed() {
         let mut ui = IslandUiState::default();
         ui.away_notice = true;
-        let now = std::time::Instant::now();
 
-        assert!(!ui.confirm_return_after_away(true, now));
-        assert!(!ui.confirm_return_after_away(false, now + ISLAND_RETURN_CONFIRMATION));
+        assert!(!ui.confirm_return_after_away(false));
         assert!(ui.away_notice);
-
-        let restarted = now + ISLAND_RETURN_CONFIRMATION + std::time::Duration::from_millis(1);
-        assert!(!ui.confirm_return_after_away(true, restarted));
-        assert!(ui.confirm_return_after_away(true, restarted + ISLAND_RETURN_CONFIRMATION));
+        assert!(ui.confirm_return_after_away(true));
         assert!(!ui.away_notice);
     }
 
