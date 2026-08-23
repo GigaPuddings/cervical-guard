@@ -142,7 +142,7 @@ export async function getWeatherForecast(location: WeatherLocation, force = fals
   }
 
   const existing = inFlight.get(location.id)
-  if (existing && !force) return existing
+  if (existing) return existing
 
   const request = fetchOpenMeteoForecast(location, signal)
     .then(forecast => {
