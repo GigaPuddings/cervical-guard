@@ -53,6 +53,31 @@ export function bumpPatch(version) {
   return `${major}.${minor}.${patch + 1}`;
 }
 
+export function isVersionOnlyChangeSet(paths, versionFiles) {
+  if (paths.length === 0) return false;
+  const allowed = new Set(versionFiles);
+  return paths.every((path) => allowed.has(path));
+}
+
+export function canResumeVersionPreparation({ selectedVersion, projectVersion, highestUsedVersion, taggedVersions, changedPaths, versionFiles }) {
+  return selectedVersion === projectVersion
+    && !taggedVersions.includes(selectedVersion)
+    && (!highestUsedVersion || compareVersions(projectVersion, highestUsedVersion) > 0)
+    && isVersionOnlyChangeSet(changedPaths, versionFiles);
+}
+
+export function selectSuggestedReleaseVersion({ projectVersion, usedVersions, taggedVersions, publishedVersion }) {
+  // A tag without a published release means a previous invocation reached the
+  // push phase and was interrupted. Keep suggesting that version so rerunning
+  // the command resumes the existing release instead of skipping to the next one.
+  if (taggedVersions.includes(projectVersion) && publishedVersion !== projectVersion) {
+    return projectVersion;
+  }
+  const highestUsed = highestVersion([...usedVersions, publishedVersion]);
+  if (!highestUsed || compareVersions(projectVersion, highestUsed) > 0) return projectVersion;
+  return bumpPatch(highestUsed);
+}
+
 export function remoteTagVersions() {
   const output = capture("git", ["ls-remote", "--tags", "origin", "refs/tags/v*"]);
   const versions = [];

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import {
-  bumpPatch,
+  canResumeVersionPreparation,
   capture,
   compareVersions,
   highestVersion,
@@ -11,6 +11,7 @@ import {
   localTagVersions,
   promptValue,
   remoteTagVersions,
+  selectSuggestedReleaseVersion,
 } from "./release-utils.mjs";
 
 // pnpm 11 on Windows forwards its `--` separator to the script itself.
@@ -47,6 +48,12 @@ function writeVersion(version) {
   writeFileSync("src-tauri/Cargo.toml", nextCargo);
 }
 
+function workingTreePaths() {
+  const tracked = capture("git", ["diff", "HEAD", "--name-only", "--"]);
+  const untracked = capture("git", ["ls-files", "--others", "--exclude-standard"]);
+  return [...new Set(`${tracked}\n${untracked}`.split(/\r?\n/).map((path) => path.trim()).filter(Boolean))];
+}
+
 function waitForReleaseRun(tag, commit) {
   process.stdout.write("Waiting for GitHub Actions to start");
   let run = null;
@@ -76,9 +83,13 @@ const latestRelease = latestPublishedRelease();
 const localVersions = localTagVersions();
 const remoteVersions = remoteTagVersions();
 const highestUsed = highestVersion([...localVersions, ...remoteVersions, latestRelease?.version]);
-const suggestedVersion = highestUsed
-  ? (compareVersions(projectVersion, highestUsed) > 0 ? projectVersion : bumpPatch(highestUsed))
-  : projectVersion;
+const taggedVersions = [...new Set([...localVersions, ...remoteVersions])];
+const suggestedVersion = selectSuggestedReleaseVersion({
+  projectVersion,
+  usedVersions: [...localVersions, ...remoteVersions],
+  taggedVersions,
+  publishedVersion: latestRelease?.version ?? null,
+});
 
 console.log(`Latest published version: ${latestRelease?.version ?? "none"}`);
 console.log(`Highest local tag version: ${highestVersion(localVersions) ?? "none"}`);
@@ -86,26 +97,44 @@ console.log(`Highest remote tag version: ${highestVersion(remoteVersions) ?? "no
 console.log(`Current project version: ${projectVersion}`);
 
 const version = requestedVersion ?? await promptValue("New release version", suggestedVersion);
-if (localVersions.includes(version)) {
-  throw new Error(`Local tag v${version} already exists. Choose a higher version, for example ${bumpPatch(version)}.`);
+if (latestRelease?.version === version) {
+  console.log(`Release v${version} is already published: ${latestRelease.url}`);
+  process.exit(0);
 }
 if (compareVersions(version, projectVersion) < 0) throw new Error(`New version ${version} cannot be lower than project version ${projectVersion}.`);
-if (highestUsed && compareVersions(version, highestUsed) <= 0) {
+const tagAlreadyExists = taggedVersions.includes(version);
+if (highestUsed && compareVersions(version, highestUsed) <= 0 && !tagAlreadyExists) {
   throw new Error(`New version ${version} must be greater than the previously used version ${highestUsed}. Withdrawn versions are not reused.`);
 }
 const tag = `v${version}`;
 
+const changedPaths = workingTreePaths();
+const resumingVersionPreparation = canResumeVersionPreparation({
+  selectedVersion: version,
+  projectVersion,
+  highestUsedVersion: highestUsed,
+  taggedVersions,
+  changedPaths,
+  versionFiles,
+});
+
+if (changedPaths.length > 0 && !resumingVersionPreparation) {
+  throw new Error(`Working tree is not clean. Commit or stash changes before publishing.\nChanged paths:\n${changedPaths.map((path) => `- ${path}`).join("\n")}`);
+}
+if (resumingVersionPreparation) {
+  console.log(`Resuming interrupted release preparation for ${tag}; only version files are modified.`);
+}
+
 if (dryRun) {
-  console.log(`Dry run passed. ${tag} can be prepared without publishing.`);
+  console.log(`Dry run passed. ${tag} can be ${tagAlreadyExists ? "resumed" : "prepared"} without publishing.`);
   process.exit(0);
 }
 
-if (capture("git", ["status", "--porcelain"])) throw new Error("Working tree is not clean. Commit or stash changes before publishing.");
 const branch = capture("git", ["branch", "--show-current"]);
 if (!branch) throw new Error("Cannot publish from a detached HEAD.");
 
 const backups = new Map(versionFiles.map((path) => [path, readFileSync(path, "utf8")]));
-let versionPrepared = false;
+let versionPrepared = resumingVersionPreparation;
 try {
   if (version !== projectVersion) {
     writeVersion(version);
@@ -124,11 +153,7 @@ if (versionPrepared) {
 if (capture("git", ["status", "--porcelain"])) throw new Error("Publishing stopped because the working tree changed during verification.");
 
 inherit("git", ["fetch", "origin", "--tags"]);
-if (remoteTagVersions().includes(version)) throw new Error(`Tag ${tag} already exists on origin.`);
-console.log("\nGenerated release notes preview:\n");
-inherit(process.execPath, ["scripts/generate-release-notes.mjs", "--tag", tag]);
-console.log("");
-inherit("git", ["push", "origin", `HEAD:${branch}`]);
+const remoteTagExists = remoteTagVersions().includes(version);
 const commit = capture("git", ["rev-parse", "HEAD"]);
 let localTagCommit = null;
 try {
@@ -137,10 +162,21 @@ try {
   // A missing local tag is the normal first-publish path.
 }
 if (localTagCommit && localTagCommit !== commit) {
-  throw new Error(`Local tag ${tag} points to ${localTagCommit}, not the release commit ${commit}.`);
+  throw new Error(`Local or fetched tag ${tag} points to ${localTagCommit}, not the release commit ${commit}.`);
 }
+if (remoteTagExists && !localTagCommit) {
+  throw new Error(`Tag ${tag} exists on origin but could not be resolved locally after fetching tags.`);
+}
+console.log("\nGenerated release notes preview:\n");
+inherit(process.execPath, ["scripts/generate-release-notes.mjs", "--tag", tag]);
+console.log("");
+inherit("git", ["push", "origin", `HEAD:${branch}`]);
 if (!localTagCommit) inherit("git", ["tag", "--annotate", tag, "--message", `Release ${tag}`]);
-inherit("git", ["push", "origin", tag]);
+if (!remoteTagExists) {
+  inherit("git", ["push", "origin", tag]);
+} else {
+  console.log(`Tag ${tag} is already on origin; resuming its existing release workflow.`);
+}
 
 console.log(`Published ${tag}; waiting for the signed release assets to finish uploading.`);
 waitForReleaseRun(tag, commit);

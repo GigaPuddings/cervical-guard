@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { bumpPatch, capturePnpm, compareVersions, highestVersion, parseVersion } from "./release-utils.mjs";
+import {
+  bumpPatch,
+  canResumeVersionPreparation,
+  capturePnpm,
+  compareVersions,
+  highestVersion,
+  isVersionOnlyChangeSet,
+  parseVersion,
+  selectSuggestedReleaseVersion,
+} from "./release-utils.mjs";
 
 describe("release version helpers", () => {
   it("compares stable semantic versions numerically", () => {
@@ -25,5 +34,43 @@ describe("release version helpers", () => {
 
   it("can launch pnpm as a child process on this platform", () => {
     assert.match(capturePnpm(["--version"]), /^\d+\.\d+\.\d+/);
+  });
+
+  it("recognizes an interrupted version-only preparation", () => {
+    const versionFiles = ["package.json", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "src-tauri/tauri.conf.json"];
+    assert.equal(isVersionOnlyChangeSet(["package.json", "src-tauri/Cargo.toml"], versionFiles), true);
+    assert.equal(isVersionOnlyChangeSet(["package.json", "src/App.tsx"], versionFiles), false);
+    assert.equal(isVersionOnlyChangeSet([], versionFiles), false);
+    assert.equal(canResumeVersionPreparation({
+      selectedVersion: "0.1.18",
+      projectVersion: "0.1.18",
+      highestUsedVersion: "0.1.17",
+      taggedVersions: ["0.1.17"],
+      changedPaths: versionFiles,
+      versionFiles,
+    }), true);
+    assert.equal(canResumeVersionPreparation({
+      selectedVersion: "0.1.18",
+      projectVersion: "0.1.18",
+      highestUsedVersion: "0.1.17",
+      taggedVersions: ["0.1.17"],
+      changedPaths: [...versionFiles, "src/App.tsx"],
+      versionFiles,
+    }), false);
+  });
+
+  it("resumes an unpublished project tag instead of suggesting the next patch", () => {
+    assert.equal(selectSuggestedReleaseVersion({
+      projectVersion: "0.1.18",
+      usedVersions: ["0.1.17", "0.1.18"],
+      taggedVersions: ["0.1.18"],
+      publishedVersion: "0.1.17",
+    }), "0.1.18");
+    assert.equal(selectSuggestedReleaseVersion({
+      projectVersion: "0.1.18",
+      usedVersions: ["0.1.17", "0.1.18"],
+      taggedVersions: ["0.1.18"],
+      publishedVersion: "0.1.18",
+    }), "0.1.19");
   });
 });
