@@ -1,6 +1,7 @@
 import type { AppSettings, AppSnapshot, CalibrationResult, BehaviorHistoryEvent, CameraDevice, DailyStatistics, ReminderPayload, VisionFrame, VisionObservation } from '../types'
 
 const today = (): string => new Date().toISOString().slice(0, 10)
+const targetDemo = import.meta.env.DEV && new URLSearchParams(window.location.search).get('demo') === 'target'
 
 const defaultSettings: AppSettings = {
   schemaVersion: 2,
@@ -67,15 +68,15 @@ function loadSettings(): AppSettings {
 class MockCore {
   private snapshot: AppSnapshot = {
     schemaVersion: 2,
-    lifecycle: localStorage.getItem('cervical-guard-onboarded') ? 'paused' : 'unavailable',
-    behavior: 'unknown',
-    permission: 'prompt',
+    lifecycle: targetDemo ? 'monitoring' : localStorage.getItem('cervical-guard-onboarded') ? 'paused' : 'unavailable',
+    behavior: targetDemo ? 'sitting_normal' : 'unknown',
+    permission: targetDemo ? 'granted' : 'prompt',
     monitoringMode: 'camera',
-    personPresent: false,
-    postureConfidence: 0,
-    frameQuality: 'unstable',
-    seatedSeconds: 0,
-    headDownSeconds: 0,
+    personPresent: targetDemo,
+    postureConfidence: targetDemo ? 0.85 : 0,
+    frameQuality: targetDemo ? 'good' : 'unstable',
+    seatedSeconds: targetDemo ? 3_182 : 0,
+    headDownSeconds: targetDemo ? 60 : 0,
     awaySeconds: 0,
     breakRemainingSeconds: 0,
     breakRestSeconds: 0,
@@ -83,12 +84,22 @@ class MockCore {
     currentReminder: null,
     nextReminderAt: null,
     reminderRemainingSeconds: null,
-    today: blankDay(),
-    settings: loadSettings(),
-    calibrated: localStorage.getItem('cervical-guard-calibrated') === 'true',
-    calibrationBaseline: Number(localStorage.getItem('cervical-guard-baseline')) || null,
-    lastObservationAt: null,
-    sessionStartedAt: null
+    today: targetDemo ? { ...blankDay(), seatedSeconds: 3_182, longestSeatedSeconds: 3_182, headDownSeconds: 60 } : blankDay(),
+    settings: targetDemo
+      ? {
+          ...defaultSettings,
+          sedentaryMinutes: 60,
+          sedentarySeconds: 3_600,
+          islandPersistentStatusEnabled: true,
+          islandPausedStatusEnabled: false,
+          islandPeekThroughEnabled: false,
+          islandAllowWithMainWindow: true
+        }
+      : loadSettings(),
+    calibrated: targetDemo || localStorage.getItem('cervical-guard-calibrated') === 'true',
+    calibrationBaseline: targetDemo ? -0.3 : Number(localStorage.getItem('cervical-guard-baseline')) || null,
+    lastObservationAt: targetDemo ? new Date().toISOString() : null,
+    sessionStartedAt: targetDemo ? new Date(Date.now() - 3_182_000).toISOString() : null
   }
 
   private lastTick = performance.now()
@@ -128,6 +139,10 @@ class MockCore {
     const now = performance.now()
     const elapsed = Math.min(2, Math.max(0, (now - this.lastTick) / 1_000))
     this.lastTick = now
+    if (targetDemo) {
+      this.updateReminderSchedule(now)
+      return
+    }
     if (this.snapshot.lifecycle === 'monitoring' || this.snapshot.lifecycle === 'degraded') {
       const timerMode = this.snapshot.monitoringMode === 'timer'
       const personHere = timerMode || this.snapshot.personPresent

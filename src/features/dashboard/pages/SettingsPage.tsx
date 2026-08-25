@@ -1,6 +1,7 @@
-import { Activity, Camera, CameraOff, ChevronRight, Clock3, Download, Eye, HeartPulse, LockKeyhole, RotateCcw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react'
+import { Activity, Armchair, Camera, CameraOff, ChevronRight, CircleCheck, CirclePause, Clock3, Download, Eye, HeartPulse, LockKeyhole, PanelTop, Power, RotateCcw, ShieldCheck, Sparkles, Trash2, UserCheck, ZoomIn } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { SelectField } from '../../../components/SelectField'
+import { SettingItem } from '../../../components/SettingItem'
 import { languageOf } from '../../../i18n'
 import { defineMessages, localizeMessages, translateNow } from '../../../runtimeI18n'
 import type { AppSettings, AppSnapshot } from '../../../types'
@@ -133,7 +134,10 @@ const settingsMessages = defineMessages({
   deleteHistory: '删除全部统计与行为历史',
   medicalDisclaimer: '健康提醒用于日常行为提醒，不用于疾病诊断或替代医生建议。',
   saveFailed: '设置没有保存',
-  saveFailedHint: '请检查输入范围后重试，原有设置仍保持有效。'
+  saveFailedHint: '请检查输入范围后重试，原有设置仍保持有效。',
+  islandPageTitle: '灵动岛显示与交互设置',
+  islandPageSubtitle: '自定义灵动岛的显示行为与交互方式，打造更贴合你的使用体验。',
+  changesApply: '所有更改将立即生效'
 })
 
 type SettingsMessages = { [K in keyof typeof settingsMessages]: string }
@@ -144,7 +148,7 @@ function intervalLabel(seconds: number, language: 'zh-CN' | 'en-US'): string {
 
 function Toggle({ checked, onChange, label, description, className, disabled = false }: { checked: boolean; onChange: (checked: boolean) => void; label: string; description: string; className?: string; disabled?: boolean }) {
   return (
-    <label className={cn('relative flex min-h-15 cursor-pointer items-center gap-4 border-b border-edge-soft py-2', disabled && 'cursor-not-allowed opacity-50', className)}>
+    <label className={cn('setting-toggle relative flex min-h-15 cursor-pointer items-center gap-4 border-b border-edge-soft py-2', disabled && 'cursor-not-allowed opacity-50', className)}>
       <div className="flex flex-1 flex-col gap-1">
         <strong className="text-sm leading-5 2xl:text-base">{label}</strong>
         <small className="text-[11px] leading-4 text-muted 2xl:text-[13px]">{description}</small>
@@ -155,15 +159,12 @@ function Toggle({ checked, onChange, label, description, className, disabled = f
   )
 }
 
-const primaryButtonClass =
-  'inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-accent px-5 text-sm font-bold text-inverse shadow-control transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50'
+const primaryButtonClass = 'inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-accent px-5 text-sm font-bold text-inverse shadow-control transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50'
 const settingsPanelClass = 'rounded-2xl border border-edge bg-panel p-6 shadow-panel'
-const sectionTitleClass =
-  'mb-1 flex items-center gap-4 border-b border-edge-soft pb-5 [&_h2]:mb-1 [&_h2]:text-xl [&_h2]:font-black [&_p]:m-0 [&_p]:text-xs [&_p]:leading-5 [&_p]:text-muted'
+const sectionTitleClass = 'mb-1 flex items-center gap-4 border-b border-edge-soft pb-5 [&_h2]:mb-1 [&_h2]:text-xl [&_h2]:font-black [&_p]:m-0 [&_p]:text-xs [&_p]:leading-5 [&_p]:text-muted'
 const fieldGridClass =
   'grid grid-cols-1 gap-4 border-b border-edge-soft py-5 sm:grid-cols-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-2.5 [&_label>span]:text-xs [&_label>span]:font-bold [&_label>span]:text-muted [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-edge [&_input]:bg-field [&_input]:px-4 [&_input]:text-[13px] disabled:[&_input]:cursor-not-allowed'
-const timeFieldGridClass =
-  'grid grid-cols-1 gap-4 sm:grid-cols-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-2.5 [&_label>span]:text-xs [&_label>span]:font-bold [&_label>span]:text-muted [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-edge [&_input]:bg-field [&_input]:px-4 [&_input]:text-[13px] disabled:[&_input]:cursor-not-allowed'
+const timeFieldGridClass = 'grid grid-cols-1 gap-4 sm:grid-cols-2 [&_label]:flex [&_label]:flex-col [&_label]:gap-2.5 [&_label>span]:text-xs [&_label>span]:font-bold [&_label>span]:text-muted [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-edge [&_input]:bg-field [&_input]:px-4 [&_input]:text-[13px] disabled:[&_input]:cursor-not-allowed'
 const selectFieldClass = 'flex min-w-0 flex-col gap-2.5 [&>span]:text-xs [&>span]:font-bold [&>span]:text-muted'
 const eyebrowClass = 'text-xs font-extrabold tracking-[.14em] text-accent'
 
@@ -267,11 +268,7 @@ function SedentaryThresholdControl({ seconds, onChange, language, messages }: { 
         {presets.map(preset => (
           <button
             key={preset.seconds}
-            className={cn(
-              'min-h-7 rounded-full border border-edge bg-panel/80 px-2.5 text-[9px] text-muted transition hover:border-warning hover:bg-warning-soft hover:text-warning',
-              preset.recommended && 'border-warning/45 text-warning-foreground',
-              seconds === preset.seconds && 'border-warning bg-warning-soft text-warning'
-            )}
+            className={cn('min-h-7 rounded-full border border-edge bg-panel/80 px-2.5 text-[9px] text-muted transition hover:border-warning hover:bg-warning-soft hover:text-warning', preset.recommended && 'border-warning/45 text-warning-foreground', seconds === preset.seconds && 'border-warning bg-warning-soft text-warning')}
             onClick={() => {
               setUnit('minutes')
               setInputValue(sedentaryDurationInputValue(preset.seconds, 'minutes'))
@@ -283,8 +280,7 @@ function SedentaryThresholdControl({ seconds, onChange, language, messages }: { 
         ))}
       </div>
       <div className="mt-2 flex items-center gap-1.5 text-[8px] text-muted">
-        <span className={cn('size-1.5 rounded-full', seconds > 3_600 ? 'bg-warning' : 'bg-accent')} />{' '}
-        {seconds <= 30 ? messages.testMode : seconds > 3_600 ? messages.tooLong : seconds >= 1_800 ? messages.referenceRange : messages.frequentReminder}
+        <span className={cn('size-1.5 rounded-full', seconds > 3_600 ? 'bg-warning' : 'bg-accent')} /> {seconds <= 30 ? messages.testMode : seconds > 3_600 ? messages.tooLong : seconds >= 1_800 ? messages.referenceRange : messages.frequentReminder}
       </div>
     </div>
   )
@@ -298,66 +294,52 @@ function createSettingsTabs(messages: SettingsMessages): Array<{
   description: string
   icon: typeof Camera
   tone: string
-}> { return [
-  {
-    id: 'detection',
-    label: messages.detection,
-    description: messages.detectionDescription,
-    icon: Camera,
-    tone: 'bg-accent-soft text-accent'
-  },
-  {
-    id: 'reminder',
-    label: messages.reminder,
-    description: messages.reminderDescription,
-    icon: Clock3,
-    tone: 'bg-warning-soft text-warning'
-  },
-  {
-    id: 'island',
-    label: messages.island,
-    description: messages.islandDescription,
-    icon: Sparkles,
-    tone: 'bg-accent-soft text-accent'
-  },
-  {
-    id: 'runtime',
-    label: messages.runtime,
-    description: messages.runtimeDescription,
-    icon: Activity,
-    tone: 'bg-info-soft text-info'
-  },
-  {
-    id: 'privacy',
-    label: messages.privacy,
-    description: messages.privacyDescription,
-    icon: ShieldCheck,
-    tone: 'bg-neutral-soft text-muted'
-  }
-] }
+}> {
+  return [
+    {
+      id: 'detection',
+      label: messages.detection,
+      description: messages.detectionDescription,
+      icon: Camera,
+      tone: 'bg-accent-soft text-accent'
+    },
+    {
+      id: 'reminder',
+      label: messages.reminder,
+      description: messages.reminderDescription,
+      icon: Clock3,
+      tone: 'bg-warning-soft text-warning'
+    },
+    {
+      id: 'island',
+      label: messages.island,
+      description: messages.islandDescription,
+      icon: Sparkles,
+      tone: 'bg-accent-soft text-accent'
+    },
+    {
+      id: 'runtime',
+      label: messages.runtime,
+      description: messages.runtimeDescription,
+      icon: Activity,
+      tone: 'bg-info-soft text-info'
+    },
+    {
+      id: 'privacy',
+      label: messages.privacy,
+      description: messages.privacyDescription,
+      icon: ShieldCheck,
+      tone: 'bg-neutral-soft text-muted'
+    }
+  ]
+}
 
-export function SettingsPage({
-  snapshot,
-  error,
-  onSave,
-  onExport,
-  onDeleteData,
-  onEnableCamera,
-  onRecalibrate
-}: {
-  snapshot: AppSnapshot
-  error: string | null
-  onSave: (settings: AppSettings) => Promise<boolean>
-  onExport: () => void
-  onDeleteData: () => void
-  onEnableCamera: () => void
-  onRecalibrate: () => void
-}) {
+export function SettingsPage({ snapshot, error, onSave, onExport, onDeleteData, onEnableCamera, onRecalibrate }: { snapshot: AppSnapshot; error: string | null; onSave: (settings: AppSettings) => Promise<boolean>; onExport: () => void; onDeleteData: () => void; onEnableCamera: () => void; onRecalibrate: () => void }) {
   const language = languageOf(snapshot.settings.language)
   const messages = localizeMessages(settingsMessages, language)
   const settingsTabs = createSettingsTabs(messages)
   const [draft, setDraft] = useState(snapshot.settings)
-  const [activeTab, setActiveTab] = useState<SettingsTab>('detection')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('island')
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const persistedKey = JSON.stringify(snapshot.settings)
   const lastSyncedKey = useRef(persistedKey)
@@ -385,22 +367,24 @@ export function SettingsPage({
     if (ok) window.setTimeout(() => setSaveState('idle'), 2_000)
   }
   const saveButton = (
-    <button className={primaryButtonClass} disabled={!changed || saveState === 'saving'} onClick={() => void save()}>
-      {saveState === 'saving' ? messages.saving : saveState === 'saved' ? messages.saved : messages.saveApply}
+    <button className={primaryButtonClass} disabled={saveState === 'saving'} onClick={() => void save()}>
+      <CircleCheck size={16} /> {saveState === 'saving' ? messages.saving : saveState === 'saved' ? messages.saved : messages.saveApply}
     </button>
   )
   const activeMeta = settingsTabs.find(tab => tab.id === activeTab) ?? settingsTabs[0]!
   const ActiveIcon = activeMeta.icon
 
   return (
-    <div className="relative mx-auto grid h-full min-h-0 w-full max-w-[2040px] grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden px-[clamp(18px,3vw,56px)] py-[clamp(16px,2.4vh,32px)]">
-      <header className="flex min-h-17 items-center justify-between gap-6">
+    <div className="settings-page-layout relative mx-auto grid h-full min-h-0 w-full max-w-375 grid-rows-[110px_minmax(0,1fr)] gap-4 overflow-hidden pb-7 pl-10.75 pr-7 pt-1">
+      <header className="flex min-h-0 items-start justify-between gap-6 pt-1">
         <div className="min-w-0">
-          <span className={eyebrowClass}>{messages.eyebrow}</span>
-          <h1 className="mb-1 mt-1.5 truncate text-[clamp(26px,1.8vw,32px)] font-black leading-tight tracking-[-.035em]">{messages.title}</h1>
-          <p className="m-0 truncate text-xs leading-5 text-muted 2xl:text-sm">{messages.subtitle}</p>
+          <span className={eyebrowClass}>
+            {messages.eyebrow} · {activeMeta.label}
+          </span>
+          <h1 className="mb-1 mt-2 truncate text-[30px] font-black leading-tight tracking-[-.04em]">{activeTab === 'island' ? messages.islandPageTitle : messages.title}</h1>
+          <p className="m-0 truncate text-[12px] leading-5 text-muted">{activeTab === 'island' ? messages.islandPageSubtitle : messages.subtitle}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 flex-col items-center gap-2 pt-5">
           {changed && (
             <span className="hidden items-center gap-1.5 text-xs font-bold text-warning sm:flex">
               <i className="size-1.5 rounded-full bg-warning" />
@@ -408,21 +392,18 @@ export function SettingsPage({
             </span>
           )}
           {saveButton}
+          <small className="text-[9px] text-muted">{messages.changesApply}</small>
         </div>
       </header>
 
-      <div className="grid min-h-0 grid-cols-[88px_minmax(0,1fr)] gap-4 min-[1040px]:grid-cols-[200px_minmax(0,1fr)] 2xl:grid-cols-[240px_minmax(0,1fr)] 2xl:gap-6">
-        <nav className="flex min-h-0 flex-col gap-1.5 rounded-2xl border border-edge bg-panel-muted p-2" role="tablist" aria-label={messages.categoriesAria} aria-orientation="vertical">
-          <span className="hidden px-3 pb-1 pt-2 text-xs font-extrabold tracking-[.14em] text-subtle min-[1040px]:block">{messages.categories}</span>
+      <div className="grid min-h-0 grid-cols-[194px_minmax(0,1fr)] gap-4">
+        <nav className="flex min-h-0 flex-col gap-1.5 rounded-[16px] border border-edge bg-panel p-2" role="tablist" aria-label={messages.categoriesAria} aria-orientation="vertical">
           {settingsTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               id={`settings-tab-${id}`}
               title={label}
-              className={cn(
-                'relative flex h-16 min-w-0 flex-col items-center justify-center gap-1.5 rounded-lg px-2 text-[11px] font-bold text-muted transition hover:bg-panel hover:text-foreground min-[1040px]:h-14 min-[1040px]:flex-row min-[1040px]:justify-start min-[1040px]:gap-3 min-[1040px]:px-4 min-[1040px]:text-sm',
-                activeTab === id && 'bg-panel text-accent shadow-control before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-accent'
-              )}
+              className={cn('relative flex h-13 min-w-0 items-center justify-start gap-3 rounded-[11px] px-4 text-[13px] font-bold text-muted transition hover:bg-panel-muted hover:text-foreground', activeTab === id && 'bg-accent-soft text-accent before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-accent')}
               role="tab"
               aria-selected={activeTab === id}
               aria-controls={`settings-panel-${id}`}
@@ -431,17 +412,13 @@ export function SettingsPage({
             >
               <Icon className="shrink-0" size={19} />
               <span className="max-w-full truncate">{label}</span>
-              <ChevronRight className="ml-auto hidden text-subtle min-[1040px]:block" size={15} />
+              <ChevronRight className="ml-auto text-subtle" size={15} />
             </button>
           ))}
-          <div className="mt-auto hidden rounded-xl border border-edge-soft bg-panel/70 p-4 min-[1040px]:block">
-            <strong className="block text-xs">{messages.unifiedSave}</strong>
-            <p className="mb-0 mt-1 text-[11px] leading-4 text-muted">{messages.switchKeepsChanges}</p>
-          </div>
         </nav>
 
-        <section className={cn(settingsPanelClass, 'min-h-0 overflow-y-auto p-[clamp(20px,2.2vw,36px)]')} id={`settings-panel-${activeTab}`} role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`}>
-          <div className={sectionTitleClass}>
+        <section className={cn(settingsPanelClass, 'settings-content-panel themed-scrollbar min-h-0 p-6', activeTab === 'island' ? 'overflow-hidden' : 'overflow-y-auto', activeTab === 'runtime' && 'settings-panel-runtime')} id={`settings-panel-${activeTab}`} role="tabpanel" aria-labelledby={`settings-tab-${activeTab}`}>
+          <div className={cn(sectionTitleClass, 'settings-section-title')}>
             <span className={cn('grid size-12 place-items-center rounded-xl', activeMeta.tone)}>
               <ActiveIcon size={24} />
             </span>
@@ -557,13 +534,7 @@ export function SettingsPage({
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   <div className="rounded-lg border border-edge-soft bg-panel px-4 py-3">
-                    <Toggle
-                      className="min-h-0 border-0 py-0"
-                      checked={draft.repeatReminders}
-                      onChange={value => set('repeatReminders', value)}
-                      label={messages.repeatBehavior}
-                      description={draft.sedentarySeconds <= 30 ? `${messages.testRepeatPrefix} ${draft.sedentarySeconds} ${messages.repeatSuffix}` : messages.cooldown}
-                    />
+                    <Toggle className="min-h-0 border-0 py-0" checked={draft.repeatReminders} onChange={value => set('repeatReminders', value)} label={messages.repeatBehavior} description={draft.sedentarySeconds <= 30 ? `${messages.testRepeatPrefix} ${draft.sedentarySeconds} ${messages.repeatSuffix}` : messages.cooldown} />
                   </div>
                   <div className="rounded-lg border border-edge-soft bg-panel px-4 py-3">
                     <Toggle className="min-h-0 border-0 py-0" checked={draft.meetingMode} onChange={value => set('meetingMode', value)} label={messages.meetingMode} description={messages.quietNotifications} />
@@ -577,34 +548,36 @@ export function SettingsPage({
           )}
 
           {activeTab === 'island' && (
-            <div>
-              <Toggle checked={draft.islandEnabled} onChange={value => set('islandEnabled', value)} label={messages.enableIsland} description={messages.islandMasterDescription} />
-              <div className={cn('grid gap-x-5 md:grid-cols-2', !draft.islandEnabled && 'pointer-events-none opacity-50')}>
-                <Toggle checked={draft.islandReminderEnabled} onChange={value => set('islandReminderEnabled', value)} label={messages.sedentaryReminder} description={messages.sedentaryReminderDescription} />
-                <Toggle checked={draft.islandAwayEnabled} onChange={value => set('islandAwayEnabled', value)} label={messages.awayStatus} description={messages.awayStatusDescription} />
-                <Toggle checked={draft.islandHeadDownEnabled} onChange={value => set('islandHeadDownEnabled', value)} label={messages.headDownDetection} description={messages.headDownDetectionDescription} />
-                <Toggle checked={draft.islandBreakEnabled} onChange={value => set('islandBreakEnabled', value)} label={messages.breakCountdown} description={messages.breakCountdownDescription} />
-                <Toggle checked={draft.islandPersistentStatusEnabled} onChange={value => set('islandPersistentStatusEnabled', value)} label={messages.persistentStatus} description={messages.persistentStatusDescription} />
-                <Toggle checked={draft.islandPausedStatusEnabled} onChange={value => set('islandPausedStatusEnabled', value)} label={messages.pausedStatus} description={messages.pausedStatusDescription} />
-                <Toggle checked={draft.islandPeekThroughEnabled} onChange={value => set('islandPeekThroughEnabled', value)} label={messages.magnifier} description={messages.magnifierDescription} />
-                <Toggle checked={draft.islandAllowWithMainWindow} onChange={value => set('islandAllowWithMainWindow', value)} label={messages.showWithWindow} description={messages.showWithWindowDescription} />
+            <div className="grid gap-3">
+              <SettingItem icon={Sparkles} checked={draft.islandEnabled} onChange={value => set('islandEnabled', value)} title={messages.enableIsland} description={messages.islandMasterDescription} />
+              <div className={cn('grid grid-cols-2 gap-3', !draft.islandEnabled && 'pointer-events-none opacity-50')}>
+                <SettingItem icon={Armchair} checked={draft.islandReminderEnabled} onChange={value => set('islandReminderEnabled', value)} title={messages.sedentaryReminder} description={messages.sedentaryReminderDescription} />
+                <SettingItem icon={UserCheck} checked={draft.islandAwayEnabled} onChange={value => set('islandAwayEnabled', value)} title={messages.awayStatus} description={messages.awayStatusDescription} />
+                <SettingItem icon={Activity} checked={draft.islandHeadDownEnabled} onChange={value => set('islandHeadDownEnabled', value)} title={messages.headDownDetection} description={messages.headDownDetectionDescription} />
+                <SettingItem icon={Clock3} checked={draft.islandBreakEnabled} onChange={value => set('islandBreakEnabled', value)} title={messages.breakCountdown} description={messages.breakCountdownDescription} />
+                <SettingItem icon={Activity} checked={draft.islandPersistentStatusEnabled} onChange={value => set('islandPersistentStatusEnabled', value)} title={messages.persistentStatus} description={messages.persistentStatusDescription} />
+                <SettingItem icon={CirclePause} checked={draft.islandPausedStatusEnabled} onChange={value => set('islandPausedStatusEnabled', value)} title={messages.pausedStatus} description={messages.pausedStatusDescription} />
+                <SettingItem icon={ZoomIn} checked={draft.islandPeekThroughEnabled} onChange={value => set('islandPeekThroughEnabled', value)} title={messages.magnifier} description={messages.magnifierDescription} />
+                <SettingItem icon={PanelTop} checked={draft.islandAllowWithMainWindow} onChange={value => set('islandAllowWithMainWindow', value)} title={messages.showWithWindow} description={messages.showWithWindowDescription} />
               </div>
-              <Toggle checked={draft.islandPermanentCloseEnabled} onChange={value => set('islandPermanentCloseEnabled', value)} label={messages.allowPermanentClose} description={messages.allowPermanentCloseDescription} />
+              <SettingItem icon={Power} checked={draft.islandPermanentCloseEnabled} onChange={value => set('islandPermanentCloseEnabled', value)} title={messages.allowPermanentClose} description={messages.allowPermanentCloseDescription} className="max-w-[calc(50%-6px)]" />
             </div>
           )}
 
           {activeTab === 'runtime' && (
-            <div className="grid min-h-0 gap-4">
-              <section className="min-w-0 rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="quiet-hours-title">
-                <div className="grid gap-4 lg:grid-cols-[minmax(280px,.85fr)_minmax(360px,1.15fr)] lg:items-end">
+            <div className="settings-runtime-grid grid min-h-0 gap-4">
+              <section className="settings-runtime-card min-w-0 rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="quiet-hours-title">
+                <div className="grid gap-4 min-[1280px]:grid-cols-[minmax(280px,.85fr)_minmax(360px,1.15fr)] min-[1280px]:items-end">
                   <div className="min-w-0">
                     <div className="mb-4">
-                      <h3 className="m-0 text-base font-black" id="quiet-hours-title">{messages.quietHours}</h3>
+                      <h3 className="m-0 text-base font-black" id="quiet-hours-title">
+                        {messages.quietHours}
+                      </h3>
                       <p className="mb-0 mt-1 text-[11px] leading-5 text-muted">{messages.quietDescription}</p>
                     </div>
                     <Toggle className="min-h-0 border-0 py-0" checked={draft.quietHoursEnabled} onChange={value => set('quietHoursEnabled', value)} label={messages.splitDayMode} description={messages.splitDayDescription} />
                   </div>
-                  <div className={cn(timeFieldGridClass, 'border-t border-edge-soft pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0', !draft.quietHoursEnabled && 'opacity-50')}>
+                  <div className={cn(timeFieldGridClass, 'border-t border-edge-soft pt-4 min-[1280px]:border-l min-[1280px]:border-t-0 min-[1280px]:pl-5 min-[1280px]:pt-0', !draft.quietHoursEnabled && 'opacity-50')}>
                     <label>
                       <span>{messages.quietStart}</span>
                       <input type="time" disabled={!draft.quietHoursEnabled} value={draft.quietStart} onChange={event => set('quietStart', event.target.value)} />
@@ -617,13 +590,15 @@ export function SettingsPage({
                 </div>
               </section>
 
-              <section className="min-w-0 rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="work-schedule-title">
-                <div className="grid gap-4 lg:grid-cols-[minmax(280px,.85fr)_minmax(360px,1.15fr)] lg:items-end">
+              <section className="settings-runtime-card min-w-0 rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="work-schedule-title">
+                <div className="grid gap-4 min-[1280px]:grid-cols-[minmax(280px,.85fr)_minmax(360px,1.15fr)] min-[1280px]:items-end">
                   <div className="min-w-0">
-                    <h3 className="m-0 text-base font-black" id="work-schedule-title">{messages.workSchedule}</h3>
+                    <h3 className="m-0 text-base font-black" id="work-schedule-title">
+                      {messages.workSchedule}
+                    </h3>
                     <p className="mb-0 mt-1 text-[11px] leading-5 text-muted">{messages.workScheduleDescription}</p>
                   </div>
-                  <div className={cn(timeFieldGridClass, 'border-t border-edge-soft pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0')}>
+                  <div className={cn(timeFieldGridClass, 'border-t border-edge-soft pt-4 min-[1280px]:border-l min-[1280px]:border-t-0 min-[1280px]:pl-5 min-[1280px]:pt-0')}>
                     <label>
                       <span>{messages.workStart}</span>
                       <input type="time" value={draft.workdayStart} onChange={event => set('workdayStart', event.target.value)} />
@@ -636,9 +611,11 @@ export function SettingsPage({
                 </div>
               </section>
 
-              <section className="rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="background-startup-title">
+              <section className="settings-runtime-card rounded-xl border border-edge-soft bg-panel-muted/65 p-4" aria-labelledby="background-startup-title">
                 <div>
-                  <h3 className="m-0 text-base font-black" id="background-startup-title">{messages.backgroundAndStartup}</h3>
+                  <h3 className="m-0 text-base font-black" id="background-startup-title">
+                    {messages.backgroundAndStartup}
+                  </h3>
                   <p className="mb-0 mt-1 text-[11px] leading-5 text-muted">{messages.backgroundAndStartupDescription}</p>
                 </div>
                 <div className="mt-3 grid gap-x-5 md:grid-cols-2">

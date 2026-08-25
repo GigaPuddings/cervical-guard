@@ -171,7 +171,8 @@ export function App() {
 
   // 休息期间也保持摄像头低功耗运行：既能在休息中感知离座行为，
   // 也让休息结束的瞬间检测管线已就绪，避免重新打开摄像头导致的 ingest 失败。
-  const cameraActive = Boolean(snapshot && (snapshot.lifecycle === 'monitoring' || snapshot.lifecycle === 'break') && snapshot.monitoringMode === 'camera' && snapshot.calibrated)
+  const visualDemo = import.meta.env.DEV && new URLSearchParams(window.location.search).get('demo') === 'target'
+  const cameraActive = Boolean(!visualDemo && snapshot && (snapshot.lifecycle === 'monitoring' || snapshot.lifecycle === 'break') && snapshot.monitoringMode === 'camera' && snapshot.calibrated)
   const vision = useVisionMonitor({
     active: cameraActive,
     cameraId: snapshot?.settings.cameraId ?? 'default',

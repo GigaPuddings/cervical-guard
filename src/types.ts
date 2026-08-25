@@ -1,6 +1,6 @@
 export const SCHEMA_VERSION = 2 as const
 
-export type AppPage = 'today' | 'statistics' | 'weather' | 'settings' | 'privacy'
+export type AppPage = 'today' | 'statistics' | 'weather' | 'report' | 'settings' | 'privacy'
 export type MonitoringLifecycle = 'unavailable' | 'initializing' | 'calibrating' | 'monitoring' | 'paused' | 'break' | 'degraded'
 export type BehaviorState = 'no_person' | 'present' | 'sitting_normal' | 'head_down' | 'standing_break' | 'unknown'
 export type FrameQuality = 'good' | 'dark' | 'occluded' | 'multi_person' | 'unstable'
