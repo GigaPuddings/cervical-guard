@@ -2,7 +2,6 @@ import {
   BarChart3,
   CircleHelp,
   CloudSun,
-  FileHeart,
   Languages,
   LayoutDashboard,
   LockKeyhole,
@@ -23,7 +22,6 @@ const sidebarMessages = defineMessages({
   today: '今日概览',
   statistics: '习惯趋势',
   weather: '天气与活动',
-  report: '健康报告',
   settings: '偏好设置',
   closeNavigation: '关闭导航',
   mainNavigation: '主导航',
@@ -67,7 +65,6 @@ export function Sidebar({
     { page: 'today' as const, label: messages.today, icon: LayoutDashboard },
     { page: 'statistics' as const, label: messages.statistics, icon: BarChart3 },
     { page: 'weather' as const, label: messages.weather, icon: CloudSun },
-    { page: 'report' as const, label: messages.report, icon: FileHeart },
     { page: 'settings' as const, label: messages.settings, icon: Settings }
   ]
 
