@@ -29,25 +29,14 @@ export function Dashboard(props: DashboardProps) {
 
   return (
     <main className="dashboard-shell grid h-full min-h-0 overflow-hidden bg-canvas text-foreground md:grid-cols-[240px_minmax(0,1fr)]">
-      <Sidebar
-        snapshot={snapshot}
-        page={page}
-        language={language}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        onPage={onPage}
-        onPause={props.onPause}
-        onResume={props.onResume}
-        onEndBreak={props.onEndBreak}
-        onLanguage={props.onLanguage}
-        onHelp={props.onHelp}
-        updater={props.updater}
-      />
+      <Sidebar snapshot={snapshot} page={page} language={language} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onPage={onPage} onPause={props.onPause} onResume={props.onResume} onEndBreak={props.onEndBreak} onLanguage={props.onLanguage} onHelp={props.onHelp} updater={props.updater} />
 
       {sidebarOpen ? <button className="fixed inset-0 z-30 bg-panel-strong/20 md:hidden" aria-label={messages.closeNavigation} onClick={() => setSidebarOpen(false)} /> : null}
 
       <section className="relative min-h-0 min-w-0 overflow-hidden">
-        <button className="absolute left-3 top-3 z-20 grid size-9 place-items-center rounded-[12px] border border-edge bg-panel shadow-control md:hidden" aria-label={messages.openNavigation} onClick={() => setSidebarOpen(true)}><Menu size={18} /></button>
+        <button className="absolute left-3 top-3 z-20 grid size-9 place-items-center rounded-[12px] border border-edge bg-panel shadow-control md:hidden" aria-label={messages.openNavigation} onClick={() => setSidebarOpen(true)}>
+          <Menu size={18} />
+        </button>
         <div className={cn('h-full min-h-0', page === 'privacy' ? 'overflow-y-auto' : 'overflow-hidden')}>
           {page === 'today' ? <TodayPage {...props} /> : null}
           {page === 'statistics' ? <StatisticsPage statistics={props.statistics} history={props.behaviorHistory} snapshot={snapshot} onHistoryDate={props.onBehaviorHistoryDate} /> : null}

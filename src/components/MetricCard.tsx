@@ -37,29 +37,18 @@ export function MetricCard({
 }) {
   if (compact) {
     return (
-      <section
-        className={cn(
-          'metric-card-compact relative min-w-0 overflow-hidden rounded-[16px] border border-edge bg-panel px-[17px] py-[17px] shadow-panel',
-          className
-        )}
-      >
+      <section className={cn('metric-card-compact relative min-w-0 overflow-hidden rounded-[16px] border border-edge bg-panel px-4.25 py-4.25 shadow-panel', className)}>
         <div className="flex min-w-0 items-center gap-3">
-          <span className={cn('metric-card-compact-icon grid size-[42px] shrink-0 place-items-center rounded-[13px]', toneClasses[tone])}>
+          <span className={cn('metric-card-compact-icon grid size-10.5 shrink-0 place-items-center rounded-[13px]', toneClasses[tone])}>
             <Icon size={21} strokeWidth={1.8} />
           </span>
           <span className="metric-card-compact-label min-w-0 truncate text-[14px] leading-5 text-muted">{label}</span>
         </div>
-        <strong
-          className={cn(
-            'metric-card-compact-value mt-[16px] block truncate font-black leading-none tracking-[-.025em] text-foreground',
-            language === 'en-US' ? 'text-[15px]' : 'text-[21px]'
-          )}
-          title={value}
-        >
+        <strong className={cn('metric-card-compact-value mt-4 block truncate font-black leading-none tracking-tight text-foreground', language === 'en-US' ? 'text-[15px]' : 'text-[21px]')} title={value}>
           {value}
         </strong>
         {note ? (
-          <small className="metric-card-compact-note mt-[9px] flex items-center gap-1 truncate text-[11px] leading-4 text-subtle">
+          <small className="metric-card-compact-note mt-2.25 flex items-center gap-1 truncate text-[11px] leading-4 text-subtle">
             <span className="truncate">{note}</span>
             {NoteIcon ? <NoteIcon className={cn('shrink-0 text-warning', noteIconClassName)} size={12} strokeWidth={2} /> : null}
           </small>
@@ -69,25 +58,13 @@ export function MetricCard({
   }
 
   return (
-    <section
-      className={cn(
-        'relative min-w-0 overflow-hidden rounded-[16px] border border-edge bg-panel shadow-panel',
-        'flex items-center gap-3 px-4 py-3.5',
-        className
-      )}
-    >
+    <section className={cn('relative min-w-0 overflow-hidden rounded-[16px] border border-edge bg-panel shadow-panel', 'flex items-center gap-3 px-4 py-3.5', className)}>
       <span className={cn('grid size-11 shrink-0 place-items-center rounded-[12px]', toneClasses[tone])}>
         <Icon size={22} strokeWidth={1.8} />
       </span>
       <div className="min-w-0">
         <span className="block truncate text-[11px] text-muted">{label}</span>
-        <strong
-          className={cn(
-            'mt-1.5 block truncate font-black leading-none tracking-[-.025em] text-foreground',
-            language === 'en-US' ? 'text-[14px]' : 'text-[20px]'
-          )}
-          title={value}
-        >
+        <strong className={cn('mt-1.5 block truncate font-black leading-none tracking-tight text-foreground', language === 'en-US' ? 'text-[14px]' : 'text-[20px]')} title={value}>
           {value}
         </strong>
         {note ? (

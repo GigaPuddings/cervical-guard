@@ -51,9 +51,7 @@ export function reasonMessage(reason: unknown): string {
 export function locationNeedsLanguageRefresh(location: WeatherLocation, language: Language): boolean {
   const label = `${location.name} ${location.admin1} ${location.country}`
   const hasHan = (value: string) => /[\u3400-\u9fff]/u.test(value)
-  return language === 'en-US'
-    ? hasHan(label)
-    : !hasHan(location.name) || Boolean(location.admin1 && !hasHan(location.admin1)) || !hasHan(location.country)
+  return language === 'en-US' ? hasHan(label) : !hasHan(location.name) || Boolean(location.admin1 && !hasHan(location.admin1)) || !hasHan(location.country)
 }
 
 export function WeatherPage({ language }: { language: Language }) {
@@ -74,7 +72,9 @@ export function WeatherPage({ language }: { language: Language }) {
 
   useEffect(() => {
     mounted.current = true
-    return () => { mounted.current = false }
+    return () => {
+      mounted.current = false
+    }
   }, [])
 
   const refreshOne = useCallback(async (location: WeatherLocation, force = false) => {
@@ -90,11 +90,12 @@ export function WeatherPage({ language }: { language: Language }) {
     } catch (reason) {
       if (mounted.current) setErrors(current => ({ ...current, [location.id]: reasonMessage(reason) }))
     } finally {
-      if (mounted.current) setLoadingIds(current => {
-        const next = new Set(current)
-        next.delete(location.id)
-        return next
-      })
+      if (mounted.current)
+        setLoadingIds(current => {
+          const next = new Set(current)
+          next.delete(location.id)
+          return next
+        })
     }
   }, [])
 
@@ -184,7 +185,7 @@ export function WeatherPage({ language }: { language: Language }) {
   }
 
   return (
-    <div className="weather-page-layout themed-scrollbar mx-auto grid h-full min-h-0 w-full max-w-[1348px] grid-rows-[109px_minmax(0,1fr)] gap-4 overflow-hidden px-7 pb-6 pt-8">
+    <div className="weather-page-layout themed-scrollbar mx-auto grid h-full min-h-0 w-full max-w-337 grid-rows-[109px_minmax(0,1fr)] gap-4 overflow-hidden px-7 pb-6 pt-8">
       <div className="weather-page-header grid grid-cols-[minmax(310px,.8fr)_minmax(480px,1.2fr)] items-start gap-8">
         <SectionHeader className="[&_h1]:mt-3 [&_h1]:text-[34px] [&_p]:mt-2.5 [&_p]:text-[13px]" eyebrow={messages.eyebrow} title={messages.title} subtitle={messages.subtitle} />
         <section className="weather-search-section relative z-30 mt-6">
@@ -192,14 +193,38 @@ export function WeatherPage({ language }: { language: Language }) {
             <label className="relative min-w-0">
               <span className="sr-only">{messages.searchCity}</span>
               <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
-              <input className="weather-search-input h-9 w-full rounded-[10px] bg-field pl-9 pr-3 text-[11px] outline-none placeholder:text-subtle focus:ring-1 focus:ring-accent" value={query} placeholder={messages.searchPlaceholder} onChange={event => { setQuery(event.target.value); setResults([]); setSearchError(null) }} onKeyDown={event => { if (event.key === 'Enter') void search() }} />
+              <input
+                className="weather-search-input h-9 w-full rounded-[10px] bg-field pl-9 pr-3 text-[11px] outline-none placeholder:text-subtle focus:ring-1 focus:ring-accent"
+                value={query}
+                placeholder={messages.searchPlaceholder}
+                onChange={event => {
+                  setQuery(event.target.value)
+                  setResults([])
+                  setSearchError(null)
+                }}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') void search()
+                }}
+              />
             </label>
-            <button className="weather-search-button inline-flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-accent text-[11px] font-bold text-inverse hover:bg-accent-strong disabled:opacity-50" disabled={searching} onClick={() => void search()}>{searching ? <RefreshCw className="animate-spin" size={14} /> : <Search size={14} />}{messages.search}</button>
+            <button className="weather-search-button inline-flex h-9 items-center justify-center gap-1.5 rounded-[10px] bg-accent text-[11px] font-bold text-inverse hover:bg-accent-strong disabled:opacity-50" disabled={searching} onClick={() => void search()}>
+              {searching ? <RefreshCw className="animate-spin" size={14} /> : <Search size={14} />}
+              {messages.search}
+            </button>
           </div>
-          <p className={cn('mt-1.5 px-2 text-[9px] text-muted', searchError && 'text-danger')}>{searchError ? t(searchError) : notice ?? `${messages.selected} ${locations.map(location => location.name).join('、')}，${messages.defaultCity}`}</p>
+          <p className={cn('mt-1.5 px-2 text-[9px] text-muted', searchError && 'text-danger')}>{searchError ? t(searchError) : (notice ?? `${messages.selected} ${locations.map(location => location.name).join('、')}，${messages.defaultCity}`)}</p>
           {results.length ? (
-            <div className="absolute inset-x-0 top-[62px] grid max-h-60 grid-cols-2 gap-2 overflow-y-auto rounded-[14px] border border-edge bg-panel p-2 shadow-panel" aria-label={messages.results}>
-              {results.map(result => <button key={result.id} className="flex min-w-0 items-center gap-2 rounded-[10px] bg-panel-muted px-3 py-2 text-left hover:bg-accent-soft disabled:opacity-50" disabled={selectedIds.has(result.id)} onClick={() => addLocation(result)}><span className="grid size-8 place-items-center rounded-[9px] bg-accent-soft text-accent">{selectedIds.has(result.id) ? <MapPin size={14} /> : <Plus size={14} />}</span><span className="min-w-0 flex-1"><strong className="block truncate text-[11px]">{result.name}</strong><small className="block truncate text-[9px] text-muted">{locationSubtitle(result, language)}</small></span><span className="text-[8px] text-accent">{messages.city}</span></button>)}
+            <div className="absolute inset-x-0 top-15.5 grid max-h-60 grid-cols-2 gap-2 overflow-y-auto rounded-[14px] border border-edge bg-panel p-2 shadow-panel" aria-label={messages.results}>
+              {results.map(result => (
+                <button key={result.id} className="flex min-w-0 items-center gap-2 rounded-[10px] bg-panel-muted px-3 py-2 text-left hover:bg-accent-soft disabled:opacity-50" disabled={selectedIds.has(result.id)} onClick={() => addLocation(result)}>
+                  <span className="grid size-8 place-items-center rounded-[9px] bg-accent-soft text-accent">{selectedIds.has(result.id) ? <MapPin size={14} /> : <Plus size={14} />}</span>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block truncate text-[11px]">{result.name}</strong>
+                    <small className="block truncate text-[9px] text-muted">{locationSubtitle(result, language)}</small>
+                  </span>
+                  <span className="text-[8px] text-accent">{messages.city}</span>
+                </button>
+              ))}
             </div>
           ) : null}
         </section>
@@ -207,16 +232,58 @@ export function WeatherPage({ language }: { language: Language }) {
 
       <div className="weather-main-grid -mx-3 grid min-h-0 grid-cols-[260px_minmax(0,1fr)] gap-6">
         <aside className="flex min-h-0 flex-col rounded-[16px] border border-edge bg-panel p-3 shadow-panel">
-          <header className="weather-places-header flex h-[52px] items-center justify-between px-1"><strong className="text-[15px]">{messages.savedPlaces}</strong><span className="text-[11px] text-muted">{locations.length}/{MAX_WEATHER_LOCATIONS}</span></header>
-          {locations.length ? <div className="grid content-start gap-2 pt-1">{locations.map(location => {
-            const selected = location.id === activeLocation?.id
-            const forecast = forecasts[location.id]
-            return <div className={cn('weather-location-card group flex items-center rounded-[12px] border px-2.5 py-2.5', selected ? 'border-accent/35 bg-accent-soft' : 'border-transparent hover:bg-panel-muted')} key={location.id}><button className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-pressed={selected} onClick={() => selectLocation(location)}><span className="weather-location-icon grid size-[42px] shrink-0 place-items-center rounded-[11px] bg-panel text-accent"><MapPin size={18} /></span><span className="min-w-0 flex-1"><strong className="weather-location-name block truncate text-[14px]">{location.name}</strong><small className="weather-location-meta mt-1 block truncate text-[10px] text-muted">{forecast ? `${Math.round(forecast.current.temperature)}° · ${t(weatherCodeLabel(forecast.current.weatherCode))}` : t(location.admin1 || messages.waitingWeather)}</small></span>{forecast ? <WeatherGlyph className="weather-location-glyph shrink-0 text-accent" code={forecast.current.weatherCode} size={22} /> : null}</button><button className="grid size-7 place-items-center rounded-[8px] text-subtle opacity-0 hover:bg-danger-soft hover:text-danger group-hover:opacity-100" aria-label={`${messages.remove} ${location.name}`} onClick={() => removeLocation(location)}><Trash2 size={13} /></button></div>
-          })}</div> : <EmptyState icon={MapPin} title={messages.noPlaces} description={messages.addCityHint} />}
-          <button className="weather-add-city mt-4 flex h-12 items-center justify-center gap-2 rounded-[12px] border border-dashed border-edge text-[12px] text-muted hover:border-accent/35 hover:bg-accent-soft hover:text-accent" onClick={() => document.querySelector<HTMLInputElement>('input[placeholder]')?.focus()}><Plus size={16} />{messages.addCity}</button>
+          <header className="weather-places-header flex h-13 items-center justify-between px-1">
+            <strong className="text-[15px]">{messages.savedPlaces}</strong>
+            <span className="text-[11px] text-muted">
+              {locations.length}/{MAX_WEATHER_LOCATIONS}
+            </span>
+          </header>
+          {locations.length ? (
+            <div className="grid content-start gap-2 pt-1">
+              {locations.map(location => {
+                const selected = location.id === activeLocation?.id
+                const forecast = forecasts[location.id]
+                return (
+                  <div className={cn('weather-location-card group flex items-center rounded-[12px] border px-2.5 py-2.5', selected ? 'border-accent/35 bg-accent-soft' : 'border-transparent hover:bg-panel-muted')} key={location.id}>
+                    <button className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-pressed={selected} onClick={() => selectLocation(location)}>
+                      <span className="weather-location-icon grid size-10.5 shrink-0 place-items-center rounded-[11px] bg-panel text-accent">
+                        <MapPin size={18} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <strong className="weather-location-name block truncate text-[14px]">{location.name}</strong>
+                        <small className="weather-location-meta mt-1 block truncate text-[10px] text-muted">{forecast ? `${Math.round(forecast.current.temperature)}° · ${t(weatherCodeLabel(forecast.current.weatherCode))}` : t(location.admin1 || messages.waitingWeather)}</small>
+                      </span>
+                      {forecast ? <WeatherGlyph className="weather-location-glyph shrink-0 text-accent" code={forecast.current.weatherCode} size={22} /> : null}
+                    </button>
+                    <button className="grid size-7 place-items-center rounded-[8px] text-subtle opacity-0 hover:bg-danger-soft hover:text-danger group-hover:opacity-100" aria-label={`${messages.remove} ${location.name}`} onClick={() => removeLocation(location)}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <EmptyState icon={MapPin} title={messages.noPlaces} description={messages.addCityHint} />
+          )}
+          <button className="weather-add-city mt-4 flex h-12 items-center justify-center gap-2 rounded-[12px] border border-dashed border-edge text-[12px] text-muted hover:border-accent/35 hover:bg-accent-soft hover:text-accent" onClick={() => document.querySelector<HTMLInputElement>('input[placeholder]')?.focus()}>
+            <Plus size={16} />
+            {messages.addCity}
+          </button>
         </aside>
 
-        <WeatherDetail language={language} location={activeLocation} forecast={activeForecast} error={activeLocation ? errors[activeLocation.id] : undefined} loading={activeLocation ? loadingIds.has(activeLocation.id) : false} onRefresh={() => { if (activeLocation) void refreshOne(activeLocation, true) }} onRemove={() => { if (activeLocation) removeLocation(activeLocation) }} />
+        <WeatherDetail
+          language={language}
+          location={activeLocation}
+          forecast={activeForecast}
+          error={activeLocation ? errors[activeLocation.id] : undefined}
+          loading={activeLocation ? loadingIds.has(activeLocation.id) : false}
+          onRefresh={() => {
+            if (activeLocation) void refreshOne(activeLocation, true)
+          }}
+          onRemove={() => {
+            if (activeLocation) removeLocation(activeLocation)
+          }}
+        />
       </div>
     </div>
   )

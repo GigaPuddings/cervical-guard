@@ -133,13 +133,16 @@ export function App() {
       .catch((reason: unknown) => setError(errorMessage(reason, messages.operationUnavailable)))
   }, [messages.operationUnavailable, page, setBehaviorHistory, setError, setStatistics])
 
-  const loadBehaviorHistoryDate = useCallback(async (localDate: string) => {
-    try {
-      setBehaviorHistory(await coreClient.getBehaviorHistoryForDate(localDate))
-    } catch (reason) {
-      setError(errorMessage(reason, messages.operationUnavailable))
-    }
-  }, [messages.operationUnavailable, setBehaviorHistory, setError])
+  const loadBehaviorHistoryDate = useCallback(
+    async (localDate: string) => {
+      try {
+        setBehaviorHistory(await coreClient.getBehaviorHistoryForDate(localDate))
+      } catch (reason) {
+        setError(errorMessage(reason, messages.operationUnavailable))
+      }
+    },
+    [messages.operationUnavailable, setBehaviorHistory, setError]
+  )
 
   useEffect(() => {
     const reminder = snapshot?.currentReminder

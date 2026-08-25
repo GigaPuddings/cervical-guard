@@ -32,7 +32,9 @@ export function ReminderOverlay({ reminder, language, onBreak, onSnooze, onDismi
           <BellRing size={17} />
         </div>
         <div className="relative min-w-0">
-          <span className="block text-[8px] font-bold text-inverse-muted">{messages.continuous} {duration}</span>
+          <span className="block text-[8px] font-bold text-inverse-muted">
+            {messages.continuous} {duration}
+          </span>
           <h2 className="mt-0.5 truncate text-[13px] font-bold" id="reminder-title">
             {translateNow(reminder.title, language)}
           </h2>

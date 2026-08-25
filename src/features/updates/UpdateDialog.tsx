@@ -42,7 +42,7 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
             <Sparkles size={22} />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="m-0 text-[22px] font-black tracking-[-.025em]" id="update-dialog-title">
+            <h2 className="m-0 text-[22px] font-black tracking-tight" id="update-dialog-title">
               {t.title}
             </h2>
             <p className="mb-0 mt-1 text-xs leading-5 text-muted">{status}</p>
@@ -58,7 +58,9 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
               <small className="block text-[10px] font-bold text-subtle">{t.currentVersion}</small>
               <strong className="mt-2 block text-lg">v{updater.currentVersion}</strong>
             </div>
-            <span className="relative z-1 hidden text-center text-xl text-muted sm:block" aria-hidden="true">→</span>
+            <span className="relative z-1 hidden text-center text-xl text-muted sm:block" aria-hidden="true">
+              →
+            </span>
             <div className="relative z-1 mt-4 sm:mt-0">
               <small className="block text-[10px] font-bold text-subtle">{t.latestVersion}</small>
               <span className="mt-2 flex flex-wrap items-center gap-2">
@@ -66,15 +68,7 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
                 {!updater.updateAvailable && updater.stage === 'latest' && <b className="rounded-full bg-accent px-2.5 py-1 text-[9px] text-inverse">{t.latestBadge}</b>}
               </span>
             </div>
-            <img
-              className="pointer-events-none absolute -bottom-10 right-0 w-52 object-contain sm:static sm:-my-12 sm:w-56"
-              src={updateIllustrationUrl}
-              alt=""
-              aria-hidden="true"
-              decoding="sync"
-              fetchPriority="high"
-              loading="eager"
-            />
+            <img className="pointer-events-none absolute -bottom-10 right-0 w-52 object-contain sm:static sm:-my-12 sm:w-56" src={updateIllustrationUrl} alt="" aria-hidden="true" decoding="sync" fetchPriority="high" loading="eager" />
             <Sparkles className="pointer-events-none absolute right-5 top-3 text-[#45ba6b]" size={18} strokeWidth={2.2} aria-hidden="true" />
             <Sparkles className="pointer-events-none absolute bottom-5 right-50 text-[#62c982]" size={11} strokeWidth={2.2} aria-hidden="true" />
           </div>
@@ -136,7 +130,9 @@ export function UpdateDialog({ updater, language }: { updater: AppUpdater; langu
             </button>
           ) : null}
           {!updater.updateAvailable && (updater.stage === 'error' || updater.stage === 'idle' || updater.stage === 'latest') && (
-            <button className="order-first inline-flex min-h-12 items-center justify-center rounded-xl border border-edge bg-panel px-6 text-xs font-bold text-muted hover:bg-panel-muted" onClick={updater.close}>{t.close}</button>
+            <button className="order-first inline-flex min-h-12 items-center justify-center rounded-xl border border-edge bg-panel px-6 text-xs font-bold text-muted hover:bg-panel-muted" onClick={updater.close}>
+              {t.close}
+            </button>
           )}
         </footer>
       </section>

@@ -43,12 +43,7 @@ export function HelpDialog({ open, language, onClose }: { open: boolean; languag
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <section
-        className="flex max-h-[min(700px,calc(100vh-32px))] w-full max-w-180 flex-col overflow-hidden rounded-[18px] border border-edge bg-panel shadow-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="help-dialog-title"
-      >
+      <section className="flex max-h-[min(700px,calc(100vh-32px))] w-full max-w-180 flex-col overflow-hidden rounded-[18px] border border-edge bg-panel shadow-panel" role="dialog" aria-modal="true" aria-labelledby="help-dialog-title">
         <header className="flex items-start gap-4 border-b border-edge px-6 py-5">
           <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
             <CircleHelp size={23} />
