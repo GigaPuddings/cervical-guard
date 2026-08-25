@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { outdoorActivityAdvice, rankChineseCityResults, weatherCodeLabel } from "./openMeteo";
-import { formatWeatherUpdatedAt, locationSubtitle, uvIndexLabel, weatherHealthAdvice, windLevelLabel } from "./presentation";
+import { cloudCoverLabel, formatWeatherUpdatedAt, humidityLevelLabel, locationSubtitle, precipitationAmountLabel, precipitationProbabilityLabel, uvIndexLabel, uvProtectionLabel, weatherActivityGuidance, weatherHealthAdvice, windLevelLabel } from "./presentation";
 import type { WeatherForecast } from "./types";
 
 function forecast(overrides: Partial<WeatherForecast["current"]> = {}, rainProbability = 10): WeatherForecast {
@@ -53,6 +53,30 @@ describe("weather presentation", () => {
   it("turns rain and high UV into health-aware break guidance", () => {
     expect(weatherHealthAdvice(forecast({ precipitation: 0.2 }), "break")).toContain("室内");
     expect(weatherHealthAdvice(forecast({ uvIndex: 9 }, 10), "break")).toContain("紫外线很强");
+  });
+
+  it("derives supporting labels from the live values", () => {
+    expect(humidityLevelLabel(82)).toBe("湿度很高");
+    expect(cloudCoverLabel(90)).toBe("阴天");
+    expect(precipitationAmountLabel(41)).toBe("降水较多");
+    expect(precipitationProbabilityLabel(100)).toBe("很高");
+    expect(uvProtectionLabel(9)).toBe("避免暴晒");
+  });
+
+  it("builds the activity and temperature guidance from the selected city's forecast", () => {
+    const rainy = forecast({ humidity: 80, precipitation: 1 }, 100);
+    rainy.daily[0]!.precipitationSum = 41;
+    rainy.daily[0]!.temperatureMin = 24;
+    rainy.daily[0]!.temperatureMax = 31;
+    rainy.daily[0]!.apparentTemperatureMax = 35;
+    const guidance = weatherActivityGuidance(rainy);
+    expect(guidance.activityLabel).toBe("建议室内活动");
+    expect(guidance.detail).toContain("降水概率 100%");
+    expect(guidance.tags).toContain("外出携带雨具");
+    expect(guidance.thermalLabel).toBe("体感炎热");
+    expect(guidance.temperaturePosition).toBeGreaterThanOrEqual(4);
+    expect(guidance.temperaturePosition).toBeLessThanOrEqual(96);
+    expect(weatherActivityGuidance(rainy, "en-US").activityLabel).toBe("Indoor activity recommended");
   });
 });
 

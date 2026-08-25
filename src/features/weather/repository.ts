@@ -3,7 +3,7 @@ import { fetchOpenMeteoForecast } from './openMeteo'
 import { MAX_WEATHER_LOCATIONS, WEATHER_CACHE_TTL_MS, WEATHER_MANUAL_REFRESH_MIN_MS, WEATHER_STALE_FALLBACK_MS, type WeatherForecast, type WeatherLocation } from './types'
 
 const LOCATIONS_KEY = 'cervical-guard-weather-locations-v1'
-const FORECASTS_KEY = 'cervical-guard-weather-cache-v2'
+const FORECASTS_KEY = 'cervical-guard-weather-cache-v3'
 const PREFERRED_LOCATION_KEY = 'cervical-guard-weather-preferred-v1'
 export const WEATHER_PREFERENCE_EVENT = 'cervical-guard:weather-preference-changed'
 
@@ -56,6 +56,17 @@ const forecastSchema = z.object({
 const forecastMapSchema = z.record(z.string(), forecastSchema)
 const inFlight = new Map<string, Promise<WeatherForecast>>()
 
+const DEFAULT_SHANGHAI: WeatherLocation = {
+  id: 'city:1796236',
+  name: '上海',
+  admin1: '上海市',
+  country: '中国',
+  latitude: 31.22222,
+  longitude: 121.45806,
+  timezone: 'Asia/Shanghai',
+  source: 'search'
+}
+
 function loadJson(key: string): unknown {
   try {
     const raw = window.localStorage.getItem(key)
@@ -91,7 +102,9 @@ function saveText(key: string, value: string | null): void {
 }
 
 export function loadWeatherLocations(): WeatherLocation[] {
-  const parsed = z.array(locationSchema).safeParse(loadJson(LOCATIONS_KEY))
+  const raw = loadJson(LOCATIONS_KEY)
+  if (raw === null) return [DEFAULT_SHANGHAI]
+  const parsed = z.array(locationSchema).safeParse(raw)
   return parsed.success ? parsed.data.slice(0, MAX_WEATHER_LOCATIONS) : []
 }
 

@@ -154,7 +154,7 @@ export async function fetchOpenMeteoForecast(location: WeatherLocation, signal?:
     current: ['temperature_2m', 'apparent_temperature', 'relative_humidity_2m', 'precipitation', 'cloud_cover', 'uv_index', 'weather_code', 'wind_speed_10m', 'wind_gusts_10m', 'is_day'].join(','),
     daily: ['weather_code', 'temperature_2m_max', 'temperature_2m_min', 'apparent_temperature_max', 'precipitation_probability_max', 'precipitation_sum', 'uv_index_max', 'sunrise', 'sunset'].join(','),
     timezone: 'auto',
-    forecast_days: '5'
+    forecast_days: '7'
   }).toString()
   const parsed = forecastResponseSchema.parse(await requestJson(url, signal))
   const length = Math.min(
