@@ -1,4 +1,3 @@
-import { isTauri } from '@tauri-apps/api/core'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
@@ -28,8 +27,8 @@ const mount = async () => {
   }
   createRoot(root).render(
     <StrictMode>
-      <div className={isTauri() ? 'h-full overflow-hidden pt-9' : 'h-full overflow-hidden'}>
-        {isTauri() && <WindowChrome />}
+      <div className="h-full overflow-hidden pt-9">
+        <WindowChrome />
         <App />
       </div>
     </StrictMode>
