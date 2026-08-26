@@ -201,4 +201,17 @@
 - Verification: `pnpm test` passed 18 files / 56 tests; `pnpm test:release` passed 15 tests; `pnpm build` passed; `cargo test` passed 97 tests; `git diff --check` reported no whitespace errors. The existing Vite chunk-size advisory remains non-blocking and unrelated.
 - Result: no actionable P0, P1, or P2 issue remains in the annotated regions or tested responsive states.
 
+**Posture-feedback icon and recognition-state correction — 2026-08-26**
+
+- Source visual truth: `D:\zero\文档\OneDrive\Desktop\今日概览.png` (`1672 x 941`) establishes the recognized/stable treatment, while `C:\Users\zero\AppData\Local\Temp\codex-clipboard-e37d5826-47c8-46f5-b511-8b62584b049d.png` (`1943 x 1116`) exposes the contradictory zero-confidence treatment.
+- Confirmed P2 defects: positive encouragement was reused while posture was still unknown, both supporting icons resolved to the generic help mark, and the confidence footer stayed green with `稳定` at `0%` or while monitoring was paused.
+- State-system fix: posture presentation now resolves one mutually exclusive state from monitoring mode, lifecycle, frame quality, person presence, behavior, and confidence. Paused, unrecognized, low-confidence, confirming, frame-quality, no-person, head-down, standing, break, timer, and stable states each receive coherent title, detail, icon, progress tone, and footer label.
+- Icon fidelity: the recognized/stable encouragement now uses the target-aligned yellow `BicepsFlexed` mark; `头前倾定度` uses the small `CirclePlus` mark visible in the source. Generic `CircleHelp` icons are absent from the reviewed region.
+- Dynamic behavior: a running camera at `0%` now shows `暂未识别 / 请保持头部清晰并正对屏幕 / 未识别` in the neutral treatment. A paused detector shows `检测已暂停 / 恢复检测后继续识别 / 已暂停`. Neither state uses the green success treatment.
+- Browser evidence: `output/design-qa/today-posture-stable-after.png`, `output/design-qa/today-posture-paused-after.png`, and `output/design-qa/today-posture-unrecognized-after.png`; full comparisons are `output/design-qa/today-posture-stable-comparison.png` and `output/design-qa/today-posture-paused-comparison.png`; focused comparisons are `output/design-qa/today-posture-stable-focused.png` and `output/design-qa/today-posture-paused-focused.png`.
+- Runtime assertions at `1280 x 720`: stable resolves `stable / 85% / 稳定` with one biceps icon and one plus icon; paused resolves `paused / 0% / 已暂停` with muted styling; running zero-confidence resolves `unrecognized / 0% / 未识别` with `ScanFace` and muted styling. All three document sizes equal their viewport with no overflow, and browser console contains 0 warnings and 0 errors.
+- Responsive/layout review: the correction changes only semantic icon/copy/color state inside the existing responsive tracks; card dimensions, typography hierarchy, whitespace rhythm, and target desktop density remain unchanged.
+- Verification: `pnpm test -- --reporter=verbose` passed 19 files / 62 tests; `pnpm test:release` passed 15 tests; `pnpm build` passed; `git diff --check` reported no whitespace errors (only existing LF-to-CRLF notices). The existing Vite chunk-size advisory remains non-blocking and unrelated.
+- Result: no actionable P0, P1, or P2 mismatch remains in the annotated posture-feedback region or in the stable, paused, and zero-confidence states.
+
 final result: passed
