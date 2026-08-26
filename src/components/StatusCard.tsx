@@ -1,6 +1,7 @@
 import { ChevronDown, Circle, Coffee, Pause, Play, ShieldCheck, TimerReset } from 'lucide-react'
 import { useState } from 'react'
 import { languageOf } from '../i18n'
+import type { Language } from '../i18n'
 import { defineMessages, localizeMessages } from '../runtimeI18n'
 import type { AppSnapshot } from '../types'
 import { cn } from '../utils'
@@ -16,11 +17,24 @@ const statusMessages = defineMessages({
   pauseDetection: '暂停检测',
   resumeDetection: '恢复检测',
   lastDetection: '上次检测',
-  detected: '已检测',
+  noDetectionRecord: '暂无检测记录',
   pause30: '暂停 30 分钟',
   pauseHour: '暂停 1 小时',
   pauseManual: '暂停到手动恢复'
 })
+
+export function formatDetectionTimestamp(timestamp: string | null, language: Language): string | null {
+  if (!timestamp) return null
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date)
+}
+
+export function formatStatusDetectionText(timestamp: string | null, language: Language, lastDetectionLabel: string, noRecordLabel: string): string {
+  const time = formatDetectionTimestamp(timestamp, language)
+  if (!time) return noRecordLabel
+  return `${lastDetectionLabel}${language === 'en-US' ? ': ' : '：'}${time}`
+}
 
 export function StatusCard({
   snapshot,
@@ -33,14 +47,15 @@ export function StatusCard({
   onResume: () => void
   onEndBreak: () => void
 }) {
-  const messages = localizeMessages(statusMessages, languageOf(snapshot.settings.language))
+  const language = languageOf(snapshot.settings.language)
+  const messages = localizeMessages(statusMessages, language)
   const [pauseOpen, setPauseOpen] = useState(false)
   const monitoring = snapshot.lifecycle === 'monitoring' || snapshot.lifecycle === 'degraded'
   const paused = snapshot.lifecycle === 'paused'
   const isBreak = snapshot.lifecycle === 'break'
   const statusLabel = isBreak ? messages.onBreak : paused ? messages.paused : monitoring ? messages.detecting : messages.preparing
   const statusNote = snapshot.monitoringMode === 'camera' ? messages.cameraConnected : messages.timerReminder
-  const elapsed = `${Math.floor(snapshot.seatedSeconds / 60)}:${String(Math.floor(snapshot.seatedSeconds % 60)).padStart(2, '0')}`
+  const detectionText = formatStatusDetectionText(snapshot.lastDetectionAt, language, messages.lastDetection, messages.noDetectionRecord)
 
   return (
     <section className="relative rounded-[16px] border border-edge bg-panel p-3 shadow-control">
@@ -69,7 +84,7 @@ export function StatusCard({
 
       <p className="mt-2 flex items-center justify-center gap-1.5 text-[10px] text-muted">
         <TimerReset size={13} />
-        {paused ? `${messages.lastDetection}：08:48` : `${messages.detected} ${elapsed}`}
+        {detectionText}
       </p>
 
       {pauseOpen ? (

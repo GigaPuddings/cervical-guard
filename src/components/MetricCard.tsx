@@ -50,7 +50,7 @@ export function MetricCard({
         {note ? (
           <small className="metric-card-compact-note mt-2.25 flex items-center gap-1 truncate text-[11px] leading-4 text-subtle">
             <span className="truncate">{note}</span>
-            {NoteIcon ? <NoteIcon className={cn('shrink-0 text-warning', noteIconClassName)} size={12} strokeWidth={2} /> : null}
+            {NoteIcon ? <NoteIcon className={cn('shrink-0', noteIconClassName ?? 'text-warning')} size={12} strokeWidth={2} /> : null}
           </small>
         ) : null}
       </section>
@@ -68,9 +68,9 @@ export function MetricCard({
           {value}
         </strong>
         {note ? (
-          <small className="mt-2 flex items-center gap-1 truncate text-[10px] text-subtle">
-            <span className="truncate">{note}</span>
-            {NoteIcon ? <NoteIcon className={cn('shrink-0 text-warning', noteIconClassName)} size={12} strokeWidth={2} /> : null}
+          <small className="mt-2 flex min-w-0 items-start gap-1 text-[10px] leading-3 text-subtle">
+            <span className="line-clamp-2 min-w-0">{note}</span>
+            {NoteIcon ? <NoteIcon className={cn('shrink-0', noteIconClassName ?? 'text-warning')} size={12} strokeWidth={2} /> : null}
           </small>
         ) : null}
       </div>
