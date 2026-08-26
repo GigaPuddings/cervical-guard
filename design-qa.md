@@ -186,4 +186,19 @@
 - Typography, spacing/layout, colors/tokens, icon system, and responsive tracks were intentionally left unchanged; the correction only replaces the city visual/data dependencies and contradictory copy.
 - Verification: `pnpm test` passed 14 files / 44 tests; `pnpm test:release` passed 15 tests; `pnpm build` passed; `git diff --check` reported no whitespace errors (only existing LF-to-CRLF notices). The existing Vite chunk-size advisory remains non-blocking and unrelated.
 
+**Today live-state and dynamic-data correction — 2026-08-26**
+
+- Source visual truth: `C:\Users\zero\AppData\Local\Temp\codex-clipboard-c08f1f55-2471-4cd6-b78e-25789e5adf87.png` (`2008 x 1131`). The annotated regions identify the paused preview placeholder, current-session reminder area, and five bottom-card supporting messages.
+- Final implementation captures: `output/design-qa/today-camera-running-45m-1338x753.png`, `output/design-qa/today-camera-running-45m-1120x700.png`, and `output/design-qa/today-camera-running-45m-1672x941.png`.
+- Same-input comparison: `output/design-qa/today-reference-vs-implementation-1338x753.png`. The source was normalized to `1338 x 753`; its paused state is compared with the intentionally different active-camera state required by this correction.
+- Preview behavior: active camera monitoring immediately hides both the ScanFace placeholder and its two-line caption. While the stream initializes, only the centered camera/connection status remains visible.
+- Reminder behavior: selecting the 45-minute preset changes the header support copy, progress-ring recommendation, bottom-card guidance, exact next-reminder clock time, and remaining-minute countdown together. Browser regression confirmed the active format `下次休息 HH:mm · 剩余 45 分钟`.
+- Dynamic metrics: all five supporting messages and their Lucide icons now derive from today's seated, head-down, break, dismissed-reminder, away-time, and away-count data. Partial minutes render as `少于 1 分钟` instead of being rounded up inconsistently.
+- Responsive correction: the five-card row remains intact at default and large desktop widths. Below `1200px`, it becomes a three-column wrapping grid inside the existing vertical page scroll, preventing value truncation and preserving full guidance copy at the `1120 x 700` minimum window.
+- Static-data audit: the fixed sidebar `08:48`, fixed timer-mode `85%`, fixed 60-minute recommendation, and fabricated Weather air-quality value were removed. Remaining fixed times are configuration choices or date parsing anchors, not runtime measurements.
+- Persistence verification: same-day app reload restores current seated/head-down/away counters, session start, and last detection time. A new local date resets only the active session counters while retaining the last-detection record; legacy metadata without these fields migrates through defaults.
+- Accessibility and interaction: sidebar navigation, reminder preset selection/save, resume detection, camera calibration, and camera monitoring were exercised in the in-app browser. Browser console contains 0 warnings and 0 errors.
+- Verification: `pnpm test` passed 18 files / 56 tests; `pnpm test:release` passed 15 tests; `pnpm build` passed; `cargo test` passed 97 tests; `git diff --check` reported no whitespace errors. The existing Vite chunk-size advisory remains non-blocking and unrelated.
+- Result: no actionable P0, P1, or P2 issue remains in the annotated regions or tested responsive states.
+
 final result: passed

@@ -28,13 +28,10 @@ const detailMessages = defineMessages({
   feelsWarm: '体感偏热',
   clothing: '建议穿着轻薄透气衣物',
   outside: '适合户外活动',
-  airQuality: '空气质量',
-  excellent: '优 8',
   dataUpdated: '数据更新',
   today: '今天',
   rain: '降水',
   source: '数据来源：Open-Meteo',
-  bestTime: '最佳运动时段：06:00–10:00, 16:00–19:00',
   hydrate: '注意补水',
   stretch: '运动后拉伸放松',
   sunscreen: '注意防晒',
@@ -125,10 +122,6 @@ function WeatherDetailContent({ language, location, forecast, onRefresh }: { lan
               <strong className="weather-hero-temperature block text-[64px] font-black leading-none tracking-[-.055em]">{Math.round(forecast.current.temperature)}°</strong>
               <span className="weather-hero-feels mt-3 block text-[14px]">
                 {messages.feelsLike} {Math.round(forecast.current.apparentTemperature)}°
-              </span>
-              <span className="weather-hero-air mt-2 flex items-center gap-2 text-[11px] text-inverse/90">
-                <span>{messages.airQuality}：</span>
-                <b className="weather-hero-air-badge rounded-full bg-accent/90 px-2 py-0.5 text-[9px] text-inverse">{messages.excellent}</b>
               </span>
               <span className="weather-hero-activity mt-3 inline-flex rounded-full bg-panel/75 px-3 py-1 text-[10px] font-bold text-accent">{t(guidance.activityLabel)}</span>
             </div>
