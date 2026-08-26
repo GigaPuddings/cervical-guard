@@ -846,3 +846,6 @@ pub(crate) fn update_island_hover_state(app: &AppHandle, current: &mut bool, nex
     *current = next;
     let _ = app.emit_to("reminder-island", "island://pointer-hover", next);
 }
+
+#[cfg(test)]
+mod tests;
