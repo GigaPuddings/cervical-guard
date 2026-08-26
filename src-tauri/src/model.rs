@@ -330,59 +330,7 @@ fn in_span(value: u32, start: u32, end: u32) -> bool {
 }
 
 #[cfg(test)]
-mod settings_tests {
-    use super::*;
-
-    #[test]
-    fn short_test_threshold_bypasses_quiet_hours() {
-        let mut settings = AppSettings::default();
-        settings.sedentary_seconds = 10;
-        assert!(settings.reminders_allowed_at(Weekday::Wed, 12 * 60 + 3));
-    }
-
-    #[test]
-    fn normal_threshold_still_honors_quiet_hours() {
-        let settings = AppSettings::default();
-        assert!(!settings.reminders_allowed_at(Weekday::Wed, 12 * 60 + 3));
-        assert!(settings.reminders_allowed_at(Weekday::Wed, 11 * 60 + 59));
-    }
-
-    #[test]
-    fn disabling_quiet_hours_preserves_times_but_allows_reminders() {
-        let mut settings = AppSettings::default();
-        settings.quiet_hours_enabled = false;
-        assert!(settings.reminders_allowed_at(Weekday::Wed, 12 * 60 + 3));
-        assert_eq!(settings.quiet_start, "12:00");
-        assert_eq!(settings.quiet_end, "13:00");
-    }
-
-    #[test]
-    fn legacy_settings_enable_quiet_hours_during_migration() {
-        let mut json = serde_json::to_value(AppSettings::default()).unwrap();
-        json.as_object_mut().unwrap().remove("quietHoursEnabled");
-        let settings: AppSettings = serde_json::from_value(json).unwrap();
-        assert!(settings.quiet_hours_enabled);
-    }
-
-    #[test]
-    fn legacy_settings_enable_new_island_interactions_during_migration() {
-        let mut json = serde_json::to_value(AppSettings::default()).unwrap();
-        let object = json.as_object_mut().unwrap();
-        object.remove("islandPausedStatusEnabled");
-        object.remove("islandPeekThroughEnabled");
-        let settings: AppSettings = serde_json::from_value(json).unwrap();
-        assert!(settings.island_paused_status_enabled);
-        assert!(settings.island_peek_through_enabled);
-    }
-
-    #[test]
-    fn legacy_settings_enable_silent_autostart_during_migration() {
-        let mut json = serde_json::to_value(AppSettings::default()).unwrap();
-        json.as_object_mut().unwrap().remove("silentAutostart");
-        let settings: AppSettings = serde_json::from_value(json).unwrap();
-        assert!(settings.silent_autostart);
-    }
-}
+mod tests;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -480,7 +428,10 @@ pub struct AppSnapshot {
     pub calibrated: bool,
     pub calibration_baseline: Option<f64>,
     pub last_observation_at: Option<String>,
-    /// 本次连续监测会话的开始时间（RFC3339），应用重启后为空。
+    /// 最近一次检测活动时间（RFC3339），用于暂停和重启后的状态展示。
+    #[serde(default)]
+    pub last_detection_at: Option<String>,
+    /// 本次连续监测会话的开始时间（RFC3339），同一天内可跨应用重启恢复。
     #[serde(default)]
     pub session_started_at: Option<String>,
 }
@@ -493,11 +444,17 @@ pub struct CalibrationResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct PersistedMeta {
     pub onboarded: bool,
     pub calibrated: bool,
     pub calibration_baseline: Option<f64>,
     pub permission: Option<PermissionState>,
     pub monitoring_mode: Option<MonitoringMode>,
+    pub current_local_date: Option<String>,
+    pub current_seated_seconds: u64,
+    pub current_head_down_seconds: u64,
+    pub current_away_seconds: u64,
+    pub session_started_at: Option<String>,
+    pub last_detection_at: Option<String>,
 }

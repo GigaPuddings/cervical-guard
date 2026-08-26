@@ -60,6 +60,9 @@ impl RuntimeState {
         } else {
             MonitoringLifecycle::Paused
         };
+        let today = database.load_today();
+        let restore_current_session =
+            meta.current_local_date.as_deref() == Some(today.local_date.as_str());
         let snapshot = AppSnapshot {
             schema_version: SCHEMA_VERSION,
             lifecycle,
@@ -69,21 +72,38 @@ impl RuntimeState {
             person_present: false,
             posture_confidence: 0.0,
             frame_quality: FrameQuality::Unstable,
-            seated_seconds: 0,
-            head_down_seconds: 0,
-            away_seconds: 0,
+            seated_seconds: if restore_current_session {
+                meta.current_seated_seconds
+            } else {
+                0
+            },
+            head_down_seconds: if restore_current_session {
+                meta.current_head_down_seconds
+            } else {
+                0
+            },
+            away_seconds: if restore_current_session {
+                meta.current_away_seconds
+            } else {
+                0
+            },
             break_remaining_seconds: 0,
             break_rest_seconds: 0,
             paused_until: None,
             current_reminder: None,
             next_reminder_at: None,
             reminder_remaining_seconds: None,
-            today: database.load_today(),
+            today,
             settings,
             calibrated,
             calibration_baseline,
             last_observation_at: None,
-            session_started_at: None,
+            last_detection_at: meta.last_detection_at.clone(),
+            session_started_at: if restore_current_session {
+                meta.session_started_at.clone()
+            } else {
+                None
+            },
         };
         Self::new(snapshot)
     }
@@ -240,6 +260,9 @@ impl RuntimeState {
         if !running {
             return None;
         }
+        if self.snapshot.monitoring_mode == MonitoringMode::Timer {
+            self.snapshot.last_detection_at = Some(Utc::now().to_rfc3339());
+        }
 
         // 坐姿计时门控：
         // - Timer 模式：无条件累加（无摄像头行为感知）。
@@ -297,6 +320,19 @@ impl RuntimeState {
         let today = Local::now().date_naive().to_string();
         if self.snapshot.today.local_date != today {
             self.snapshot.today = DailyStatistics::today();
+            self.snapshot.seated_seconds = 0;
+            self.snapshot.head_down_seconds = 0;
+            self.snapshot.away_seconds = 0;
+            self.snapshot.session_started_at = if matches!(
+                self.snapshot.lifecycle,
+                MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded
+            ) {
+                Some(Utc::now().to_rfc3339())
+            } else {
+                None
+            };
+            self.last_sedentary_reminder = None;
+            self.last_head_reminder = None;
         }
     }
 
@@ -526,6 +562,7 @@ impl RuntimeState {
         self.snapshot.current_reminder = None;
         self.snapshot.next_reminder_at = None;
         self.snapshot.reminder_remaining_seconds = None;
+        self.snapshot.session_started_at = Some(Utc::now().to_rfc3339());
         self.last_sedentary_reminder = None;
         self.last_head_reminder = None;
         self.head_candidate_since = None;
@@ -617,6 +654,8 @@ impl RuntimeState {
         self.snapshot.head_down_seconds = 0;
         self.snapshot.away_seconds = 0;
         self.snapshot.current_reminder = None;
+        self.snapshot.last_detection_at = None;
+        self.snapshot.session_started_at = None;
         self.last_sedentary_reminder = None;
         self.last_head_reminder = None;
     }
@@ -639,6 +678,7 @@ impl RuntimeState {
         let now = Instant::now();
         self.last_observation = Some(now);
         self.snapshot.last_observation_at = Some(Utc::now().to_rfc3339());
+        self.snapshot.last_detection_at = self.snapshot.last_observation_at.clone();
         self.snapshot.frame_quality = observation.frame_quality;
         self.snapshot.posture_confidence = observation.posture.confidence;
 
@@ -764,6 +804,7 @@ impl RuntimeState {
         self.snapshot.head_down_seconds = 0;
         self.snapshot.away_seconds = 0;
         self.snapshot.current_reminder = None;
+        self.snapshot.session_started_at = Some(Utc::now().to_rfc3339());
         self.last_sedentary_reminder = None;
         self.last_head_reminder = None;
     }
@@ -775,6 +816,12 @@ impl RuntimeState {
             calibration_baseline: self.snapshot.calibration_baseline,
             permission: Some(self.snapshot.permission),
             monitoring_mode: Some(self.snapshot.monitoring_mode),
+            current_local_date: Some(self.snapshot.today.local_date.clone()),
+            current_seated_seconds: self.snapshot.seated_seconds,
+            current_head_down_seconds: self.snapshot.head_down_seconds,
+            current_away_seconds: self.snapshot.away_seconds,
+            session_started_at: self.snapshot.session_started_at.clone(),
+            last_detection_at: self.snapshot.last_detection_at.clone(),
         }
     }
 

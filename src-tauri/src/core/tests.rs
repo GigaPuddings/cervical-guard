@@ -365,6 +365,7 @@ fn load_recovers_valid_calibration_from_an_interrupted_recalibration() {
             calibration_baseline: Some(0.64),
             permission: Some(PermissionState::Granted),
             monitoring_mode: Some(MonitoringMode::Timer),
+            ..PersistedMeta::default()
         })
         .unwrap();
 
@@ -373,6 +374,83 @@ fn load_recovers_valid_calibration_from_an_interrupted_recalibration() {
     assert!(state.snapshot.calibrated);
     assert_eq!(state.snapshot.calibration_baseline, Some(0.64));
     assert_eq!(state.snapshot.lifecycle, MonitoringLifecycle::Paused);
+}
+
+#[test]
+fn load_restores_same_day_continuous_session_and_last_detection() {
+    let database = Database::memory();
+    let today = Local::now().date_naive().to_string();
+    database
+        .save_meta(&PersistedMeta {
+            onboarded: true,
+            monitoring_mode: Some(MonitoringMode::Timer),
+            current_local_date: Some(today),
+            current_seated_seconds: 40 * 60,
+            current_head_down_seconds: 3 * 60,
+            current_away_seconds: 2 * 60,
+            session_started_at: Some("2026-08-26T00:26:00Z".into()),
+            last_detection_at: Some("2026-08-26T01:06:00Z".into()),
+            ..PersistedMeta::default()
+        })
+        .unwrap();
+
+    let state = RuntimeState::load(&database);
+
+    assert_eq!(state.snapshot.seated_seconds, 40 * 60);
+    assert_eq!(state.snapshot.head_down_seconds, 3 * 60);
+    assert_eq!(state.snapshot.away_seconds, 2 * 60);
+    assert_eq!(
+        state.snapshot.session_started_at.as_deref(),
+        Some("2026-08-26T00:26:00Z")
+    );
+    assert_eq!(
+        state.snapshot.last_detection_at.as_deref(),
+        Some("2026-08-26T01:06:00Z")
+    );
+}
+
+#[test]
+fn load_drops_stale_continuous_session_but_keeps_last_detection() {
+    let database = Database::memory();
+    database
+        .save_meta(&PersistedMeta {
+            onboarded: true,
+            monitoring_mode: Some(MonitoringMode::Timer),
+            current_local_date: Some("2000-01-01".into()),
+            current_seated_seconds: 40 * 60,
+            session_started_at: Some("2000-01-01T00:00:00Z".into()),
+            last_detection_at: Some("2000-01-01T00:40:00Z".into()),
+            ..PersistedMeta::default()
+        })
+        .unwrap();
+
+    let state = RuntimeState::load(&database);
+
+    assert_eq!(state.snapshot.seated_seconds, 0);
+    assert!(state.snapshot.session_started_at.is_none());
+    assert_eq!(
+        state.snapshot.last_detection_at.as_deref(),
+        Some("2000-01-01T00:40:00Z")
+    );
+}
+
+#[test]
+fn date_rollover_resets_current_session_counters() {
+    let mut state = state();
+    state.snapshot.today.local_date = "2000-01-01".into();
+    state.snapshot.seated_seconds = 40 * 60;
+    state.snapshot.head_down_seconds = 3 * 60;
+    state.snapshot.away_seconds = 2 * 60;
+
+    state.roll_date_if_needed();
+
+    assert_eq!(
+        state.snapshot.today.local_date,
+        Local::now().date_naive().to_string()
+    );
+    assert_eq!(state.snapshot.seated_seconds, 0);
+    assert_eq!(state.snapshot.head_down_seconds, 0);
+    assert_eq!(state.snapshot.away_seconds, 0);
 }
 
 #[test]

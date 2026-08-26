@@ -119,7 +119,9 @@ export interface AppSnapshot {
   calibrated: boolean
   calibrationBaseline: number | null
   lastObservationAt: string | null
-  /** 本次连续监测会话的开始时间（RFC3339），应用重启后为空。 */
+  /** 最近一次检测活动时间（RFC3339），用于暂停和重启后的状态展示。 */
+  lastDetectionAt: string | null
+  /** 本次连续监测会话的开始时间（RFC3339），同一天内可跨应用重启恢复。 */
   sessionStartedAt: string | null
 }
 

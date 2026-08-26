@@ -99,6 +99,7 @@ class MockCore {
     calibrated: targetDemo || localStorage.getItem('cervical-guard-calibrated') === 'true',
     calibrationBaseline: targetDemo ? -0.3 : Number(localStorage.getItem('cervical-guard-baseline')) || null,
     lastObservationAt: targetDemo ? new Date().toISOString() : null,
+    lastDetectionAt: targetDemo ? new Date().toISOString() : null,
     sessionStartedAt: targetDemo ? new Date(Date.now() - 3_182_000).toISOString() : null
   }
 
@@ -144,6 +145,7 @@ class MockCore {
       return
     }
     if (this.snapshot.lifecycle === 'monitoring' || this.snapshot.lifecycle === 'degraded') {
+      this.snapshot.lastDetectionAt = new Date().toISOString()
       const timerMode = this.snapshot.monitoringMode === 'timer'
       const personHere = timerMode || this.snapshot.personPresent
       if (personHere && (timerMode || this.snapshot.behavior === 'sitting_normal' || this.snapshot.behavior === 'head_down')) {
@@ -231,6 +233,7 @@ class MockCore {
         this.snapshot.postureConfidence = observation.posture.confidence
         this.snapshot.frameQuality = observation.frameQuality
         this.snapshot.lastObservationAt = new Date().toISOString()
+        this.snapshot.lastDetectionAt = this.snapshot.lastObservationAt
         if (!observation.person.present) this.snapshot.behavior = 'no_person'
         else if (observation.posture.state === 'standing') this.snapshot.behavior = 'standing_break'
         else if (this.snapshot.settings.islandHeadDownEnabled && observation.head.downScore > 0.62 && observation.frameQuality === 'good') {

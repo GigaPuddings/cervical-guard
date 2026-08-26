@@ -86,6 +86,7 @@ export const snapshotSchema = z.object({
   calibrated: z.boolean(),
   calibrationBaseline: z.number().nullable(),
   lastObservationAt: z.string().nullable(),
+  lastDetectionAt: z.string().nullable().default(null),
   sessionStartedAt: z.string().nullable().default(null)
 })
 
