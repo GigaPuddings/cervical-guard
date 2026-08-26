@@ -1,7 +1,10 @@
 import type { AppSettings, AppSnapshot, CalibrationResult, BehaviorHistoryEvent, CameraDevice, DailyStatistics, ReminderPayload, VisionFrame, VisionObservation } from '../types'
 
 const today = (): string => new Date().toISOString().slice(0, 10)
-const targetDemo = import.meta.env.DEV && new URLSearchParams(window.location.search).get('demo') === 'target'
+const demoMode = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('demo') : null
+const targetDemo = demoMode === 'target'
+const pausedDemo = demoMode === 'paused'
+const unrecognizedDemo = demoMode === 'unrecognized'
 
 const defaultSettings: AppSettings = {
   schemaVersion: 2,
@@ -68,13 +71,13 @@ function loadSettings(): AppSettings {
 class MockCore {
   private snapshot: AppSnapshot = {
     schemaVersion: 2,
-    lifecycle: targetDemo ? 'monitoring' : localStorage.getItem('cervical-guard-onboarded') ? 'paused' : 'unavailable',
+    lifecycle: targetDemo || unrecognizedDemo ? 'monitoring' : pausedDemo ? 'paused' : localStorage.getItem('cervical-guard-onboarded') ? 'paused' : 'unavailable',
     behavior: targetDemo ? 'sitting_normal' : 'unknown',
-    permission: targetDemo ? 'granted' : 'prompt',
+    permission: targetDemo || pausedDemo || unrecognizedDemo ? 'granted' : 'prompt',
     monitoringMode: 'camera',
-    personPresent: targetDemo,
+    personPresent: targetDemo || unrecognizedDemo,
     postureConfidence: targetDemo ? 0.85 : 0,
-    frameQuality: targetDemo ? 'good' : 'unstable',
+    frameQuality: targetDemo || unrecognizedDemo ? 'good' : 'unstable',
     seatedSeconds: targetDemo ? 3_182 : 0,
     headDownSeconds: targetDemo ? 60 : 0,
     awaySeconds: 0,
@@ -96,7 +99,7 @@ class MockCore {
           islandAllowWithMainWindow: true
         }
       : loadSettings(),
-    calibrated: targetDemo || localStorage.getItem('cervical-guard-calibrated') === 'true',
+    calibrated: targetDemo || pausedDemo || unrecognizedDemo || localStorage.getItem('cervical-guard-calibrated') === 'true',
     calibrationBaseline: targetDemo ? -0.3 : Number(localStorage.getItem('cervical-guard-baseline')) || null,
     lastObservationAt: targetDemo ? new Date().toISOString() : null,
     lastDetectionAt: targetDemo ? new Date().toISOString() : null,
@@ -352,7 +355,7 @@ class MockCore {
       sequence: Math.floor(performance.now() / 240),
       capturedAtMonotonicMs: performance.now(),
       person: { present: true, uncertain: false, confidence: 0.9 },
-      posture: { state: 'sitting', confidence: 0.9 },
+      posture: { state: 'sitting', confidence: unrecognizedDemo ? 0 : 0.9 },
       head: { downScore: 0.1, confidence: 0.9 },
       frameQuality: 'good',
       metrics: { poseMs: 12, droppedFrames: 0 }

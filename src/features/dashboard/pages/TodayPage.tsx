@@ -1,4 +1,4 @@
-import { Activity, BadgeCheck, BellOff, BicepsFlexed, Camera, ChevronRight, CircleHelp, Clock3, Coffee, Gauge, Leaf, ScanFace, ShieldCheck, SlidersHorizontal, Target, ThumbsUp, TriangleAlert, UserRound } from 'lucide-react'
+import { Activity, BadgeCheck, BellOff, BicepsFlexed, Camera, ChevronRight, CirclePause, CirclePlus, Clock3, Coffee, Gauge, Leaf, ScanFace, ShieldCheck, SlidersHorizontal, Target, ThumbsUp, TriangleAlert, UserRound, UserRoundX } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { MetricCard } from '../../../components/MetricCard'
@@ -11,6 +11,7 @@ import type { AppSnapshot } from '../../../types'
 import { cn, compactDuration, percent } from '../../../utils'
 import { TodayWeatherHeader } from '../../weather/WeatherOverview'
 import type { DashboardProps } from '../dashboardTypes'
+import { resolvePosturePresentationState, type PosturePresentationState } from '../posturePresentation'
 import { buildHealthAdvice, buildTodayMetricInsights, formatReminderSchedule, formatRestCadence, type InsightIcon, type InsightTone } from '../todayInsights'
 
 const todayMessages = defineMessages({
@@ -49,6 +50,25 @@ const todayMessages = defineMessages({
   standing: '已离座',
   confirming: '确认姿态中',
   postureEncouragement: '保持得不错，继续加油',
+  posturePaused: '检测已暂停',
+  posturePausedNote: '恢复检测后继续识别',
+  postureUnrecognized: '暂未识别',
+  postureUnrecognizedNote: '请保持头部清晰并正对屏幕',
+  postureLowConfidence: '识别度较低',
+  postureLowConfidenceNote: '请改善光线并保持头肩完整入镜',
+  frameQualityInsufficient: '画面质量不足',
+  frameDarkNote: '当前光线不足，请适当补光',
+  frameOccludedNote: '画面有遮挡，请保持头肩完整入镜',
+  frameMultiPersonNote: '画面中有多人，请仅保留当前使用者',
+  frameUnstableNote: '画面不稳定，请保持设备与坐姿稳定',
+  noPerson: '未检测到人',
+  unrecognized: '未识别',
+  identifying: '识别中',
+  needsAdjustment: '需调整',
+  frameDark: '光线不足',
+  frameOccluded: '画面遮挡',
+  frameMultiPerson: '多人入镜',
+  frameUnstable: '画面不稳定',
   timerMode: '定时提醒已开启',
   timerModeNote: '达到阈值后会提醒你起身活动',
   breakActive: '休息进行中',
@@ -83,15 +103,25 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
   const streamSession = streamUrl?.startsWith('data:image/') ? 'event-preview' : (streamUrl?.split('?', 1)[0] ?? null)
   useEffect(() => setImgLoaded(false), [streamSession])
 
-  const behaviorCopy: Record<AppSnapshot['behavior'], { title: string; description: string; icon: LucideIcon; iconClassName: string }> = {
-    no_person: { title: messages.awayActivity, description: messages.getMoving, icon: Activity, iconClassName: 'text-accent' },
-    present: { title: messages.confirming, description: messages.postureEncouragement, icon: CircleHelp, iconClassName: 'text-muted' },
-    sitting_normal: { title: messages.naturalPosture, description: messages.postureEncouragement, icon: BicepsFlexed, iconClassName: 'text-warning' },
-    head_down: { title: messages.headDown, description: messages.liftGaze, icon: Gauge, iconClassName: 'text-warning' },
-    standing_break: { title: messages.standing, description: messages.getMoving, icon: Activity, iconClassName: 'text-accent' },
-    unknown: { title: messages.confirming, description: messages.postureEncouragement, icon: CircleHelp, iconClassName: 'text-muted' }
+  const postureState = resolvePosturePresentationState(snapshot)
+  const posturePresentation: Record<PosturePresentationState, { title: string; description: string; icon: LucideIcon; iconClassName: string; status: string; statusClassName: string; barClassName: string }> = {
+    timer: { title: messages.timerMode, description: messages.timerModeNote, icon: Clock3, iconClassName: 'text-accent', status: messages.timerNoPose, statusClassName: 'text-muted', barClassName: 'bg-muted' },
+    paused: { title: messages.posturePaused, description: messages.posturePausedNote, icon: CirclePause, iconClassName: 'text-muted', status: messages.paused, statusClassName: 'text-muted', barClassName: 'bg-muted' },
+    break: { title: messages.breakActive, description: messages.breakNote, icon: Coffee, iconClassName: 'text-info', status: messages.breakActive, statusClassName: 'text-info', barClassName: 'bg-info' },
+    'not-ready': { title: messages.confirming, description: messages.postureUnrecognizedNote, icon: ScanFace, iconClassName: 'text-muted', status: messages.unrecognized, statusClassName: 'text-muted', barClassName: 'bg-muted' },
+    'no-person': { title: messages.noPerson, description: messages.getMoving, icon: UserRoundX, iconClassName: 'text-muted', status: messages.noPerson, statusClassName: 'text-muted', barClassName: 'bg-muted' },
+    'frame-dark': { title: messages.frameQualityInsufficient, description: messages.frameDarkNote, icon: TriangleAlert, iconClassName: 'text-warning', status: messages.frameDark, statusClassName: 'text-warning', barClassName: 'bg-warning' },
+    'frame-occluded': { title: messages.frameQualityInsufficient, description: messages.frameOccludedNote, icon: TriangleAlert, iconClassName: 'text-warning', status: messages.frameOccluded, statusClassName: 'text-warning', barClassName: 'bg-warning' },
+    'frame-multi-person': { title: messages.frameQualityInsufficient, description: messages.frameMultiPersonNote, icon: TriangleAlert, iconClassName: 'text-warning', status: messages.frameMultiPerson, statusClassName: 'text-warning', barClassName: 'bg-warning' },
+    'frame-unstable': { title: messages.frameQualityInsufficient, description: messages.frameUnstableNote, icon: TriangleAlert, iconClassName: 'text-warning', status: messages.frameUnstable, statusClassName: 'text-warning', barClassName: 'bg-warning' },
+    unrecognized: { title: messages.postureUnrecognized, description: messages.postureUnrecognizedNote, icon: ScanFace, iconClassName: 'text-muted', status: messages.unrecognized, statusClassName: 'text-muted', barClassName: 'bg-muted' },
+    'low-confidence': { title: messages.postureLowConfidence, description: messages.postureLowConfidenceNote, icon: TriangleAlert, iconClassName: 'text-warning', status: messages.postureLowConfidence, statusClassName: 'text-warning', barClassName: 'bg-warning' },
+    confirming: { title: messages.confirming, description: messages.postureUnrecognizedNote, icon: ScanFace, iconClassName: 'text-info', status: messages.identifying, statusClassName: 'text-info', barClassName: 'bg-info' },
+    stable: { title: messages.naturalPosture, description: messages.postureEncouragement, icon: BicepsFlexed, iconClassName: 'text-warning', status: messages.stable, statusClassName: 'text-accent', barClassName: 'bg-accent' },
+    'head-down': { title: messages.headDown, description: messages.liftGaze, icon: Gauge, iconClassName: 'text-warning', status: messages.needsAdjustment, statusClassName: 'text-warning', barClassName: 'bg-warning' },
+    standing: { title: messages.standing, description: messages.getMoving, icon: Activity, iconClassName: 'text-accent', status: messages.standing, statusClassName: 'text-accent', barClassName: 'bg-accent' }
   }
-  const behavior = snapshot.lifecycle === 'break' ? { title: messages.breakActive, description: messages.breakNote, icon: Coffee, iconClassName: 'text-info' } : isCamera ? behaviorCopy[snapshot.behavior] : { title: messages.timerMode, description: messages.timerModeNote, icon: Clock3, iconClassName: 'text-accent' }
+  const behavior = posturePresentation[postureState]
   const BehaviorFeedbackIcon = behavior.icon
   const metricInsights = buildTodayMetricInsights(snapshot.today, snapshot.settings.sedentarySeconds, language)
   const insightIcons: Record<InsightIcon, LucideIcon> = { activity: Activity, alert: TriangleAlert, check: BadgeCheck, clock: Clock3, target: Target, 'thumbs-up': ThumbsUp }
@@ -119,7 +149,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
               <button className="today-break-button inline-flex h-15 min-w-52.5 items-center justify-center gap-2 rounded-full bg-accent px-7 text-[14px] font-bold text-inverse shadow-control transition hover:bg-accent-strong" onClick={snapshot.lifecycle === 'break' ? onEndBreak : onStartBreak}>
                 <Coffee size={18} /> {snapshot.lifecycle === 'break' ? messages.endBreak : messages.startBreak}
               </button>
-               <small className="mt-2 block text-[9px] text-muted">{formatRestCadence(snapshot.settings.sedentarySeconds, language)}</small>
+              <small className="mt-2 block text-[9px] text-muted">{formatRestCadence(snapshot.settings.sedentarySeconds, language)}</small>
             </div>
           </div>
         }
@@ -127,7 +157,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
 
       {error ? <div className="absolute left-66 right-6 top-28 z-30 rounded-[12px] border border-warning/25 bg-warning-soft px-4 py-2 text-[10px] text-warning-foreground">{translateNow(error, language)}</div> : null}
 
-      <div className="today-primary-grid grid min-h-0 gap-5 min-[1120px]:grid-cols-[minmax(0,1.22fr)_minmax(360px,.98fr)]">
+      <div className="today-primary-grid grid min-h-0 gap-5 min-[1120px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.85fr)]">
         <section className="flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-edge bg-panel shadow-panel">
           <header className="today-session-header flex h-15 min-w-0 shrink-0 items-center border-b border-edge-soft px-5 text-[12px] font-bold">
             <span className="flex shrink-0 items-center">
@@ -139,9 +169,9 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
               <span className="truncate">{reminderSchedule}</span>
             </span>
           </header>
-          <div className="today-session-body grid min-h-0 flex-1 grid-cols-[minmax(226px,.95fr)_minmax(210px,1.05fr)] items-center gap-5 px-5 py-3">
+          <div className="today-session-body grid min-h-0 flex-1 grid-cols-[minmax(226px,.95fr)_minmax(210px,1.05fr)] items-center gap-5 px-5 py-3" data-posture-state={postureState}>
             <SessionProgressRing progress={progress} label={messages.continuousSitting} value={sessionClock} recommendation={`${messages.recommended} ${Math.round(snapshot.settings.sedentarySeconds / 60)} ${messages.minute}${messages.rest}`} status={messages.active} />
-            <div className="min-w-0 border-l border-edge-soft py-1 pl-5">
+            <div className="min-w-0 border-edge-soft py-1 pl-5">
               <div className="flex items-center gap-3">
                 <span className="today-posture-icon grid size-13 place-items-center rounded-[14px] bg-accent-soft text-accent">
                   <UserRound size={28} />
@@ -151,7 +181,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
                   <h2 className="today-posture-title mt-1 truncate text-[clamp(27px,3.25vh,32px)] font-black tracking-[-.04em]">{behavior.title}</h2>
                 </div>
               </div>
-              <p className="mt-4 flex items-center gap-2 text-[12px] text-muted">
+              <p className="mt-4 flex items-center gap-2 text-[12px] font-medium">
                 {behavior.description}
                 <BehaviorFeedbackIcon className={behavior.iconClassName} size={16} strokeWidth={2} />
               </p>
@@ -159,14 +189,14 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="flex items-center gap-2 text-muted">
                     {messages.stability}
-                    <CircleHelp size={13} strokeWidth={1.8} />
+                    <CirclePlus aria-label={messages.stability} size={13} strokeWidth={1.8} />
                   </span>
                   <strong className="text-[12px]">{isCamera ? `${confidence}%` : messages.notApplicable}</strong>
                 </div>
                 <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-edge-soft">
-                  <i className="block h-full rounded-full bg-accent" style={{ width: `${isCamera ? confidence : 0}%` }} />
+                  <i className={cn('block h-full rounded-full transition-[width,background-color]', behavior.barClassName)} style={{ width: `${isCamera ? confidence : 0}%` }} />
                 </div>
-                <small className="mt-2 block text-[10px] text-accent">{isCamera ? messages.stable : messages.timerNoPose}</small>
+                <small className={cn('mt-2 block text-[10px] font-medium', behavior.statusClassName)} data-confidence-state={postureState}>{behavior.status}</small>
               </div>
             </div>
           </div>
@@ -219,7 +249,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
             ) : null}
             {showPreviewCaption ? (
               <div className="pointer-events-none absolute inset-x-0 bottom-0 grid h-18 place-content-center bg-transparent px-4 text-center text-inverse">
-                <strong className="block text-[13px]">{messages.preview}</strong>
+                <strong className="block text-[12px]">{messages.preview}</strong>
                 <small className="mt-1.5 block text-[10px] text-inverse/75">{messages.previewHint}</small>
               </div>
             ) : null}
@@ -250,7 +280,17 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
       </div>
 
       <div className="today-metrics-grid mt-5.25 grid min-h-0 grid-cols-5 gap-3">
-        <MetricCard icon={Clock3} label={messages.sittingToday} value={compactDuration(snapshot.today.seatedSeconds, language)} note={metricInsights.sitting.note} noteIcon={insightIcons[metricInsights.sitting.icon]} noteIconClassName={insightToneClasses[metricInsights.sitting.tone]} tone="green" language={language} progress={percent(snapshot.today.seatedSeconds, snapshot.settings.sedentarySeconds)} />
+        <MetricCard
+          icon={Clock3}
+          label={messages.sittingToday}
+          value={compactDuration(snapshot.today.seatedSeconds, language)}
+          note={metricInsights.sitting.note}
+          noteIcon={insightIcons[metricInsights.sitting.icon]}
+          noteIconClassName={insightToneClasses[metricInsights.sitting.tone]}
+          tone="green"
+          language={language}
+          progress={percent(snapshot.today.seatedSeconds, snapshot.settings.sedentarySeconds)}
+        />
         <MetricCard icon={Gauge} label={messages.cumulativeHeadDown} value={compactDuration(snapshot.today.headDownSeconds, language)} note={metricInsights.headDown.note} noteIcon={insightIcons[metricInsights.headDown.icon]} noteIconClassName={insightToneClasses[metricInsights.headDown.tone]} tone="amber" language={language} />
         <MetricCard icon={Coffee} label={messages.completedBreaks} value={`${snapshot.today.breakCount} ${messages.times}`} note={metricInsights.breaks.note} noteIcon={insightIcons[metricInsights.breaks.icon]} noteIconClassName={insightToneClasses[metricInsights.breaks.tone]} tone="blue" language={language} />
         <MetricCard icon={BellOff} label={messages.ignoredReminders} value={`${snapshot.today.dismissedCount} ${messages.times}`} note={metricInsights.dismissed.note} noteIcon={insightIcons[metricInsights.dismissed.icon]} noteIconClassName={insightToneClasses[metricInsights.dismissed.tone]} tone="rose" language={language} />
