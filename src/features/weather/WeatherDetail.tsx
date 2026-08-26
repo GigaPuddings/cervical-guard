@@ -95,7 +95,7 @@ function WeatherDetailContent({ language, location, forecast, onRefresh }: { lan
             <MapPin size={19} />
           </span>
           <span className="min-w-0">
-            <h2 className="weather-detail-location-title truncate text-[20px] font-black">{location.name}</h2>
+            <h2 className="weather-detail-location-title truncate text-[16px] font-black">{location.name}</h2>
             <p className="weather-detail-location-subtitle mt-0.5 truncate text-[11px] text-muted">{locationSubtitle(location, language)}</p>
           </span>
         </div>
@@ -189,7 +189,7 @@ function WeatherDetailContent({ language, location, forecast, onRefresh }: { lan
           const dayLabel = index === 0 ? messages.today : `${new Intl.DateTimeFormat(language, { weekday: 'short' }).format(date)} · ${date.getMonth() + 1}/${date.getDate()}`
           return (
             <div className={`weather-forecast-day grid min-w-0 place-content-center justify-items-center gap-1.5 border-r border-edge-soft px-1 text-center last:border-r-0 ${index === 0 ? 'bg-accent-soft/45' : ''}`} key={day.date}>
-              <span className="weather-forecast-label text-[10px] font-bold">
+              <span className="weather-forecast-label text-[14px] font-bold">
                 {index === 0 ? (
                   dayLabel
                 ) : (
@@ -202,11 +202,11 @@ function WeatherDetailContent({ language, location, forecast, onRefresh }: { lan
                 )}
               </span>
               <WeatherGlyph code={day.weatherCode} size={26} className="weather-forecast-glyph text-info" />
-              <strong className="weather-forecast-temperature text-[11px]">
+              <strong className="weather-forecast-temperature text-[12px]">
                 {Math.round(day.temperatureMin)}° / {Math.round(day.temperatureMax)}°
               </strong>
-              <span className="weather-forecast-condition text-[8px] text-muted">{t(weatherCodeLabel(day.weatherCode))}</span>
-              <small className="weather-forecast-meta text-[7px] text-muted">
+              <span className="weather-forecast-condition text-[10px] text-muted">{t(weatherCodeLabel(day.weatherCode))}</span>
+              <small className="weather-forecast-meta text-[9px] text-muted">
                 {messages.rain} {day.precipitationProbability.toFixed(0)}% · UV {day.uvIndexMax.toFixed(1)}
               </small>
             </div>

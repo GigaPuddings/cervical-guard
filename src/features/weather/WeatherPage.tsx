@@ -244,7 +244,7 @@ export function WeatherPage({ language }: { language: Language }) {
                 const selected = location.id === activeLocation?.id
                 const forecast = forecasts[location.id]
                 return (
-                  <div className={cn('weather-location-card group flex items-center rounded-[12px] border px-2.5 py-2.5', selected ? 'border-accent/35 bg-accent-soft' : 'border-transparent hover:bg-panel-muted')} key={location.id}>
+                  <div className={cn('weather-location-card group flex items-center rounded-[12px] border px-2.5 py-2.5 bg-panel-muted', selected ? 'border-accent/35 bg-accent-soft' : 'border-transparent')} key={location.id}>
                     <button className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-pressed={selected} onClick={() => selectLocation(location)}>
                       <span className="weather-location-icon grid size-10.5 shrink-0 place-items-center rounded-[11px] bg-panel text-accent">
                         <MapPin size={18} />

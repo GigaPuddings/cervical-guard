@@ -64,7 +64,7 @@ export function MetricCard({
       </span>
       <div className="min-w-0">
         <span className="block truncate text-[11px] text-muted">{label}</span>
-        <strong className={cn('mt-1.5 block truncate font-black leading-none tracking-tight text-foreground', language === 'en-US' ? 'text-[14px]' : 'text-[20px]')} title={value}>
+        <strong className={cn('mt-1.5 block truncate font-black leading-none tracking-tight text-foreground', language === 'en-US' ? 'text-[14px]' : 'text-[16px]')} title={value}>
           {value}
         </strong>
         {note ? (
