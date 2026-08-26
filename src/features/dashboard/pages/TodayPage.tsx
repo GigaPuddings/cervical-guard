@@ -1,4 +1,4 @@
-import { Activity, BellOff, BicepsFlexed, Camera, ChevronRight, CircleHelp, Clock3, Coffee, Gauge, Leaf, ScanFace, ShieldCheck, SlidersHorizontal, ThumbsUp, UserRound } from 'lucide-react'
+import { Activity, BadgeCheck, BellOff, BicepsFlexed, Camera, ChevronRight, CircleHelp, Clock3, Coffee, Gauge, Leaf, ScanFace, ShieldCheck, SlidersHorizontal, Target, ThumbsUp, TriangleAlert, UserRound } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { MetricCard } from '../../../components/MetricCard'
@@ -11,6 +11,7 @@ import type { AppSnapshot } from '../../../types'
 import { cn, compactDuration, percent } from '../../../utils'
 import { TodayWeatherHeader } from '../../weather/WeatherOverview'
 import type { DashboardProps } from '../dashboardTypes'
+import { buildHealthAdvice, buildTodayMetricInsights, formatReminderSchedule, formatRestCadence, type InsightIcon, type InsightTone } from '../todayInsights'
 
 const todayMessages = defineMessages({
   today: '今天',
@@ -23,7 +24,6 @@ const todayMessages = defineMessages({
   currentPosture: '当前姿态',
   stability: '头前倾定度',
   healthAdvice: '健康建议',
-  adviceBody: '保持屏幕与视线平齐，双脚平放地面，肩颈更轻松。',
   detectionStatus: '实时检测状态',
   detecting: '检测中',
   paused: '已暂停',
@@ -38,15 +38,9 @@ const todayMessages = defineMessages({
   detectionSettings: '检测设置',
   detectionSettingsNote: '姿态识别 · 久坐提醒 · 灵敏度',
   sittingToday: '今日坐姿',
-  recommendedLimit: '建议上限 60 分钟',
   cumulativeHeadDown: '累计低头',
-  lowerThanYesterday: '较昨日 -30%~',
   completedBreaks: '完成休息',
-  targetSix: '今日目标 6 次',
   ignoredReminders: '忽略提醒',
-  focusPraise: '专注时段保持',
-  reminderMissed: '偶尔错过，记得及时休息',
-  reminderFrequent: '提醒偏多，建议调整节奏',
   awayActivity: '累计活动',
   getMoving: '起来动一动吧！',
   naturalPosture: '姿态自然',
@@ -62,15 +56,20 @@ const todayMessages = defineMessages({
   minute: '分钟',
   times: '次',
   liftGaze: '抬起视线，轻轻放松颈部',
-  restEveryHour: '建议每 60 分钟休息一次',
   recommended: '建议',
   rest: '休息',
   active: '进行中',
-  stable: '稳定'
+  stable: '稳定',
+  notApplicable: '不适用',
+  timerNoPose: '定时模式无需姿态判断'
 })
 
 export function shouldShowPreviewCaption(lifecycle: AppSnapshot['lifecycle'], isCamera: boolean): boolean {
   return !(isCamera && (lifecycle === 'monitoring' || lifecycle === 'break'))
+}
+
+export function shouldShowPreviewPlaceholder(lifecycle: AppSnapshot['lifecycle'], isCamera: boolean): boolean {
+  return shouldShowPreviewCaption(lifecycle, isCamera)
 }
 
 export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, landmarks, error, onStartBreak, onEndBreak, onPage, onRetryPreview, onEnableCamera }: DashboardProps) {
@@ -78,6 +77,8 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
   const messages = localizeMessages(todayMessages, language)
   const isCamera = snapshot.monitoringMode === 'camera'
   const showPreviewCaption = shouldShowPreviewCaption(snapshot.lifecycle, isCamera)
+  const showPreviewPlaceholder = shouldShowPreviewPlaceholder(snapshot.lifecycle, isCamera)
+  const cameraRunning = isCamera && !showPreviewPlaceholder
   const [imgLoaded, setImgLoaded] = useState(false)
   const streamSession = streamUrl?.startsWith('data:image/') ? 'event-preview' : (streamUrl?.split('?', 1)[0] ?? null)
   useEffect(() => setImgLoaded(false), [streamSession])
@@ -92,7 +93,11 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
   }
   const behavior = snapshot.lifecycle === 'break' ? { title: messages.breakActive, description: messages.breakNote, icon: Coffee, iconClassName: 'text-info' } : isCamera ? behaviorCopy[snapshot.behavior] : { title: messages.timerMode, description: messages.timerModeNote, icon: Clock3, iconClassName: 'text-accent' }
   const BehaviorFeedbackIcon = behavior.icon
-  const ignoredFeedback = snapshot.today.dismissedCount === 0 ? { note: messages.focusPraise, icon: ThumbsUp, iconClassName: 'text-warning' } : snapshot.today.dismissedCount <= 2 ? { note: messages.reminderMissed, icon: BellOff, iconClassName: 'text-warning' } : { note: messages.reminderFrequent, icon: CircleHelp, iconClassName: 'text-danger' }
+  const metricInsights = buildTodayMetricInsights(snapshot.today, snapshot.settings.sedentarySeconds, language)
+  const insightIcons: Record<InsightIcon, LucideIcon> = { activity: Activity, alert: TriangleAlert, check: BadgeCheck, clock: Clock3, target: Target, 'thumbs-up': ThumbsUp }
+  const insightToneClasses: Record<InsightTone, string> = { danger: 'text-danger', muted: 'text-muted', positive: 'text-accent', warning: 'text-warning' }
+  const reminderSchedule = formatReminderSchedule(snapshot, language)
+  const healthAdvice = buildHealthAdvice(snapshot, snapshot.settings.sedentarySeconds, language)
   const progress = percent(snapshot.seatedSeconds, snapshot.settings.sedentarySeconds)
   const confidence = Math.round(snapshot.postureConfidence * 100)
   const canEnableCamera = !isCamera && (snapshot.lifecycle === 'monitoring' || snapshot.lifecycle === 'degraded')
@@ -114,7 +119,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
               <button className="today-break-button inline-flex h-15 min-w-52.5 items-center justify-center gap-2 rounded-full bg-accent px-7 text-[14px] font-bold text-inverse shadow-control transition hover:bg-accent-strong" onClick={snapshot.lifecycle === 'break' ? onEndBreak : onStartBreak}>
                 <Coffee size={18} /> {snapshot.lifecycle === 'break' ? messages.endBreak : messages.startBreak}
               </button>
-              <small className="mt-2 block text-[9px] text-muted">{messages.restEveryHour}</small>
+               <small className="mt-2 block text-[9px] text-muted">{formatRestCadence(snapshot.settings.sedentarySeconds, language)}</small>
             </div>
           </div>
         }
@@ -124,9 +129,15 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
 
       <div className="today-primary-grid grid min-h-0 gap-5 min-[1120px]:grid-cols-[minmax(0,1.22fr)_minmax(360px,.98fr)]">
         <section className="flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-edge bg-panel shadow-panel">
-          <header className="today-session-header flex h-15 shrink-0 items-center border-b border-edge-soft px-5 text-[12px] font-bold">
-            <Activity size={17} className="mr-2" />
-            {messages.currentSession}
+          <header className="today-session-header flex h-15 min-w-0 shrink-0 items-center border-b border-edge-soft px-5 text-[12px] font-bold">
+            <span className="flex shrink-0 items-center">
+              <Activity size={17} className="mr-2" />
+              {messages.currentSession}
+            </span>
+            <span className="ml-auto flex min-w-0 items-center gap-1.5 pl-4 text-[10px] font-semibold text-accent" title={reminderSchedule}>
+              <Clock3 className="shrink-0" size={13} />
+              <span className="truncate">{reminderSchedule}</span>
+            </span>
           </header>
           <div className="today-session-body grid min-h-0 flex-1 grid-cols-[minmax(226px,.95fr)_minmax(210px,1.05fr)] items-center gap-5 px-5 py-3">
             <SessionProgressRing progress={progress} label={messages.continuousSitting} value={sessionClock} recommendation={`${messages.recommended} ${Math.round(snapshot.settings.sedentarySeconds / 60)} ${messages.minute}${messages.rest}`} status={messages.active} />
@@ -150,25 +161,24 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
                     {messages.stability}
                     <CircleHelp size={13} strokeWidth={1.8} />
                   </span>
-                  <strong className="text-[12px]">{isCamera ? confidence : 85}%</strong>
+                  <strong className="text-[12px]">{isCamera ? `${confidence}%` : messages.notApplicable}</strong>
                 </div>
                 <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-edge-soft">
-                  <i className="block h-full rounded-full bg-accent" style={{ width: `${isCamera ? confidence : 85}%` }} />
+                  <i className="block h-full rounded-full bg-accent" style={{ width: `${isCamera ? confidence : 0}%` }} />
                 </div>
-                <small className="mt-2 block text-[10px] text-accent">{messages.stable}</small>
+                <small className="mt-2 block text-[10px] text-accent">{isCamera ? messages.stable : messages.timerNoPose}</small>
               </div>
             </div>
           </div>
-          <button className="today-advice-card mx-5 mb-5.25 flex h-18.75 shrink-0 items-center gap-3 rounded-[14px] bg-panel-muted px-4 text-left hover:bg-accent-soft" onClick={() => onPage('settings')}>
+          <div className="today-advice-card mx-5 mb-5.25 flex h-18.75 shrink-0 items-center gap-3 rounded-[14px] bg-panel-muted px-4" role="status">
             <span className="grid size-9 place-items-center rounded-[11px] bg-accent text-inverse shadow-control">
               <Leaf size={18} />
             </span>
             <span className="min-w-0 flex-1">
               <strong className="block text-[11px] text-accent">{messages.healthAdvice}</strong>
-              <small className="mt-1 block truncate text-[10px] text-muted">{messages.adviceBody}</small>
+              <small className="mt-1 line-clamp-2 block text-[10px] leading-4 text-muted">{healthAdvice}</small>
             </span>
-            <ChevronRight size={17} className="text-muted" />
-          </button>
+          </div>
         </section>
 
         <section className="today-detection-card grid min-h-0 grid-rows-[60px_minmax(0,1fr)_auto] overflow-hidden rounded-[16px] border border-edge bg-panel shadow-panel">
@@ -180,13 +190,13 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
             <span className="rounded-full bg-accent-soft px-3 py-1 text-[9px] text-accent">● {snapshot.lifecycle === 'paused' ? messages.paused : isCamera ? messages.detecting : messages.timing}</span>
           </header>
           <div className="relative mx-4 min-h-0 overflow-hidden rounded-[14px]" style={{ background: 'radial-gradient(circle at 72% 20%, #285A3E 0%, #214B35 34%, #183C2B 66%, #123125 100%)' }}>
-            {isCamera && streamUrl ? (
+            {cameraRunning && streamUrl ? (
               <>
                 <img src={streamUrl} className="absolute inset-0 size-full object-cover" alt={messages.preview} onLoad={() => setImgLoaded(true)} onError={() => setImgLoaded(false)} />
                 {imgLoaded ? <PoseCanvas landmarks={landmarks} /> : null}
               </>
             ) : null}
-            {!streamUrl ? (
+            {showPreviewPlaceholder ? (
               <div className="absolute inset-x-0 bottom-9.5 top-0 grid place-items-center text-inverse/45">
                 <ScanFace className="today-preview-face" size={100} strokeWidth={1.25} />
                 {canEnableCamera ? (
@@ -196,7 +206,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
                 ) : null}
               </div>
             ) : null}
-            {isCamera && (visionStatus !== 'ready' || !imgLoaded) && streamUrl ? (
+            {cameraRunning && (!streamUrl || visionStatus !== 'ready' || !imgLoaded) ? (
               <div className="absolute inset-0 grid place-content-center justify-items-center gap-2 bg-panel-strong/90 text-[10px] text-inverse-muted">
                 <Camera size={21} />
                 <span>{previewError ? translateNow(previewError, language) : messages.connecting}</span>
@@ -240,11 +250,11 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
       </div>
 
       <div className="today-metrics-grid mt-5.25 grid min-h-0 grid-cols-5 gap-3">
-        <MetricCard icon={Clock3} label={messages.sittingToday} value={compactDuration(snapshot.today.seatedSeconds, language)} note={messages.recommendedLimit} tone="green" language={language} progress={Math.min(100, snapshot.today.seatedSeconds / 36)} />
-        <MetricCard icon={Gauge} label={messages.cumulativeHeadDown} value={compactDuration(snapshot.today.headDownSeconds, language)} note={messages.lowerThanYesterday} tone="amber" language={language} />
-        <MetricCard icon={Coffee} label={messages.completedBreaks} value={`${snapshot.today.breakCount} ${messages.times}`} note={messages.targetSix} tone="blue" language={language} />
-        <MetricCard icon={BellOff} label={messages.ignoredReminders} value={`${snapshot.today.dismissedCount} ${messages.times}`} note={ignoredFeedback.note} noteIcon={ignoredFeedback.icon} noteIconClassName={ignoredFeedback.iconClassName} tone="rose" language={language} />
-        <MetricCard icon={Activity} label={messages.awayActivity} value={compactDuration(snapshot.today.awaySeconds, language)} note={messages.getMoving} tone="green" language={language} />
+        <MetricCard icon={Clock3} label={messages.sittingToday} value={compactDuration(snapshot.today.seatedSeconds, language)} note={metricInsights.sitting.note} noteIcon={insightIcons[metricInsights.sitting.icon]} noteIconClassName={insightToneClasses[metricInsights.sitting.tone]} tone="green" language={language} progress={percent(snapshot.today.seatedSeconds, snapshot.settings.sedentarySeconds)} />
+        <MetricCard icon={Gauge} label={messages.cumulativeHeadDown} value={compactDuration(snapshot.today.headDownSeconds, language)} note={metricInsights.headDown.note} noteIcon={insightIcons[metricInsights.headDown.icon]} noteIconClassName={insightToneClasses[metricInsights.headDown.tone]} tone="amber" language={language} />
+        <MetricCard icon={Coffee} label={messages.completedBreaks} value={`${snapshot.today.breakCount} ${messages.times}`} note={metricInsights.breaks.note} noteIcon={insightIcons[metricInsights.breaks.icon]} noteIconClassName={insightToneClasses[metricInsights.breaks.tone]} tone="blue" language={language} />
+        <MetricCard icon={BellOff} label={messages.ignoredReminders} value={`${snapshot.today.dismissedCount} ${messages.times}`} note={metricInsights.dismissed.note} noteIcon={insightIcons[metricInsights.dismissed.icon]} noteIconClassName={insightToneClasses[metricInsights.dismissed.tone]} tone="rose" language={language} />
+        <MetricCard icon={Activity} label={messages.awayActivity} value={compactDuration(snapshot.today.awaySeconds, language)} note={metricInsights.activity.note} noteIcon={insightIcons[metricInsights.activity.icon]} noteIconClassName={insightToneClasses[metricInsights.activity.tone]} tone="green" language={language} />
       </div>
     </div>
   )
