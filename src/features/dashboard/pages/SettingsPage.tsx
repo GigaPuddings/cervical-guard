@@ -455,10 +455,10 @@ export function SettingsPage({ snapshot, error, onSave, onExport, onDeleteData, 
                     disabled={!draft.islandHeadDownEnabled}
                     value={draft.headDownConfirmationSeconds}
                     options={[
-                      { value: 1, label: `1 ${messages.seconds} · ${messages.fasterResponse}` },
-                      { value: 2, label: `2 ${messages.seconds} · ${messages.robust}` },
-                      { value: 3, label: `3 ${messages.seconds} · ${messages.recommended}` },
-                      { value: 5, label: `5 ${messages.seconds} · ${messages.fewerMistakes}` }
+                      { value: 5, label: `5 ${messages.seconds} · ${messages.fasterResponse}` },
+                      { value: 10, label: `10 ${messages.seconds} · ${messages.robust}` },
+                      { value: 15, label: `15 ${messages.seconds} · ${messages.recommended}` },
+                      { value: 30, label: `30 ${messages.seconds} · ${messages.fewerMistakes}` }
                     ]}
                     ariaLabel={messages.confirmationAria}
                     onChange={value => set('headDownConfirmationSeconds', value)}

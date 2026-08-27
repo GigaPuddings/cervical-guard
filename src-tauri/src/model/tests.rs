@@ -15,6 +15,31 @@ fn normal_threshold_still_honors_quiet_hours() {
 }
 
 #[test]
+fn head_down_confirmation_defaults_to_stable_detection_window() {
+    let settings = AppSettings::default();
+    assert_eq!(
+        settings.head_down_confirmation_seconds,
+        DEFAULT_HEAD_DOWN_CONFIRMATION_SECS
+    );
+    assert!(settings.validate().is_ok());
+}
+
+#[test]
+fn legacy_short_head_down_confirmation_is_normalized() {
+    let mut settings = AppSettings {
+        head_down_confirmation_seconds: 3,
+        ..AppSettings::default()
+    };
+
+    settings.normalize_for_current_version();
+
+    assert_eq!(
+        settings.head_down_confirmation_seconds,
+        DEFAULT_HEAD_DOWN_CONFIRMATION_SECS
+    );
+}
+
+#[test]
 fn disabling_quiet_hours_preserves_times_but_allows_reminders() {
     let mut settings = AppSettings::default();
     settings.quiet_hours_enabled = false;

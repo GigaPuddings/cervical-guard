@@ -14,6 +14,9 @@ use crate::{
 /// 连续缺失达到该时长后，才把“不确定/丢点”升级为真正离座。
 /// 确认窗口内继续沿用上一个已确认状态；只有确认离座后才暂停坐姿计时。
 const DEFAULT_PERSON_ABSENCE_CONFIRMATION_SECS: u64 = 3;
+const HEAD_DOWN_EXIT_CONFIRMATION_SECS: u64 = 6;
+const HEAD_DOWN_STATISTICS_MIN_SECS: u64 = 60;
+const HEAD_DOWN_SEGMENT_MERGE_GRACE_SECS: u64 = 15;
 
 pub struct RuntimeState {
     snapshot: AppSnapshot,
@@ -23,6 +26,9 @@ pub struct RuntimeState {
     sitting_candidate_since: Option<Instant>,
     head_candidate_since: Option<Instant>,
     normal_candidate_since: Option<Instant>,
+    head_down_segment_seconds: u64,
+    head_down_segment_reported_seconds: u64,
+    head_down_gap_since: Option<Instant>,
     paused_deadline: Option<Instant>,
     snoozed_until: Option<Instant>,
     last_sedentary_reminder: Option<Instant>,
@@ -39,6 +45,58 @@ impl RuntimeState {
         };
         Duration::from_secs(seconds)
     }
+
+    fn reset_head_down_segment(&mut self) {
+        self.head_down_segment_seconds = 0;
+        self.head_down_segment_reported_seconds = 0;
+        self.head_down_gap_since = None;
+    }
+
+    fn start_head_down_segment(&mut self, now: Instant) {
+        if self.head_down_gap_since.is_some_and(|gap_since| {
+            now.duration_since(gap_since) > Duration::from_secs(HEAD_DOWN_SEGMENT_MERGE_GRACE_SECS)
+        }) {
+            self.reset_head_down_segment();
+        }
+        self.head_down_gap_since = None;
+        self.snapshot.behavior = BehaviorState::HeadDown;
+    }
+
+    fn stop_head_down_segment(&mut self, now: Instant) {
+        self.snapshot.head_down_seconds = 0;
+        self.last_head_reminder = None;
+        self.head_down_gap_since = Some(now);
+    }
+
+    fn expire_head_down_gap(&mut self, now: Instant) {
+        if self.head_down_gap_since.is_some_and(|gap_since| {
+            now.duration_since(gap_since) > Duration::from_secs(HEAD_DOWN_SEGMENT_MERGE_GRACE_SECS)
+        }) {
+            self.reset_head_down_segment();
+        }
+    }
+
+    fn advance_head_down_statistics(&mut self, elapsed: u64) {
+        self.head_down_gap_since = None;
+        self.head_down_segment_seconds = self.head_down_segment_seconds.saturating_add(elapsed);
+        if !self.snapshot.settings.statistics_enabled {
+            self.head_down_segment_reported_seconds = self.head_down_segment_seconds;
+            return;
+        }
+        let reportable_seconds = if self.head_down_segment_seconds >= HEAD_DOWN_STATISTICS_MIN_SECS
+        {
+            self.head_down_segment_seconds
+        } else {
+            0
+        };
+        let delta = reportable_seconds.saturating_sub(self.head_down_segment_reported_seconds);
+        if delta > 0 {
+            self.snapshot.today.head_down_seconds =
+                self.snapshot.today.head_down_seconds.saturating_add(delta);
+            self.head_down_segment_reported_seconds = reportable_seconds;
+        }
+    }
+
     pub fn load(database: &Database) -> Self {
         let settings = database.load_settings();
         let meta = database.load_meta();
@@ -117,6 +175,9 @@ impl RuntimeState {
             sitting_candidate_since: None,
             head_candidate_since: None,
             normal_candidate_since: None,
+            head_down_segment_seconds: 0,
+            head_down_segment_reported_seconds: 0,
+            head_down_gap_since: None,
             paused_deadline: None,
             snoozed_until: None,
             last_sedentary_reminder: None,
@@ -304,13 +365,9 @@ impl RuntimeState {
         {
             self.snapshot.head_down_seconds =
                 self.snapshot.head_down_seconds.saturating_add(elapsed);
-            if self.snapshot.settings.statistics_enabled {
-                self.snapshot.today.head_down_seconds = self
-                    .snapshot
-                    .today
-                    .head_down_seconds
-                    .saturating_add(elapsed);
-            }
+            self.advance_head_down_statistics(elapsed);
+        } else {
+            self.expire_head_down_gap(now);
         }
 
         self.check_reminders(now)
@@ -323,6 +380,7 @@ impl RuntimeState {
             self.snapshot.seated_seconds = 0;
             self.snapshot.head_down_seconds = 0;
             self.snapshot.away_seconds = 0;
+            self.reset_head_down_segment();
             self.snapshot.session_started_at = if matches!(
                 self.snapshot.lifecycle,
                 MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded
@@ -558,6 +616,7 @@ impl RuntimeState {
         self.snapshot.seated_seconds = 0;
         self.snapshot.head_down_seconds = 0;
         self.snapshot.away_seconds = 0;
+        self.reset_head_down_segment();
         self.snapshot.break_remaining_seconds = 0;
         self.snapshot.current_reminder = None;
         self.snapshot.next_reminder_at = None;
@@ -601,6 +660,7 @@ impl RuntimeState {
             self.normal_candidate_since = None;
             self.last_head_reminder = None;
             self.snapshot.head_down_seconds = 0;
+            self.reset_head_down_segment();
             if self.snapshot.behavior == BehaviorState::HeadDown {
                 self.snapshot.behavior = BehaviorState::SittingNormal;
             }
@@ -653,6 +713,7 @@ impl RuntimeState {
         self.snapshot.seated_seconds = 0;
         self.snapshot.head_down_seconds = 0;
         self.snapshot.away_seconds = 0;
+        self.reset_head_down_segment();
         self.snapshot.current_reminder = None;
         self.snapshot.last_detection_at = None;
         self.snapshot.session_started_at = None;
@@ -699,12 +760,16 @@ impl RuntimeState {
             // 完全没有可信点位时进入离座确认窗口；确认前继续沿用上一个在场
             // 状态和计时，避免短时丢点造成时钟频繁停顿。
             if now.duration_since(missing) >= self.person_absence_confirmation() {
+                let was_head_down = self.snapshot.behavior == BehaviorState::HeadDown;
                 if self.snapshot.person_present && self.snapshot.settings.statistics_enabled {
                     self.snapshot.today.away_count =
                         self.snapshot.today.away_count.saturating_add(1);
                 }
                 self.snapshot.person_present = false;
                 self.snapshot.behavior = BehaviorState::NoPerson;
+                if was_head_down {
+                    self.stop_head_down_segment(now);
+                }
             }
             if now.duration_since(missing)
                 >= Duration::from_secs(self.snapshot.settings.break_minutes * 60)
@@ -758,6 +823,7 @@ impl RuntimeState {
             self.head_candidate_since = None;
             self.normal_candidate_since = None;
             self.snapshot.head_down_seconds = 0;
+            self.reset_head_down_segment();
             if self.snapshot.behavior == BehaviorState::HeadDown {
                 self.snapshot.behavior = BehaviorState::SittingNormal;
             }
@@ -772,17 +838,17 @@ impl RuntimeState {
             if now.duration_since(head)
                 >= Duration::from_secs(self.snapshot.settings.head_down_confirmation_seconds)
             {
-                self.snapshot.behavior = BehaviorState::HeadDown;
+                self.start_head_down_segment(now);
             }
         } else if observation.head.down_score <= exit {
             self.head_candidate_since = None;
             let normal = *self.normal_candidate_since.get_or_insert(now);
             if self.snapshot.behavior == BehaviorState::HeadDown
-                && now.duration_since(normal) >= Duration::from_secs(4)
+                && now.duration_since(normal)
+                    >= Duration::from_secs(HEAD_DOWN_EXIT_CONFIRMATION_SECS)
             {
                 self.snapshot.behavior = BehaviorState::SittingNormal;
-                self.snapshot.head_down_seconds = 0;
-                self.last_head_reminder = None;
+                self.stop_head_down_segment(now);
             }
         } else if self.snapshot.behavior != BehaviorState::HeadDown {
             // 进入低头状态前必须是连续的强证据。旧实现会让处于进入/退出阈值
@@ -803,6 +869,7 @@ impl RuntimeState {
         self.snapshot.seated_seconds = 0;
         self.snapshot.head_down_seconds = 0;
         self.snapshot.away_seconds = 0;
+        self.reset_head_down_segment();
         self.snapshot.current_reminder = None;
         self.snapshot.session_started_at = Some(Utc::now().to_rfc3339());
         self.last_sedentary_reminder = None;

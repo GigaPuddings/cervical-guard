@@ -110,7 +110,9 @@ impl Database {
     }
 
     pub fn load_settings(&self) -> AppSettings {
-        self.load_json("app_settings").unwrap_or_default()
+        let mut settings: AppSettings = self.load_json("app_settings").unwrap_or_default();
+        settings.normalize_for_current_version();
+        settings
     }
 
     pub fn load_meta(&self) -> PersistedMeta {

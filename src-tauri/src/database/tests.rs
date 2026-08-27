@@ -88,6 +88,21 @@ fn persists_custom_sedentary_seconds() {
 }
 
 #[test]
+fn load_settings_migrates_legacy_head_down_confirmation() {
+    let database = Database::memory();
+    let settings = AppSettings {
+        head_down_confirmation_seconds: 3,
+        ..AppSettings::default()
+    };
+    database.save_settings(&settings).unwrap();
+
+    assert_eq!(
+        database.load_settings().head_down_confirmation_seconds,
+        crate::model::DEFAULT_HEAD_DOWN_CONFIRMATION_SECS
+    );
+}
+
+#[test]
 fn persists_runtime_preferences_as_one_consistent_snapshot() {
     let database = Database::memory();
     let settings = AppSettings {

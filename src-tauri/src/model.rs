@@ -2,6 +2,9 @@ use chrono::{Datelike, Local, Timelike, Weekday};
 use serde::{Deserialize, Serialize};
 
 pub const SCHEMA_VERSION: u8 = 2;
+pub const MIN_HEAD_DOWN_CONFIRMATION_SECS: u64 = 5;
+pub const MAX_HEAD_DOWN_CONFIRMATION_SECS: u64 = 30;
+pub const DEFAULT_HEAD_DOWN_CONFIRMATION_SECS: u64 = 15;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -246,7 +249,8 @@ impl AppSettings {
             || !(1..=30).contains(&self.repeat_reminder_minutes)
             || !(1..=10).contains(&self.break_minutes)
             || !(1..=10).contains(&self.head_down_minutes)
-            || !(1..=10).contains(&self.head_down_confirmation_seconds)
+            || !(MIN_HEAD_DOWN_CONFIRMATION_SECS..=MAX_HEAD_DOWN_CONFIRMATION_SECS)
+                .contains(&self.head_down_confirmation_seconds)
             || !(5..=30).contains(&self.head_down_strong_minutes)
         {
             return Err("提醒阈值超出允许范围".into());
@@ -269,6 +273,14 @@ impl AppSettings {
             "low" => 0.82,
             "high" => 0.64,
             _ => 0.74,
+        }
+    }
+
+    pub fn normalize_for_current_version(&mut self) {
+        if !(MIN_HEAD_DOWN_CONFIRMATION_SECS..=MAX_HEAD_DOWN_CONFIRMATION_SECS)
+            .contains(&self.head_down_confirmation_seconds)
+        {
+            self.head_down_confirmation_seconds = DEFAULT_HEAD_DOWN_CONFIRMATION_SECS;
         }
     }
 
@@ -303,7 +315,7 @@ fn default_sedentary_seconds() -> u64 {
 }
 
 fn default_head_down_confirmation_seconds() -> u64 {
-    3
+    DEFAULT_HEAD_DOWN_CONFIRMATION_SECS
 }
 
 fn default_language() -> String {

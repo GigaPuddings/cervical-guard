@@ -1,6 +1,79 @@
 use super::*;
 
 const AUTOSTART_BACKGROUND_ARG: &str = "--background-autostart";
+const MIN_RECORDED_HEAD_DOWN_EVENT_SECS: u64 = 60;
+const HEAD_DOWN_EVENT_MERGE_GRACE_SECS: u64 = 15;
+
+#[derive(Debug, Clone)]
+struct PendingHeadDownEvent {
+    started_at: String,
+    duration_seconds: u64,
+    ended_at: Instant,
+}
+
+fn queue_head_down_event_segment(
+    database: &Database,
+    pending: &mut Option<PendingHeadDownEvent>,
+    started_at: &str,
+    duration_seconds: u64,
+    now: Instant,
+) {
+    if duration_seconds == 0 {
+        return;
+    }
+    if pending.as_ref().is_some_and(|event| {
+        now.duration_since(event.ended_at) > Duration::from_secs(HEAD_DOWN_EVENT_MERGE_GRACE_SECS)
+    }) {
+        flush_pending_head_down_event(database, pending, true, now);
+    }
+    match pending {
+        Some(event) => {
+            event.duration_seconds = event.duration_seconds.saturating_add(duration_seconds);
+            event.ended_at = now;
+        }
+        None => {
+            *pending = Some(PendingHeadDownEvent {
+                started_at: started_at.to_string(),
+                duration_seconds,
+                ended_at: now,
+            });
+        }
+    }
+}
+
+fn pending_head_down_event_ready(
+    pending: &Option<PendingHeadDownEvent>,
+    force: bool,
+    now: Instant,
+) -> bool {
+    pending.as_ref().is_some_and(|event| {
+        force
+            || now.duration_since(event.ended_at)
+                > Duration::from_secs(HEAD_DOWN_EVENT_MERGE_GRACE_SECS)
+    })
+}
+
+fn flush_pending_head_down_event(
+    database: &Database,
+    pending: &mut Option<PendingHeadDownEvent>,
+    force: bool,
+    now: Instant,
+) {
+    if !pending_head_down_event_ready(pending, force, now) {
+        return;
+    }
+    let Some(event) = pending.take() else {
+        return;
+    };
+    if event.duration_seconds >= MIN_RECORDED_HEAD_DOWN_EVENT_SECS {
+        let _ = database.record_completed_event(
+            "head_down",
+            &event.started_at,
+            event.duration_seconds,
+            Some("recovered"),
+        );
+    }
+}
 
 fn should_show_main_window_for_launch(args: &[String], silent_autostart: bool) -> bool {
     !silent_autostart || !args.iter().any(|arg| arg == AUTOSTART_BACKGROUND_ARG)
@@ -124,6 +197,7 @@ pub(crate) fn run() {
                             .map(|core| core.today().break_count)
                     })
                     .unwrap_or(0);
+                let mut pending_head_down_event: Option<PendingHeadDownEvent> = None;
                 loop {
                     interval.tick().await;
                     let Some(context) = handle.try_state::<AppContext>() else {
@@ -151,27 +225,46 @@ pub(crate) fn run() {
                     }
                     let behavior_changed = snapshot.behavior != last_behavior;
                     if behavior_changed {
-                        let completed_type = match last_behavior {
-                            BehaviorState::NoPerson => Some("away"),
-                            BehaviorState::HeadDown => Some("head_down"),
-                            _ => None,
-                        };
-                        if let Some(event_type) = completed_type {
-                            if let Ok(database) = context.database.lock() {
-                                let _ = database.record_completed_event(
-                                    event_type,
-                                    &behavior_started_wall,
-                                    behavior_started_at.elapsed().as_secs(),
-                                    Some(if event_type == "away" {
-                                        "returned"
-                                    } else {
-                                        "recovered"
-                                    }),
-                                );
+                        if let Ok(database) = context.database.lock() {
+                            match last_behavior {
+                                BehaviorState::NoPerson => {
+                                    let _ = database.record_completed_event(
+                                        "away",
+                                        &behavior_started_wall,
+                                        behavior_started_at.elapsed().as_secs(),
+                                        Some("returned"),
+                                    );
+                                }
+                                BehaviorState::HeadDown => {
+                                    queue_head_down_event_segment(
+                                        &database,
+                                        &mut pending_head_down_event,
+                                        &behavior_started_wall,
+                                        behavior_started_at.elapsed().as_secs(),
+                                        Instant::now(),
+                                    );
+                                }
+                                _ => {}
                             }
                         }
                         behavior_started_at = Instant::now();
                         behavior_started_wall = chrono::Utc::now().to_rfc3339();
+                    }
+                    if snapshot.behavior != BehaviorState::HeadDown
+                        && pending_head_down_event_ready(
+                            &pending_head_down_event,
+                            false,
+                            Instant::now(),
+                        )
+                    {
+                        if let Ok(database) = context.database.lock() {
+                            flush_pending_head_down_event(
+                                &database,
+                                &mut pending_head_down_event,
+                                false,
+                                Instant::now(),
+                            );
+                        }
                     }
                     if snapshot.today.break_count > last_break_count
                         && snapshot.lifecycle != MonitoringLifecycle::Break

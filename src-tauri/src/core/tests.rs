@@ -13,6 +13,15 @@ fn state() -> RuntimeState {
     state
 }
 
+fn camera_state() -> RuntimeState {
+    let mut state = state();
+    state.snapshot.monitoring_mode = MonitoringMode::Camera;
+    state.snapshot.lifecycle = MonitoringLifecycle::Monitoring;
+    state.snapshot.person_present = true;
+    state.snapshot.behavior = BehaviorState::SittingNormal;
+    state
+}
+
 fn observation(posture: PostureState, down_score: f64) -> VisionObservation {
     VisionObservation {
         schema_version: SCHEMA_VERSION,
@@ -114,19 +123,91 @@ fn disabling_head_detection_clears_state_and_blocks_future_triggers() {
 
 #[test]
 fn head_down_confirmation_uses_the_detection_tab_setting() {
-    let mut state = state();
-    state.snapshot.monitoring_mode = MonitoringMode::Camera;
-    state.snapshot.lifecycle = MonitoringLifecycle::Monitoring;
-    state.snapshot.person_present = true;
-    state.snapshot.behavior = BehaviorState::SittingNormal;
-    state.snapshot.settings.head_down_confirmation_seconds = 1;
-    state.head_candidate_since = Some(Instant::now() - Duration::from_secs(1));
+    let mut state = camera_state();
+    state.snapshot.settings.head_down_confirmation_seconds = 5;
+    state.head_candidate_since = Some(Instant::now() - Duration::from_secs(5));
 
     state
         .ingest(observation(PostureState::Sitting, 1.0))
         .unwrap();
 
     assert_eq!(state.snapshot.behavior, BehaviorState::HeadDown);
+}
+
+#[test]
+fn default_head_down_confirmation_ignores_brief_movements() {
+    let mut state = camera_state();
+    state.head_candidate_since = Some(Instant::now() - Duration::from_secs(14));
+
+    state
+        .ingest(observation(PostureState::Sitting, 1.0))
+        .unwrap();
+
+    assert_eq!(state.snapshot.behavior, BehaviorState::SittingNormal);
+}
+
+#[test]
+fn head_down_statistics_ignore_short_segments() {
+    let mut state = camera_state();
+    let now = Instant::now();
+    state.start_head_down_segment(now);
+
+    state.advance(59, now + Duration::from_secs(59));
+    state.snapshot.behavior = BehaviorState::SittingNormal;
+    state.stop_head_down_segment(now + Duration::from_secs(59));
+
+    assert_eq!(state.snapshot.head_down_seconds, 0);
+    assert_eq!(state.snapshot.today.head_down_seconds, 0);
+}
+
+#[test]
+fn head_down_statistics_backfill_after_minimum_duration() {
+    let mut state = camera_state();
+    let now = Instant::now();
+    state.start_head_down_segment(now);
+
+    state.advance(59, now + Duration::from_secs(59));
+    assert_eq!(state.snapshot.today.head_down_seconds, 0);
+
+    state.advance(1, now + Duration::from_secs(60));
+    assert_eq!(state.snapshot.today.head_down_seconds, 60);
+
+    state.advance(5, now + Duration::from_secs(65));
+    assert_eq!(state.snapshot.today.head_down_seconds, 65);
+}
+
+#[test]
+fn head_down_statistics_merge_short_recovery_gaps() {
+    let mut state = camera_state();
+    let now = Instant::now();
+    state.start_head_down_segment(now);
+    state.advance(40, now + Duration::from_secs(40));
+
+    state.snapshot.behavior = BehaviorState::SittingNormal;
+    state.stop_head_down_segment(now + Duration::from_secs(40));
+    state.advance(10, now + Duration::from_secs(50));
+
+    state.start_head_down_segment(now + Duration::from_secs(50));
+    state.advance(20, now + Duration::from_secs(70));
+
+    assert_eq!(state.snapshot.today.head_down_seconds, 60);
+}
+
+#[test]
+fn head_down_statistics_split_after_recovery_gap_expires() {
+    let mut state = camera_state();
+    let now = Instant::now();
+    state.start_head_down_segment(now);
+    state.advance(40, now + Duration::from_secs(40));
+
+    state.snapshot.behavior = BehaviorState::SittingNormal;
+    state.stop_head_down_segment(now + Duration::from_secs(40));
+    state.advance(16, now + Duration::from_secs(56));
+
+    state.start_head_down_segment(now + Duration::from_secs(56));
+    state.advance(20, now + Duration::from_secs(76));
+
+    assert_eq!(state.snapshot.today.head_down_seconds, 0);
 }
 
 #[test]
