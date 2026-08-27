@@ -136,8 +136,7 @@ fn reminder_action_requires_cursor_exit_before_hover_can_expand_again() {
     let mut ui = IslandUiState::default();
     ui.detail_expanded = true;
     ui.away_notice = true;
-    ui.behavior_notice_until =
-        Some(std::time::Instant::now() + std::time::Duration::from_secs(6));
+    ui.behavior_notice_until = Some(std::time::Instant::now() + std::time::Duration::from_secs(6));
 
     ui.suppress_hover_until_cursor_exit();
 
@@ -197,6 +196,15 @@ fn hover_polling_stays_idle_when_no_island_surface_is_enabled() {
     assert!(!island_surface_needed(
         &settings, true, true, true, true, true, true, false
     ));
+}
+
+#[test]
+fn external_fullscreen_blocks_island_unless_enabled() {
+    assert!(!island_content_allowed_for_state(true, false, false, true));
+    assert!(island_content_allowed_for_state(true, false, true, true));
+    assert!(island_content_allowed_for_state(true, false, false, false));
+    assert!(!island_content_allowed_for_state(false, false, true, false));
+    assert!(island_content_allowed_for_state(false, true, true, false));
 }
 
 #[test]

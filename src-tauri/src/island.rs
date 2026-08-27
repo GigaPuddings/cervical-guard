@@ -172,21 +172,22 @@ pub(crate) fn reminder_sound_enabled(settings: &AppSettings) -> bool {
     settings.sound_enabled && !settings.meeting_mode
 }
 
-pub(crate) fn island_feature_enabled(
+pub(crate) fn island_feature_settings(
     app: &AppHandle,
     feature: impl FnOnce(&AppSettings) -> bool,
-) -> bool {
+) -> Option<AppSettings> {
     let Some(context) = app.try_state::<AppContext>() else {
-        return false;
+        return None;
     };
     let settings = match context.core.lock() {
         Ok(core) => core.settings().clone(),
-        Err(_) => return false,
+        Err(_) => return None,
     };
     context
         .island_ui
         .lock()
         .is_ok_and(|mut ui| ui.island_available(&settings) && feature(&settings))
+        .then_some(settings)
 }
 
 pub(crate) fn island_status_feature_enabled(
@@ -240,16 +241,27 @@ pub(crate) fn island_hover_status_enabled_for_context(
     })
 }
 
-pub(crate) fn island_may_overlay_content(app: &AppHandle) -> bool {
-    app.try_state::<AppContext>()
-        .and_then(|context| {
-            context
-                .core
-                .lock()
-                .ok()
-                .map(|core| core.settings().island_allow_with_main_window)
-        })
-        .unwrap_or(false)
+pub(crate) fn island_content_allowed_for_state(
+    content_windows_hidden: bool,
+    allow_with_main_window: bool,
+    fullscreen_notifications: bool,
+    external_fullscreen_active: bool,
+) -> bool {
+    (content_windows_hidden || allow_with_main_window)
+        && (fullscreen_notifications || !external_fullscreen_active)
+}
+
+pub(crate) fn island_blocked_by_external_fullscreen(settings: &AppSettings) -> bool {
+    !settings.fullscreen_notifications && external_fullscreen_window_active()
+}
+
+pub(crate) fn island_content_allowed(app: &AppHandle, settings: &AppSettings) -> bool {
+    island_content_allowed_for_state(
+        all_content_windows_hidden(app),
+        settings.island_allow_with_main_window,
+        settings.fullscreen_notifications,
+        external_fullscreen_window_active(),
+    )
 }
 
 pub(crate) fn island_surface_needed(
@@ -358,6 +370,60 @@ pub(crate) fn all_content_windows_hidden(app: &AppHandle) -> bool {
             Ok(true) => window.is_minimized().unwrap_or(false),
             Err(_) => false,
         })
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn external_fullscreen_window_active() -> bool {
+    use std::mem::size_of;
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible,
+    };
+
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_invalid() || !IsWindowVisible(hwnd).as_bool() {
+            return false;
+        }
+
+        let mut process_id = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut process_id));
+        if process_id == std::process::id() {
+            return false;
+        }
+
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if monitor.is_invalid() {
+            return false;
+        }
+
+        let mut monitor_info = MONITORINFO {
+            cbSize: size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        if !GetMonitorInfoW(monitor, &mut monitor_info).as_bool() {
+            return false;
+        }
+
+        let mut rect = RECT::default();
+        if GetWindowRect(hwnd, &mut rect).is_err() {
+            return false;
+        }
+
+        let monitor_rect = monitor_info.rcMonitor;
+        rect.left <= monitor_rect.left
+            && rect.top <= monitor_rect.top
+            && rect.right >= monitor_rect.right
+            && rect.bottom >= monitor_rect.bottom
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn external_fullscreen_window_active() -> bool {
+    false
 }
 
 /// 控制灵动岛窗口可见性及命中测试。被动状态卡片始终穿透；正式提醒也先
@@ -507,14 +573,15 @@ pub(crate) fn present_reminder_island(
     }
     let app_handle = app.clone();
     let _ = app.run_on_main_thread(move || {
-        if !island_feature_enabled(&app_handle, |settings| settings.island_reminder_enabled) {
+        let Some(settings) =
+            island_feature_settings(&app_handle, |settings| settings.island_reminder_enabled)
+        else {
             let _ = set_reminder_island_visible(&app_handle, false, false);
             return;
-        }
-        // 只有所有内容窗口都隐藏/最小化后才使用
-        // 独立的屏幕级灵动岛；内容窗口可见时只更新页面自身状态，不渲染
-        // 任何页面内“伪灵动岛”。
-        if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
+        };
+        // 只有在内容窗口策略与外部全屏策略都允许时才使用独立屏幕级灵动岛。
+        // 内容窗口可见时只更新页面自身状态，不渲染任何页面内“伪灵动岛”。
+        if !island_content_allowed(&app_handle, &settings) {
             let _ = set_reminder_island_visible(&app_handle, false, false);
             return;
         }
@@ -542,7 +609,13 @@ pub(crate) fn present_break_island(app: &AppHandle, snapshot: &AppSnapshot) {
     let app_handle = app.clone();
     let payload = snapshot.clone();
     let _ = app.run_on_main_thread(move || {
-        if !island_feature_enabled(&app_handle, |settings| settings.island_break_enabled) {
+        let Some(settings) =
+            island_feature_settings(&app_handle, |settings| settings.island_break_enabled)
+        else {
+            let _ = set_reminder_island_visible(&app_handle, false, false);
+            return;
+        };
+        if !island_content_allowed(&app_handle, &settings) {
             let _ = set_reminder_island_visible(&app_handle, false, false);
             return;
         }
@@ -554,7 +627,7 @@ pub(crate) fn present_break_island(app: &AppHandle, snapshot: &AppSnapshot) {
                 ui.hover_suppressed_until_exit = false;
             }
         }
-        if !island_may_overlay_content(&app_handle) {
+        if !settings.island_allow_with_main_window {
             if let Some(main) = app_handle.get_webview_window("main") {
                 if let Err(error) = main.hide() {
                     eprintln!("进入休息时隐藏主窗口失败: {error}");
@@ -580,10 +653,12 @@ pub(crate) fn present_behavior_notice(app: &AppHandle, snapshot: &AppSnapshot) {
     let app_handle = app.clone();
     let payload = snapshot.clone();
     let _ = app.run_on_main_thread(move || {
-        if !island_feature_enabled(&app_handle, |settings| settings.island_head_down_enabled) {
+        let Some(settings) =
+            island_feature_settings(&app_handle, |settings| settings.island_head_down_enabled)
+        else {
             return;
-        }
-        if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
+        };
+        if !island_content_allowed(&app_handle, &settings) {
             return;
         }
         if let Some(context) = app_handle.try_state::<AppContext>() {
@@ -620,10 +695,12 @@ pub(crate) fn present_away_notice(app: &AppHandle, snapshot: &AppSnapshot) {
     let app_handle = app.clone();
     let payload = snapshot.clone();
     let _ = app.run_on_main_thread(move || {
-        if !island_feature_enabled(&app_handle, |settings| settings.island_away_enabled) {
+        let Some(settings) =
+            island_feature_settings(&app_handle, |settings| settings.island_away_enabled)
+        else {
             return;
-        }
-        if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
+        };
+        if !island_content_allowed(&app_handle, &settings) {
             let _ = set_reminder_island_visible(&app_handle, false, false);
             return;
         }
@@ -679,7 +756,7 @@ pub(crate) fn present_island_detail(app: &AppHandle, snapshot: &AppSnapshot) {
         {
             return;
         }
-        if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
+        if !island_content_allowed(&app_handle, &payload.settings) {
             let _ = set_reminder_island_visible(&app_handle, false, false);
             return;
         }
@@ -706,7 +783,7 @@ pub(crate) fn present_persistent_status(app: &AppHandle, snapshot: &AppSnapshot)
         {
             return;
         }
-        if !all_content_windows_hidden(&app_handle) && !island_may_overlay_content(&app_handle) {
+        if !island_content_allowed(&app_handle, &payload.settings) {
             let _ = set_reminder_island_visible(&app_handle, false, false);
             return;
         }

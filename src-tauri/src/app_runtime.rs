@@ -216,9 +216,8 @@ pub(crate) fn run() {
                     }
                     // —— 离开检测提示 ——
                     // 灵动岛仅在所有内容窗口均隐藏或最小化时展示。
-                    let content_windows_hidden = all_content_windows_hidden(&handle);
-                    let island_content_allowed =
-                        content_windows_hidden || island_may_overlay_content(&handle);
+                    let island_content_permitted =
+                        island_content_allowed(&handle, &snapshot.settings);
                     let camera_tracking =
                         matches!(snapshot.lifecycle, MonitoringLifecycle::Monitoring)
                             && snapshot.monitoring_mode == MonitoringMode::Camera;
@@ -242,7 +241,7 @@ pub(crate) fn run() {
                         // 提醒展示期间离开提示让位。
                         ui.away_notice = false;
                         ui.behavior_notice_until = None;
-                    } else if camera_tracking && island_content_allowed {
+                    } else if camera_tracking && island_content_permitted {
                         // 使用“已确认离座”的稳定状态，而不是单帧 present 跳变。
                         // 因此即使用户先离座、随后才最小化主窗口，也能显示正确状态。
                         if confirmed_away && !ui.away_notice {
@@ -348,11 +347,10 @@ pub(crate) fn run() {
                         continue;
                     }
                     idle = false;
-                    let content_windows_hidden = all_content_windows_hidden(&hover_handle);
-                    let island_content_allowed =
-                        content_windows_hidden || island_may_overlay_content(&hover_handle);
+                    let fullscreen_blocked = island_blocked_by_external_fullscreen(settings);
+                    let island_content_permitted = island_content_allowed(&hover_handle, settings);
                     if hover_handle.get_webview_window("reminder-island").is_none() {
-                        if island_content_allowed {
+                        if island_content_permitted {
                             if let Some(reminder) = snapshot.current_reminder.clone() {
                                 present_reminder_island(&hover_handle, reminder, false);
                             } else if break_active {
@@ -371,7 +369,26 @@ pub(crate) fn run() {
                     let Some(window) = hover_handle.get_webview_window("reminder-island") else {
                         continue;
                     };
-                    if !island_content_allowed && !behavior_notice_active && !break_active {
+                    if fullscreen_blocked {
+                        if window.is_visible().unwrap_or(false) {
+                            if let Ok(mut ui) = context.island_ui.lock() {
+                                ui.detail_expanded = false;
+                                ui.away_notice = false;
+                                ui.behavior_notice_until = None;
+                                ui.menu_open = false;
+                            }
+                            hide_island_window(&hover_handle);
+                        }
+                        content_windows_were_hidden = false;
+                        action_buttons_capturing = false;
+                        update_island_peek_state(&hover_handle, &mut pointer_peeking, None);
+                        update_island_hover_state(&hover_handle, &mut pointer_hovering, false);
+                        hover_inside = false;
+                        expanded_at = None;
+                        hot_zone_hits = 0;
+                        continue;
+                    }
+                    if !island_content_permitted && !behavior_notice_active && !break_active {
                         if content_windows_were_hidden || window.is_visible().unwrap_or(false) {
                             if let Ok(mut ui) = context.island_ui.lock() {
                                 ui.detail_expanded = false;
