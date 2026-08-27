@@ -149,7 +149,8 @@ impl Database {
 
     pub fn load_today(&self) -> DailyStatistics {
         let today = chrono::Local::now().date_naive().to_string();
-        self.connection
+        let mut item = self
+            .connection
             .query_row(
                 "SELECT local_date, seated_seconds, longest_seated_seconds, head_down_seconds,
                     suspected_phone_seconds, break_count, reminder_count, dismissed_count, away_seconds, away_count
@@ -157,7 +158,11 @@ impl Database {
                 [today],
                 map_statistics,
             )
-            .unwrap_or_else(|_| DailyStatistics::today())
+            .unwrap_or_else(|_| DailyStatistics::today());
+        if let Ok(dismissed_count) = self.dismissed_reminders_on(&item.local_date) {
+            item.dismissed_count = item.dismissed_count.max(dismissed_count);
+        }
+        item
     }
 
     pub fn save_daily(&self, item: &DailyStatistics) -> Result<(), String> {
@@ -195,19 +200,30 @@ impl Database {
     }
 
     pub fn statistics(&self, days: u32) -> Result<Vec<DailyStatistics>, String> {
-        let mut statement = self.connection.prepare(
-            "WITH RECURSIVE dates(day, n) AS (
+        let mut statement = self
+            .connection
+            .prepare(
+                "WITH RECURSIVE dates(day, n) AS (
                 SELECT date('now', 'localtime'), 1
                 UNION ALL SELECT date(day, '-1 day'), n + 1 FROM dates WHERE n < ?1
+             ),
+             dismissed_events(local_date, dismissed_count) AS (
+                SELECT date(started_at, 'localtime'), COUNT(*)
+                FROM behavior_events
+                WHERE event_type = 'reminder' AND reminder_action = 'dismissed'
+                GROUP BY date(started_at, 'localtime')
              )
              SELECT dates.day,
                     COALESCE(d.seated_seconds, 0), COALESCE(d.longest_seated_seconds, 0),
                     COALESCE(d.head_down_seconds, 0), COALESCE(d.suspected_phone_seconds, 0),
-                    COALESCE(d.break_count, 0), COALESCE(d.reminder_count, 0), COALESCE(d.dismissed_count, 0),
+                    COALESCE(d.break_count, 0), COALESCE(d.reminder_count, 0),
+                    MAX(COALESCE(d.dismissed_count, 0), COALESCE(e.dismissed_count, 0)),
                     COALESCE(d.away_seconds, 0), COALESCE(d.away_count, 0)
              FROM dates LEFT JOIN daily_statistics d ON d.local_date = dates.day
+             LEFT JOIN dismissed_events e ON e.local_date = dates.day
              ORDER BY dates.day ASC",
-        ).map_err(|error| error.to_string())?;
+            )
+            .map_err(|error| error.to_string())?;
         let rows = statement
             .query_map([days.clamp(1, 366)], map_statistics)
             .map_err(|error| error.to_string())?;
@@ -228,6 +244,20 @@ impl Database {
             params![uuid::Uuid::new_v4().to_string(), event_type, now, duration, action],
         ).map_err(|error| error.to_string())?;
         Ok(())
+    }
+
+    fn dismissed_reminders_on(&self, local_date: &str) -> Result<u64, String> {
+        self.connection
+            .query_row(
+                "SELECT COUNT(*)
+                 FROM behavior_events
+                 WHERE event_type = 'reminder'
+                    AND reminder_action = 'dismissed'
+                    AND date(started_at, 'localtime') = date(?1)",
+                [local_date],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())
     }
 
     pub fn record_completed_event(

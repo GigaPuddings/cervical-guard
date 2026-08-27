@@ -491,6 +491,7 @@ fn short_test_threshold_repeats_on_the_same_second_cadence() {
 
     assert!(state.advance(10, now).is_some());
     state.dismiss();
+    assert_eq!(state.snapshot.today.dismissed_count, 1);
     assert!(state.advance(9, now + Duration::from_secs(9)).is_none());
     assert!(state.advance(1, now + Duration::from_secs(10)).is_some());
     assert_eq!(state.snapshot.today.reminder_count, 2);

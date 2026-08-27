@@ -277,17 +277,21 @@ pub(crate) fn snooze_reminder(
 }
 
 #[tauri::command]
-pub(crate) fn dismiss_reminder(context: State<'_, AppContext>) -> Result<AppSnapshot, String> {
+pub(crate) fn dismiss_reminder(
+    app: AppHandle,
+    context: State<'_, AppContext>,
+) -> Result<AppSnapshot, String> {
     let mut core = context
         .core
         .lock()
         .map_err(|_| "状态锁已损坏".to_string())?;
-    let duration = core
-        .current_reminder()
+    let current_reminder = core.current_reminder().cloned();
+    let duration = current_reminder
+        .as_ref()
         .map(|item| item.duration_seconds)
         .unwrap_or(0);
     core.dismiss();
-    {
+    if current_reminder.is_some() {
         let database = context
             .database
             .lock()
@@ -297,6 +301,7 @@ pub(crate) fn dismiss_reminder(context: State<'_, AppContext>) -> Result<AppSnap
     let snapshot = core.snapshot();
     persist(&context, &core)?;
     suppress_island_hover_until_cursor_exit(&context)?;
+    let _ = app.emit("monitoring://snapshot", &snapshot);
     Ok(snapshot)
 }
 
