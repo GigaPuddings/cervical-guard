@@ -9,7 +9,7 @@ const reminderMessages = defineMessages({
   break: '休息',
   later: '稍后',
   pauseHour: '暂停一小时',
-  dismiss: '忽略本次'
+  dismiss: '关闭本次'
 })
 
 interface ReminderOverlayProps {

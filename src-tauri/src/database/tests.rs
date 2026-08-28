@@ -35,7 +35,7 @@ fn behavior_history_returns_structured_events_newest_first() {
 }
 
 #[test]
-fn dismissed_reminders_are_counted_from_behavior_events() {
+fn reminder_followups_are_counted_from_behavior_events() {
     let database = Database::memory();
     database
         .record_event("reminder", 120, Some("dismissed"))
@@ -45,21 +45,29 @@ fn dismissed_reminders_are_counted_from_behavior_events() {
         .unwrap();
 
     assert_eq!(database.load_today().dismissed_count, 1);
+    assert_eq!(database.load_today().snoozed_count, 1);
     assert_eq!(database.statistics(1).unwrap()[0].dismissed_count, 1);
+    assert_eq!(database.statistics(1).unwrap()[0].snoozed_count, 1);
 }
 
 #[test]
-fn stored_dismissed_count_wins_when_it_is_higher_than_events() {
+fn stored_reminder_followup_count_wins_when_it_is_higher_than_events() {
     let database = Database::memory();
     let mut day = DailyStatistics::today();
     day.dismissed_count = 3;
+    day.snoozed_count = 2;
     database.save_daily(&day).unwrap();
     database
         .record_event("reminder", 120, Some("dismissed"))
         .unwrap();
+    database
+        .record_event("reminder", 60, Some("snoozed"))
+        .unwrap();
 
     assert_eq!(database.load_today().dismissed_count, 3);
+    assert_eq!(database.load_today().snoozed_count, 2);
     assert_eq!(database.statistics(1).unwrap()[0].dismissed_count, 3);
+    assert_eq!(database.statistics(1).unwrap()[0].snoozed_count, 2);
 }
 
 #[test]

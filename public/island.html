@@ -133,7 +133,7 @@
     <div class="actions">
       <button class="primary reminder-action" data-command="start_break">休息</button>
       <button class="reminder-action" data-command="snooze_reminder" data-minutes="10">稍后</button>
-      <button class="icon reminder-action" title="忽略本次" aria-label="忽略本次" data-command="dismiss_reminder">×</button>
+      <button class="icon reminder-action" title="关闭本次" aria-label="关闭本次" data-command="dismiss_reminder">×</button>
       <button class="primary break-action" data-command="end_break">结束休息</button>
     </div>
     <div class="detail" id="detail">
@@ -222,7 +222,7 @@
         ];
         labels.forEach(([selector, zh, en]) => { const node = document.querySelector(selector); if (node) node.textContent = tr(zh, en); });
         closeButton.title = closeButton.ariaLabel = tr('关闭灵动岛', 'Close Dynamic Island');
-        document.querySelector('[data-command="dismiss_reminder"]').title = document.querySelector('[data-command="dismiss_reminder"]').ariaLabel = tr('忽略本次', 'Dismiss');
+        document.querySelector('[data-command="dismiss_reminder"]').title = document.querySelector('[data-command="dismiss_reminder"]').ariaLabel = tr('关闭本次', 'Close');
       };
 
       const plural = (value, unit) => `${value} ${unit}${value === 1 ? '' : 's'}`;

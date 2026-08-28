@@ -354,7 +354,11 @@ pub struct DailyStatistics {
     pub suspected_phone_seconds: u64,
     pub break_count: u64,
     pub reminder_count: u64,
+    /// 今日点击“关闭本次”的提醒次数。
     pub dismissed_count: u64,
+    /// 今日点击“稍后”的提醒次数。
+    #[serde(default)]
+    pub snoozed_count: u64,
     /// 今日离座活动总秒数（接水、上厕所等短暂离开）。
     #[serde(default)]
     pub away_seconds: u64,
@@ -369,6 +373,10 @@ impl DailyStatistics {
             local_date: Local::now().date_naive().to_string(),
             ..Self::default()
         }
+    }
+
+    pub fn deferred_reminder_count(&self) -> u64 {
+        self.snoozed_count.saturating_add(self.dismissed_count)
     }
 }
 

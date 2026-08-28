@@ -456,7 +456,7 @@ impl RuntimeState {
         let strong = (self.snapshot.settings.island_head_down_enabled
             && self.snapshot.head_down_seconds
                 >= self.snapshot.settings.head_down_strong_minutes * 60)
-            || self.snapshot.today.dismissed_count >= 2;
+            || self.snapshot.today.deferred_reminder_count() >= 2;
         let level = if self.snapshot.settings.meeting_mode {
             ReminderLevel::Gentle
         } else if strong {
@@ -635,7 +635,9 @@ impl RuntimeState {
     }
 
     pub fn snooze(&mut self, minutes: u64) {
-        self.snapshot.current_reminder = None;
+        if self.snapshot.current_reminder.take().is_some() {
+            self.snapshot.today.snoozed_count = self.snapshot.today.snoozed_count.saturating_add(1);
+        }
         self.snoozed_until = Some(Instant::now() + Duration::from_secs(minutes.clamp(1, 120) * 60));
         self.refresh_reminder_schedule(Instant::now());
     }

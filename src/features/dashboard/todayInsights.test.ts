@@ -12,6 +12,7 @@ function day(overrides: Partial<DailyStatistics> = {}): DailyStatistics {
     breakCount: 0,
     reminderCount: 0,
     dismissedCount: 0,
+    snoozedCount: 0,
     awaySeconds: 0,
     awayCount: 0,
     ...overrides
@@ -66,6 +67,7 @@ describe('today metric insights', () => {
         headDownSeconds: 9 * 60,
         breakCount: 1,
         dismissedCount: 0,
+        snoozedCount: 0,
         awaySeconds: 10 * 60,
         awayCount: 2
       }),
@@ -76,9 +78,15 @@ describe('today metric insights', () => {
     expect(insights.sitting.note).toContain('2 个提醒周期')
     expect(insights.headDown.note).toContain('10%')
     expect(insights.breaks.note).toContain('还差 1 次')
-    expect(insights.dismissed.note).toBe('今天没有忽略提醒')
+    expect(insights.reminderFollowups.note).toBe('今天没有延后或关闭提醒')
     expect(insights.activity.note).toContain('2 次离座')
     expect(new Set(Object.values(insights).map(item => item.icon)).size).toBeGreaterThan(2)
+  })
+
+  it('treats snoozed and closed reminders as follow-ups', () => {
+    const insights = buildTodayMetricInsights(day({ snoozedCount: 1, dismissedCount: 1 }), 45 * 60, 'zh-CN')
+
+    expect(insights.reminderFollowups.note).toContain('已延后/关闭 2 次')
   })
 
   it('changes guidance as the day accumulates behavior', () => {

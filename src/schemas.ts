@@ -49,6 +49,7 @@ const dailyStatisticsSchema = z.object({
   breakCount: z.number().nonnegative(),
   reminderCount: z.number().nonnegative(),
   dismissedCount: z.number().nonnegative(),
+  snoozedCount: z.number().nonnegative().default(0),
   awaySeconds: z.number().nonnegative().default(0),
   awayCount: z.number().nonnegative().default(0)
 })

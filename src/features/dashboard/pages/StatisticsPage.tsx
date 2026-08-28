@@ -7,6 +7,7 @@ import { languageOf } from '../../../i18n'
 import { defineMessages, localizeMessages } from '../../../runtimeI18n'
 import type { AppSnapshot, BehaviorHistoryEvent, DailyStatistics } from '../../../types'
 import { cn, compactDuration } from '../../../utils'
+import { reminderFollowupCount } from '../todayInsights'
 
 const statisticsMessages = defineMessages({
   away: '离开座位',
@@ -28,7 +29,7 @@ const statisticsMessages = defineMessages({
   completedBreaks: '完成休息次数',
   times: '次',
   conversion: '提醒转化',
-  ignoredReminders: '忽略提醒次数',
+  reminderFollowups: '提醒延后/关闭',
   ofReminders: '的提醒',
   noReminders: '暂无提醒',
   localOnly: '习惯趋势',
@@ -72,7 +73,7 @@ const historyActionMessages = defineMessages({
   manual: '手动恢复',
   pause30: '暂停 30 分钟',
   snoozed: '稍后提醒',
-  dismissed: '已忽略'
+  dismissed: '已关闭'
 })
 
 export function localDateKey(value: Date): string {
@@ -161,7 +162,7 @@ export function StatisticsPage({ statistics, history, snapshot, onHistoryDate }:
   const totalHeadDown = rows.reduce((sum, item) => sum + item.headDownSeconds, 0)
   const totalAway = rows.reduce((sum, item) => sum + item.awaySeconds, 0)
   const totalBreaks = rows.reduce((sum, item) => sum + item.breakCount, 0)
-  const totalDismissed = rows.reduce((sum, item) => sum + item.dismissedCount, 0)
+  const totalReminderFollowups = rows.reduce((sum, item) => sum + reminderFollowupCount(item), 0)
   const dayHistory = useMemo(() => historyForDate(history, selectedDate), [history, selectedDate])
   const historyRange = virtualHistoryRange(dayHistory.length, historyScrollTop, historyViewportHeight)
   const visibleHistory = dayHistory.slice(historyRange.start, historyRange.end)
@@ -247,7 +248,7 @@ export function StatisticsPage({ statistics, history, snapshot, onHistoryDate }:
     { label: messages.cumulativeHeadDown, value: compactDuration(totalHeadDown, language), note: `${messages.dailyAveragePrefix} ${compactDuration(totalHeadDown / dayCount, language)}`, icon: TimerReset },
     { label: messages.awayActivity, value: compactDuration(totalAway, language), note: `${messages.dailyAveragePrefix} ${Math.round((totalAway / Math.max(1, totalAway + totalSeated)) * 100)}%`, icon: PersonStanding },
     { label: messages.completedBreaks, value: `${totalBreaks} ${messages.times}`, note: `${messages.dailyAveragePrefix} ${averageCount(totalBreaks)} ${messages.times}`, icon: Coffee },
-    { label: messages.ignoredReminders, value: `${totalDismissed} ${messages.times}`, note: `${messages.dailyAveragePrefix} ${averageCount(totalDismissed)} ${messages.times}`, icon: Bell }
+    { label: messages.reminderFollowups, value: `${totalReminderFollowups} ${messages.times}`, note: `${messages.dailyAveragePrefix} ${averageCount(totalReminderFollowups)} ${messages.times}`, icon: Bell }
   ]
 
   return (

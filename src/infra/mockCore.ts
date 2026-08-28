@@ -17,7 +17,7 @@ const defaultSettings: AppSettings = {
   repeatReminderMinutes: 15,
   breakMinutes: 5,
   headDownMinutes: 3,
-  headDownConfirmationSeconds: 3,
+  headDownConfirmationSeconds: 15,
   headDownStrongMinutes: 10,
   repeatReminders: true,
   autostart: false,
@@ -55,6 +55,7 @@ const blankDay = (date = today()): DailyStatistics => ({
   breakCount: 0,
   reminderCount: 0,
   dismissedCount: 0,
+  snoozedCount: 0,
   awaySeconds: 0,
   awayCount: 0
 })
@@ -278,12 +279,13 @@ class MockCore {
         this.updateReminderSchedule(performance.now())
         break
       case 'snooze_reminder':
+        if (this.snapshot.currentReminder) this.snapshot.today.snoozedCount += 1
         this.snapshot.currentReminder = null
         this.snoozedUntil = performance.now() + Number(args?.minutes ?? 10) * 60_000
         break
       case 'dismiss_reminder':
+        if (this.snapshot.currentReminder) this.snapshot.today.dismissedCount += 1
         this.snapshot.currentReminder = null
-        this.snapshot.today.dismissedCount += 1
         break
       case 'update_settings':
         {
@@ -386,6 +388,7 @@ class MockCore {
               breakCount: 3 + (index % 4),
               reminderCount: 2 + (index % 3),
               dismissedCount: index % 2,
+              snoozedCount: index % 3,
               awaySeconds: (28 + (variation % 15)) * 60,
               awayCount: 1 + (index % 5)
             }
@@ -396,7 +399,7 @@ class MockCore {
 
   private csv(): string {
     const rows = this.demoStatistics(30)
-    return ['日期,坐姿秒数,最长连续坐姿秒数,低头秒数,休息次数,提醒次数,忽略次数,离座秒数', ...rows.map(item => [item.localDate, Math.round(item.seatedSeconds), Math.round(item.longestSeatedSeconds), Math.round(item.headDownSeconds), item.breakCount, item.reminderCount, item.dismissedCount, Math.round(item.awaySeconds)].join(','))].join('\n')
+    return ['日期,坐姿秒数,最长连续坐姿秒数,低头秒数,休息次数,提醒次数,稍后提醒次数,关闭提醒次数,延后或关闭提醒次数,离座秒数', ...rows.map(item => [item.localDate, Math.round(item.seatedSeconds), Math.round(item.longestSeatedSeconds), Math.round(item.headDownSeconds), item.breakCount, item.reminderCount, item.snoozedCount, item.dismissedCount, item.snoozedCount + item.dismissedCount, Math.round(item.awaySeconds)].join(','))].join('\n')
   }
 
   private demoBehaviorHistory(): BehaviorHistoryEvent[] {

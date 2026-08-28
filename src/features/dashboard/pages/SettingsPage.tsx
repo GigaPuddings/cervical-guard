@@ -90,7 +90,7 @@ const settingsMessages = defineMessages({
   enableIsland: '启用灵动岛',
   islandMasterDescription: '总开关；关闭后保留下面的行为偏好',
   sedentaryReminder: '久坐提醒',
-  sedentaryReminderDescription: '显示休息、稍后和忽略操作',
+  sedentaryReminderDescription: '显示休息、稍后和关闭操作',
   awayStatus: '离座状态',
   awayStatusDescription: '确认无人后保持显示计时暂停',
   headDownDetection: '低头检测',

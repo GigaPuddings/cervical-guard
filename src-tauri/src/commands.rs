@@ -262,8 +262,9 @@ pub(crate) fn snooze_reminder(
         .current_reminder()
         .map(|item| item.duration_seconds)
         .unwrap_or(0);
+    let had_reminder = core.current_reminder().is_some();
     core.snooze(minutes);
-    {
+    if had_reminder {
         let database = context
             .database
             .lock()
@@ -454,11 +455,11 @@ pub(crate) fn export_statistics(context: State<'_, AppContext>) -> Result<String
         .map_err(|_| "数据库锁已损坏".to_string())?;
     let rows = database.statistics(366)?;
     let mut csv = String::from(
-        "日期,坐姿秒数,最长连续坐姿秒数,低头秒数,疑似手机秒数,休息次数,提醒次数,忽略次数,离座秒数,离座次数\n",
+        "日期,坐姿秒数,最长连续坐姿秒数,低头秒数,疑似手机秒数,休息次数,提醒次数,稍后提醒次数,关闭提醒次数,延后或关闭提醒次数,离座秒数,离座次数\n",
     );
     for item in rows {
         csv.push_str(&format!(
-            "{},{},{},{},{},{},{},{},{},{}\n",
+            "{},{},{},{},{},{},{},{},{},{},{},{}\n",
             item.local_date,
             item.seated_seconds,
             item.longest_seated_seconds,
@@ -466,7 +467,9 @@ pub(crate) fn export_statistics(context: State<'_, AppContext>) -> Result<String
             item.suspected_phone_seconds,
             item.break_count,
             item.reminder_count,
+            item.snoozed_count,
             item.dismissed_count,
+            item.deferred_reminder_count(),
             item.away_seconds,
             item.away_count,
         ));

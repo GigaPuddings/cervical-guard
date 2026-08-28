@@ -12,7 +12,7 @@ import { cn, compactDuration, percent } from '../../../utils'
 import { TodayWeatherHeader } from '../../weather/WeatherOverview'
 import type { DashboardProps } from '../dashboardTypes'
 import { resolvePosturePresentationState, type PosturePresentationState } from '../posturePresentation'
-import { buildHealthAdvice, buildTodayMetricInsights, formatReminderSchedule, formatRestCadence, type InsightIcon, type InsightTone } from '../todayInsights'
+import { buildHealthAdvice, buildTodayMetricInsights, formatReminderSchedule, formatRestCadence, reminderFollowupCount, type InsightIcon, type InsightTone } from '../todayInsights'
 
 const todayMessages = defineMessages({
   today: '今天',
@@ -41,7 +41,7 @@ const todayMessages = defineMessages({
   sittingToday: '今日坐姿',
   cumulativeHeadDown: '累计低头',
   completedBreaks: '完成休息',
-  ignoredReminders: '忽略提醒',
+  reminderFollowups: '延后/关闭',
   awayActivity: '累计活动',
   getMoving: '起来动一动吧！',
   naturalPosture: '姿态自然',
@@ -124,6 +124,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
   const behavior = posturePresentation[postureState]
   const BehaviorFeedbackIcon = behavior.icon
   const metricInsights = buildTodayMetricInsights(snapshot.today, snapshot.settings.sedentarySeconds, language)
+  const followupCount = reminderFollowupCount(snapshot.today)
   const insightIcons: Record<InsightIcon, LucideIcon> = { activity: Activity, alert: TriangleAlert, check: BadgeCheck, clock: Clock3, target: Target, 'thumbs-up': ThumbsUp }
   const insightToneClasses: Record<InsightTone, string> = { danger: 'text-danger', muted: 'text-muted', positive: 'text-accent', warning: 'text-warning' }
   const reminderSchedule = formatReminderSchedule(snapshot, language)
@@ -293,7 +294,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
         />
         <MetricCard icon={Gauge} label={messages.cumulativeHeadDown} value={compactDuration(snapshot.today.headDownSeconds, language)} note={metricInsights.headDown.note} noteIcon={insightIcons[metricInsights.headDown.icon]} noteIconClassName={insightToneClasses[metricInsights.headDown.tone]} tone="amber" language={language} />
         <MetricCard icon={Coffee} label={messages.completedBreaks} value={`${snapshot.today.breakCount} ${messages.times}`} note={metricInsights.breaks.note} noteIcon={insightIcons[metricInsights.breaks.icon]} noteIconClassName={insightToneClasses[metricInsights.breaks.tone]} tone="blue" language={language} />
-        <MetricCard icon={BellOff} label={messages.ignoredReminders} value={`${snapshot.today.dismissedCount} ${messages.times}`} note={metricInsights.dismissed.note} noteIcon={insightIcons[metricInsights.dismissed.icon]} noteIconClassName={insightToneClasses[metricInsights.dismissed.tone]} tone="rose" language={language} />
+        <MetricCard icon={BellOff} label={messages.reminderFollowups} value={`${followupCount} ${messages.times}`} note={metricInsights.reminderFollowups.note} noteIcon={insightIcons[metricInsights.reminderFollowups.icon]} noteIconClassName={insightToneClasses[metricInsights.reminderFollowups.tone]} tone="rose" language={language} />
         <MetricCard icon={Activity} label={messages.awayActivity} value={compactDuration(snapshot.today.awaySeconds, language)} note={metricInsights.activity.note} noteIcon={insightIcons[metricInsights.activity.icon]} noteIconClassName={insightToneClasses[metricInsights.activity.tone]} tone="green" language={language} />
       </div>
     </div>

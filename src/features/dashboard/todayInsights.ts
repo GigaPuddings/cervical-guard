@@ -14,7 +14,7 @@ export interface TodayMetricInsights {
   sitting: MetricInsight
   headDown: MetricInsight
   breaks: MetricInsight
-  dismissed: MetricInsight
+  reminderFollowups: MetricInsight
   activity: MetricInsight
 }
 
@@ -35,6 +35,10 @@ function elapsedMinuteText(seconds: number, language: Language): string {
 function countText(count: number, unit: string, language: Language): string {
   if (language === 'en-US') return `${count} ${unit}${count === 1 ? '' : 's'}`
   return `${count} ${unit}`
+}
+
+export function reminderFollowupCount(today: Pick<DailyStatistics, 'dismissedCount' | 'snoozedCount'>): number {
+  return today.dismissedCount + today.snoozedCount
 }
 
 export function formatRestCadence(sedentarySeconds: number, language: Language): string {
@@ -115,11 +119,12 @@ export function buildTodayMetricInsights(today: DailyStatistics, sedentarySecond
       ? { note: english ? `All ${countText(completedCycles, 'due break', language)} completed` : `今日应休息 ${completedCycles} 次，已全部完成`, icon: 'check', tone: 'positive' }
       : { note: english ? `${countText(missingBreaks, 'break', language)} still due today` : `还差 ${missingBreaks} 次达到今日休息节奏`, icon: 'target', tone: 'warning' }
 
-  const dismissed: MetricInsight = today.dismissedCount === 0
-    ? { note: english ? 'No reminders dismissed today' : '今天没有忽略提醒', icon: 'thumbs-up', tone: 'positive' }
-    : today.dismissedCount <= 2
-      ? { note: english ? `${countText(today.dismissedCount, 'reminder', language)} dismissed; take the next break` : `已忽略 ${today.dismissedCount} 次，下次记得休息`, icon: 'alert', tone: 'warning' }
-      : { note: english ? `${countText(today.dismissedCount, 'reminder', language)} dismissed; adjust your schedule` : `已忽略 ${today.dismissedCount} 次，建议调整节奏`, icon: 'alert', tone: 'danger' }
+  const followupCount = reminderFollowupCount(today)
+  const reminderFollowups: MetricInsight = followupCount === 0
+    ? { note: english ? 'No reminders delayed or closed today' : '今天没有延后或关闭提醒', icon: 'thumbs-up', tone: 'positive' }
+    : followupCount <= 2
+      ? { note: english ? `${countText(followupCount, 'reminder', language)} delayed or closed; take the next break` : `已延后/关闭 ${followupCount} 次，下次尽量及时休息`, icon: 'alert', tone: 'warning' }
+      : { note: english ? `${countText(followupCount, 'reminder', language)} delayed or closed; adjust your schedule` : `已延后/关闭 ${followupCount} 次，建议调整提醒节奏`, icon: 'alert', tone: 'danger' }
 
   const activitySummary = today.awayCount > 0
     ? english
@@ -135,5 +140,5 @@ export function buildTodayMetricInsights(today: DailyStatistics, sedentarySecond
       ? { note: activitySummary, icon: 'activity', tone: 'warning' }
       : { note: activitySummary, icon: 'check', tone: 'positive' }
 
-  return { sitting, headDown, breaks, dismissed, activity }
+  return { sitting, headDown, breaks, reminderFollowups, activity }
 }

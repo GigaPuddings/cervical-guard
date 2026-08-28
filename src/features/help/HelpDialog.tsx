@@ -8,7 +8,7 @@ const content = {
     close: '关闭',
     tips: [
       ['开始与暂停', '在左侧状态卡片中恢复、暂停检测；摄像头不可用时可继续使用普通定时提醒。', Camera],
-      ['提醒与休息', '达到久坐阈值后可直接开始休息、稍后提醒或忽略本次。主动休息也会计入今日记录。', Coffee],
+      ['提醒与休息', '达到久坐阈值后可直接开始休息、稍后提醒或关闭本次。主动休息也会计入今日记录。', Coffee],
       ['灵动岛', '开启“持续检测状态”后，紧凑状态会在后台显示；悬停顶部热区可查看详情，关闭按钮可暂时静默。', Sparkles],
       ['调整节奏', '在偏好设置中修改久坐时长、重复提醒、工作时段、摄像头和灵动岛选项。', Settings],
       ['定时暂停', '暂停期间不会累计连续坐姿时长；恢复后从保留的会话状态继续。', Clock3],
@@ -22,7 +22,7 @@ const content = {
     close: 'Close',
     tips: [
       ['Start and pause', 'Resume or pause monitoring from the status card. Timer reminders remain available when the camera cannot be used.', Camera],
-      ['Reminders and breaks', 'When the sitting threshold is reached, start a break, snooze, or dismiss it. Proactive breaks are included in today’s activity.', Coffee],
+      ['Reminders and breaks', 'When the sitting threshold is reached, start a break, snooze, or close it. Proactive breaks are included in today’s activity.', Coffee],
       ['Dynamic Island', 'Enable Persistent detection status to keep the compact card in the background. Hover over the top hot zone for details or mute it from the close menu.', Sparkles],
       ['Tune your routine', 'Use Preferences to change sitting duration, repeat reminders, work hours, camera options, and Dynamic Island behavior.', Settings],
       ['Timed pause', 'Continuous sitting time does not increase while paused. Monitoring continues from the preserved session when resumed.', Clock3],

@@ -579,6 +579,37 @@ fn short_test_threshold_repeats_on_the_same_second_cadence() {
 }
 
 #[test]
+fn snoozed_and_dismissed_reminders_are_counted_separately() {
+    let mut state = state();
+    state.snapshot.current_reminder = Some(ReminderPayload {
+        id: "snooze".into(),
+        kind: ReminderKind::Sedentary,
+        level: ReminderLevel::Noticeable,
+        title: "提醒".into(),
+        message: "起身活动".into(),
+        duration_seconds: 60,
+        triggered_at: Utc::now().to_rfc3339(),
+    });
+    state.snooze(10);
+    assert_eq!(state.snapshot.today.snoozed_count, 1);
+    assert_eq!(state.snapshot.today.dismissed_count, 0);
+
+    state.snapshot.current_reminder = Some(ReminderPayload {
+        id: "dismiss".into(),
+        kind: ReminderKind::Sedentary,
+        level: ReminderLevel::Noticeable,
+        title: "提醒".into(),
+        message: "起身活动".into(),
+        duration_seconds: 60,
+        triggered_at: Utc::now().to_rfc3339(),
+    });
+    state.dismiss();
+    assert_eq!(state.snapshot.today.snoozed_count, 1);
+    assert_eq!(state.snapshot.today.dismissed_count, 1);
+    assert_eq!(state.snapshot.today.deferred_reminder_count(), 2);
+}
+
+#[test]
 fn snapshot_exposes_the_next_reminder_time_and_countdown() {
     let mut state = state();
     state.snapshot.settings.sedentary_seconds = 10;

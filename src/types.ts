@@ -87,7 +87,10 @@ export interface DailyStatistics {
   suspectedPhoneSeconds: number
   breakCount: number
   reminderCount: number
+  /** 今日点击“关闭本次”的提醒次数。 */
   dismissedCount: number
+  /** 今日点击“稍后”的提醒次数。 */
+  snoozedCount: number
   /** 今日离座活动总秒数（接水、上厕所等短暂离开）。 */
   awaySeconds: number
   /** 今日检测到的人物离开座位次数。 */

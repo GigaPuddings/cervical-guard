@@ -67,6 +67,7 @@ impl Database {
                 break_count INTEGER NOT NULL DEFAULT 0,
                 reminder_count INTEGER NOT NULL DEFAULT 0,
                 dismissed_count INTEGER NOT NULL DEFAULT 0,
+                snoozed_count INTEGER NOT NULL DEFAULT 0,
                 away_seconds INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS model_registry (
@@ -102,6 +103,19 @@ impl Database {
             self.connection
                 .execute(
                     "ALTER TABLE daily_statistics ADD COLUMN away_count INTEGER NOT NULL DEFAULT 0",
+                    [],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        // 增量迁移：记录“稍后提醒”次数，和关闭提醒分开保存。
+        let has_snoozed_count = self
+            .connection
+            .prepare("SELECT snoozed_count FROM daily_statistics LIMIT 0")
+            .is_ok();
+        if !has_snoozed_count {
+            self.connection
+                .execute(
+                    "ALTER TABLE daily_statistics ADD COLUMN snoozed_count INTEGER NOT NULL DEFAULT 0",
                     [],
                 )
                 .map_err(|error| error.to_string())?;
@@ -155,14 +169,17 @@ impl Database {
             .connection
             .query_row(
                 "SELECT local_date, seated_seconds, longest_seated_seconds, head_down_seconds,
-                    suspected_phone_seconds, break_count, reminder_count, dismissed_count, away_seconds, away_count
+                    suspected_phone_seconds, break_count, reminder_count, dismissed_count, snoozed_count, away_seconds, away_count
              FROM daily_statistics WHERE local_date = ?1",
                 [today],
                 map_statistics,
             )
             .unwrap_or_else(|_| DailyStatistics::today());
-        if let Ok(dismissed_count) = self.dismissed_reminders_on(&item.local_date) {
+        if let Ok((dismissed_count, snoozed_count)) =
+            self.reminder_action_counts_on(&item.local_date)
+        {
             item.dismissed_count = item.dismissed_count.max(dismissed_count);
+            item.snoozed_count = item.snoozed_count.max(snoozed_count);
         }
         item
     }
@@ -172,8 +189,8 @@ impl Database {
             .execute(
                 "INSERT INTO daily_statistics (
                 local_date, seated_seconds, longest_seated_seconds, head_down_seconds,
-                suspected_phone_seconds, break_count, reminder_count, dismissed_count, away_seconds, away_count
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                suspected_phone_seconds, break_count, reminder_count, dismissed_count, snoozed_count, away_seconds, away_count
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(local_date) DO UPDATE SET
                 seated_seconds = excluded.seated_seconds,
                 longest_seated_seconds = excluded.longest_seated_seconds,
@@ -182,6 +199,7 @@ impl Database {
                 break_count = excluded.break_count,
                 reminder_count = excluded.reminder_count,
                 dismissed_count = excluded.dismissed_count,
+                snoozed_count = excluded.snoozed_count,
                 away_seconds = excluded.away_seconds,
                 away_count = excluded.away_count",
                 params![
@@ -193,6 +211,7 @@ impl Database {
                     item.break_count,
                     item.reminder_count,
                     item.dismissed_count,
+                    item.snoozed_count,
                     item.away_seconds,
                     item.away_count,
                 ],
@@ -209,10 +228,13 @@ impl Database {
                 SELECT date('now', 'localtime'), 1
                 UNION ALL SELECT date(day, '-1 day'), n + 1 FROM dates WHERE n < ?1
              ),
-             dismissed_events(local_date, dismissed_count) AS (
-                SELECT date(started_at, 'localtime'), COUNT(*)
+             reminder_actions(local_date, dismissed_count, snoozed_count) AS (
+                SELECT date(started_at, 'localtime'),
+                       COALESCE(SUM(CASE WHEN reminder_action = 'dismissed' THEN 1 ELSE 0 END), 0),
+                       COALESCE(SUM(CASE WHEN reminder_action = 'snoozed' THEN 1 ELSE 0 END), 0)
                 FROM behavior_events
-                WHERE event_type = 'reminder' AND reminder_action = 'dismissed'
+                WHERE event_type = 'reminder'
+                  AND reminder_action IN ('dismissed', 'snoozed')
                 GROUP BY date(started_at, 'localtime')
              )
              SELECT dates.day,
@@ -220,9 +242,10 @@ impl Database {
                     COALESCE(d.head_down_seconds, 0), COALESCE(d.suspected_phone_seconds, 0),
                     COALESCE(d.break_count, 0), COALESCE(d.reminder_count, 0),
                     MAX(COALESCE(d.dismissed_count, 0), COALESCE(e.dismissed_count, 0)),
+                    MAX(COALESCE(d.snoozed_count, 0), COALESCE(e.snoozed_count, 0)),
                     COALESCE(d.away_seconds, 0), COALESCE(d.away_count, 0)
              FROM dates LEFT JOIN daily_statistics d ON d.local_date = dates.day
-             LEFT JOIN dismissed_events e ON e.local_date = dates.day
+             LEFT JOIN reminder_actions e ON e.local_date = dates.day
              ORDER BY dates.day ASC",
             )
             .map_err(|error| error.to_string())?;
@@ -248,16 +271,18 @@ impl Database {
         Ok(())
     }
 
-    fn dismissed_reminders_on(&self, local_date: &str) -> Result<u64, String> {
+    fn reminder_action_counts_on(&self, local_date: &str) -> Result<(u64, u64), String> {
         self.connection
             .query_row(
-                "SELECT COUNT(*)
+                "SELECT
+                    COALESCE(SUM(CASE WHEN reminder_action = 'dismissed' THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN reminder_action = 'snoozed' THEN 1 ELSE 0 END), 0)
                  FROM behavior_events
                  WHERE event_type = 'reminder'
-                    AND reminder_action = 'dismissed'
+                    AND reminder_action IN ('dismissed', 'snoozed')
                     AND date(started_at, 'localtime') = date(?1)",
                 [local_date],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .map_err(|error| error.to_string())
     }
@@ -390,8 +415,9 @@ fn map_statistics(row: &rusqlite::Row<'_>) -> rusqlite::Result<DailyStatistics> 
         break_count: row.get(5)?,
         reminder_count: row.get(6)?,
         dismissed_count: row.get(7)?,
-        away_seconds: row.get(8)?,
-        away_count: row.get(9)?,
+        snoozed_count: row.get(8)?,
+        away_seconds: row.get(9)?,
+        away_count: row.get(10)?,
     })
 }
 

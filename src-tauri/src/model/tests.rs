@@ -90,3 +90,21 @@ fn legacy_meta_defaults_new_session_fields_during_migration() {
     assert_eq!(meta.session_started_at, None);
     assert_eq!(meta.last_detection_at, None);
 }
+
+#[test]
+fn legacy_daily_statistics_default_snoozed_count_during_migration() {
+    let day: DailyStatistics = serde_json::from_value(serde_json::json!({
+        "localDate": "2026-08-28",
+        "seatedSeconds": 0,
+        "longestSeatedSeconds": 0,
+        "headDownSeconds": 0,
+        "suspectedPhoneSeconds": 0,
+        "breakCount": 0,
+        "reminderCount": 0,
+        "dismissedCount": 0
+    }))
+    .unwrap();
+
+    assert_eq!(day.snoozed_count, 0);
+    assert_eq!(day.deferred_reminder_count(), 0);
+}
