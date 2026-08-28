@@ -117,7 +117,7 @@ GET https://api.open-meteo.com/v1/forecast
 | --- | --- | --- |
 | `cervical-guard-weather-locations-v1` | 最多 8 个地点偏好 | 用户删除前保留 |
 | `cervical-guard-weather-preferred-v1` | 概览与灵动岛共用的首选地点 id | 用户切换前保留 |
-| `cervical-guard-weather-cache-v2` | 按地点 id 保存的内部预报 DTO | 新鲜 15 分钟，降级最多使用 6 小时 |
+| `cervical-guard-weather-cache-v3` | 按地点 id 保存的内部预报 DTO | 新鲜 15 分钟，降级最多使用 6 小时 |
 
 读取算法：
 

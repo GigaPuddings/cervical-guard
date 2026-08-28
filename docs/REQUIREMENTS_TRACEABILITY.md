@@ -9,10 +9,10 @@
 | 摄像头暂停后释放 | `vision.rs::stop`、`useVisionMonitor.ts` effect cleanup | 会话停止后摄像头指示灯熄灭 |
 | 人体存在、坐姿、站姿观察值 | `src-tauri/src/vision.rs` | MoveNet SinglePose Lightning + 特征融合 Rust 单测 |
 | 连续久坐使用单调时间 | `src-tauri/src/core.rs` | `timer_mode_triggers_after_continuous_threshold` |
-| 低头使用相对校准基线 | `vision.rs`、`Calibration.tsx` | `uses_relative_calibration_baseline` |
+| 低头使用相对校准基线 | `vision.rs`、`Calibration.tsx` | `uses_calibrated_head_position_and_face_geometry` |
 | 低质量画面不产生明确判断 | `core.rs` QualityGate | `low_quality_observation_never_asserts_head_down` |
-| 多帧确认、迟滞、人物缺失容忍 | `core.rs::ingest` | 3 秒进入、4 秒退出、10 秒缺失容忍 |
-| 暂停、延后、忽略、休息 | `ReminderOverlay.tsx`、Tauri commands | Playwright 提醒到休息流程 |
+| 多帧确认、迟滞、人物缺失容忍 | `core.rs::ingest` | 稳定低头确认、6 秒恢复确认、10 秒缺失容忍 |
+| 暂停、延后、关闭、休息 | `public/island.html`、`src-tauri/src/island.rs`、Tauri commands | 灵动岛交互测试与 Rust 命令测试 |
 | 久坐与低头提醒合并、独立冷却 | `core.rs::check_reminders` | Rust 领域逻辑 |
 | 会议模式降低提醒等级 | `core.rs::check_reminders` | 设置驱动策略 |
 | 今日统计、7/30 日趋势 | `database.rs`、`Dashboard.tsx` | SQLite 查询与真实页面截图 |
@@ -26,4 +26,3 @@
 需求文档明确将“低头使用手机检测”列为第二阶段。本 MVP 没有将普通物体或单帧结果伪装成手机识别；数据库保留 `suspected_phone_seconds` 兼容字段，IPC 协议也保留后续 Worker 升级空间。
 
 当前视觉执行层由 Rust 后端完成：nokhwa(Windows Media Foundation)负责相机采集，ONNX Runtime 运行随应用打包的 MoveNet SinglePose Lightning 模型做姿态估计，仅把 JPEG 预览帧交给 WebView 展示、结构化观察值交给 Rust 状态机；摄像头帧不会写入数据库、日志或文件。面向长期生产运行的独立 C++ Vision Worker、WinML 硬件后端和手机目标检测模型属于架构文档的阶段 2/3，不在 MVP 验收范围。
-
