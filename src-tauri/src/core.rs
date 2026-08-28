@@ -4,6 +4,7 @@ use chrono::{Local, Utc};
 
 use crate::{
     database::Database,
+    messages::{msg, Language},
     model::{
         AppSettings, AppSnapshot, BehaviorState, CalibrationResult, DailyStatistics, FrameQuality,
         MonitoringLifecycle, MonitoringMode, PermissionState, PersistedMeta, PostureState,
@@ -431,26 +432,23 @@ impl RuntimeState {
         if head_due {
             self.last_head_reminder = Some(now);
         }
-        let english = self.snapshot.settings.language == "en-US";
+        let language = Language::of_settings(&self.snapshot.settings);
         let (kind, title, message) = match (sedentary_due, head_due) {
-            (true, true) if english => (
+            (true, true) => (
                 ReminderKind::Combined,
-                "Time to stretch",
-                "You have been sitting and looking down for a while. Stand up and move for 2–5 minutes.",
+                msg::REMINDER_COMBINED_TITLE.get(language),
+                msg::REMINDER_COMBINED_BODY.get(language),
             ),
-            (true, false) if english => (
+            (true, false) => (
                 ReminderKind::Sedentary,
-                "Take a short walk",
-                "You have been sitting for a while. Stand up and move for 2–5 minutes.",
+                msg::REMINDER_SEDENTARY_TITLE.get(language),
+                msg::REMINDER_SEDENTARY_BODY.get(language),
             ),
-            (false, true) if english => (
+            (false, true) => (
                 ReminderKind::HeadDown,
-                "Lift your head",
-                "You have been looking down for a while. Raise your gaze and relax your neck and shoulders.",
+                msg::REMINDER_HEAD_DOWN_TITLE.get(language),
+                msg::REMINDER_HEAD_DOWN_BODY.get(language),
             ),
-            (true, true) => (ReminderKind::Combined, "该舒展一下了", "你已经连续坐了一段时间，也有持续低头的迹象。建议站起来活动 2～5 分钟。"),
-            (true, false) => (ReminderKind::Sedentary, "起来走一走吧", "你已经连续坐了一段时间，建议站起来活动 2～5 分钟。"),
-            (false, true) => (ReminderKind::HeadDown, "试着抬起头", "检测到你已经低头一段时间，可以抬高视线并放松颈肩。"),
             (false, false) => unreachable!(),
         };
         let strong = (self.snapshot.settings.island_head_down_enabled
@@ -499,11 +497,12 @@ impl RuntimeState {
     }
 
     pub fn save_calibration(&mut self, result: CalibrationResult) -> Result<(), String> {
+        let language = Language::of_settings(&self.snapshot.settings);
         if !result.baseline.is_finite() || !(0.0..=1.0).contains(&result.baseline) {
-            return Err("校准基线无效".into());
+            return Err(msg::ERR_CALIBRATION_BASELINE.get(language).to_string());
         }
         if result.camera_id.len() > 512 {
-            return Err("摄像头标识过长".into());
+            return Err(msg::ERR_CAMERA_ID_TOO_LONG.get(language).to_string());
         }
         self.snapshot.calibrated = true;
         self.snapshot.calibration_baseline = Some(result.baseline);
@@ -530,7 +529,9 @@ impl RuntimeState {
         if mode == MonitoringMode::Camera
             && (!self.snapshot.calibrated || self.snapshot.permission != PermissionState::Granted)
         {
-            return Err("摄像头尚未授权或未完成校准".into());
+            return Err(msg::ERR_CAMERA_NOT_AUTHORIZED
+                .get(Language::of_settings(&self.snapshot.settings))
+                .to_string());
         }
         self.snapshot.monitoring_mode = mode;
         if mode == MonitoringMode::Camera {
@@ -727,7 +728,7 @@ impl RuntimeState {
         &mut self,
         observation: VisionObservation,
     ) -> Result<Option<ReminderPayload>, String> {
-        observation.validate()?;
+        observation.validate_with_language(Language::of_settings(&self.snapshot.settings))?;
         // Monitoring 正常检测；Break 期间也接受观测，用于感知真实休息行为。
         if self.snapshot.monitoring_mode != MonitoringMode::Camera
             || !matches!(
@@ -735,7 +736,9 @@ impl RuntimeState {
                 MonitoringLifecycle::Monitoring | MonitoringLifecycle::Break
             )
         {
-            return Err("摄像头检测当前未运行".into());
+            return Err(msg::ERR_CAMERA_NOT_RUNNING
+                .get(Language::of_settings(&self.snapshot.settings))
+                .to_string());
         }
         let reminder = self.tick();
         let now = Instant::now();

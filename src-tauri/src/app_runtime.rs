@@ -116,7 +116,6 @@ pub(crate) fn run() {
         .register_uri_scheme_protocol("guard", |_ctx, request| {
             guard_protocol_response(request.uri().path())
         })
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
@@ -213,8 +212,8 @@ pub(crate) fn run() {
                         (snapshot, reminder)
                     };
                     if let Some(reminder) = reminder {
-                        let sound_enabled = reminder_sound_enabled(&snapshot.settings);
-                        present_reminder_island(&handle, reminder, sound_enabled);
+                        let sound = resolve_reminder_sound(&snapshot.settings, reminder.level);
+                        present_reminder_island(&handle, reminder, sound);
                     }
                     if snapshot.lifecycle != last_lifecycle {
                         let _ = rebuild_tray_menu(&handle);
@@ -445,7 +444,7 @@ pub(crate) fn run() {
                     if hover_handle.get_webview_window("reminder-island").is_none() {
                         if island_content_permitted {
                             if let Some(reminder) = snapshot.current_reminder.clone() {
-                                present_reminder_island(&hover_handle, reminder, false);
+                                present_reminder_island(&hover_handle, reminder, None);
                             } else if break_active {
                                 present_break_island(&hover_handle, &snapshot);
                             } else if persistent_status_enabled {
@@ -507,7 +506,7 @@ pub(crate) fn run() {
                             .and_then(|core| core.current_reminder().cloned());
                         if let Some(reminder) = reminder {
                             // 这是把已存在的提醒恢复到后台灵动岛，不应重复播放声音。
-                            present_reminder_island(&hover_handle, reminder, false);
+                            present_reminder_island(&hover_handle, reminder, None);
                             continue;
                         }
                     }

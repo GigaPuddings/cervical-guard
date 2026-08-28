@@ -1,36 +1,66 @@
 import { weatherCodeLabel } from './openMeteo'
 import type { Language } from '../../i18n'
-import { translateNow } from '../../runtimeI18n'
+import { defineMessages, messageText } from '../../runtimeI18n'
 import type { WeatherForecast, WeatherLocation, WeatherSummary } from './types'
+
+/** Open-Meteo 行政区/国家名是外部数据;这里维护出现频率高的术语词汇表。 */
+const geoTermMessages = defineMessages({
+  china: { zh: '中国', en: 'China' }
+})
+
+export function localizeGeoTerm(value: string, language: Language = 'zh-CN'): string {
+  if (value === geoTermMessages.china.zh) return messageText(geoTermMessages.china, language)
+  return value
+}
 
 export function locationSubtitle(location: WeatherLocation, language: Language = 'zh-CN'): string {
   return [location.admin1, location.country]
     .filter((value, index, all) => value && all.indexOf(value) === index)
-    .map(value => translateNow(value, language))
+    .map(value => localizeGeoTerm(value, language))
     .join(' · ')
 }
 
 export function formatWeatherUpdatedAt(forecast: WeatherForecast, language: Language = 'zh-CN'): string {
   const date = new Date(forecast.fetchedAt)
-  if (Number.isNaN(date.getTime())) return translateNow('更新时间未知', language)
+  const unknownLabel = messageText(
+    defineMessages({ unknown: { zh: '更新时间未知', en: 'Update time unknown' } }).unknown,
+    language
+  )
+  if (Number.isNaN(date.getTime())) return unknownLabel
   const time = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' }).format(date)
   return language === 'en-US' ? `Updated ${time}` : `${time} 更新`
 }
 
-export function windLevelLabel(speed: number): string {
-  if (speed < 1) return '静风'
-  if (speed < 12) return '微风'
-  if (speed < 20) return '和风'
-  if (speed < 29) return '劲风'
-  return '强风'
+const windLevelMessages = defineMessages({
+  calm: { zh: '静风', en: 'Calm' },
+  light: { zh: '微风', en: 'Light breeze' },
+  moderate: { zh: '和风', en: 'Moderate breeze' },
+  fresh: { zh: '劲风', en: 'Strong breeze' },
+  strong: { zh: '强风', en: 'High wind' }
+})
+
+export function windLevelLabel(speed: number, language: Language = 'zh-CN'): string {
+  if (speed < 1) return messageText(windLevelMessages.calm, language)
+  if (speed < 12) return messageText(windLevelMessages.light, language)
+  if (speed < 20) return messageText(windLevelMessages.moderate, language)
+  if (speed < 29) return messageText(windLevelMessages.fresh, language)
+  return messageText(windLevelMessages.strong, language)
 }
 
-export function uvIndexLabel(index: number): string {
-  if (index < 3) return '低'
-  if (index < 6) return '中等'
-  if (index < 8) return '较高'
-  if (index < 11) return '很高'
-  return '极高'
+const uvIndexMessages = defineMessages({
+  low: { zh: '低', en: 'Low' },
+  moderate: { zh: '中等', en: 'Moderate' },
+  high: { zh: '较高', en: 'High' },
+  veryHigh: { zh: '很高', en: 'Very high' },
+  extreme: { zh: '极高', en: 'Extreme' }
+})
+
+export function uvIndexLabel(index: number, language: Language = 'zh-CN'): string {
+  if (index < 3) return messageText(uvIndexMessages.low, language)
+  if (index < 6) return messageText(uvIndexMessages.moderate, language)
+  if (index < 8) return messageText(uvIndexMessages.high, language)
+  if (index < 11) return messageText(uvIndexMessages.veryHigh, language)
+  return messageText(uvIndexMessages.extreme, language)
 }
 
 export function humidityLevelLabel(humidity: number, language: Language = 'zh-CN'): string {
@@ -62,11 +92,18 @@ export function precipitationProbabilityLabel(probability: number, language: Lan
   return language === 'en-US' ? 'Very high' : '很高'
 }
 
-export function uvProtectionLabel(index: number): string {
-  if (index < 3) return '无需额外防护'
-  if (index < 6) return '建议防晒'
-  if (index < 8) return '加强防晒'
-  return '避免暴晒'
+const uvProtectionMessages = defineMessages({
+  none: { zh: '无需额外防护', en: 'No extra protection needed' },
+  recommended: { zh: '建议防晒', en: 'Sun protection recommended' },
+  extra: { zh: '加强防晒', en: 'Extra sun protection' },
+  avoid: { zh: '避免暴晒', en: 'Avoid direct sun' }
+})
+
+export function uvProtectionLabel(index: number, language: Language = 'zh-CN'): string {
+  if (index < 3) return messageText(uvProtectionMessages.none, language)
+  if (index < 6) return messageText(uvProtectionMessages.recommended, language)
+  if (index < 8) return messageText(uvProtectionMessages.extra, language)
+  return messageText(uvProtectionMessages.avoid, language)
 }
 
 export interface WeatherActivityGuidance {
@@ -139,7 +176,7 @@ export function weatherActivityGuidance(forecast: WeatherForecast, language: Lan
     tags.push('Stretch after activity')
 
     return {
-      summary: translateNow(weatherHealthAdvice(forecast), language),
+      summary: weatherHealthAdvice(forecast, 'overview', language),
       detail,
       tags: tags.slice(0, 4),
       activityLabel: storm || rainProbability >= 70 || precipitation >= 25 ? 'Indoor activity recommended' : hot || uvIndex >= 8 ? 'Short outdoor activity' : 'Good for outdoor activity',
@@ -185,7 +222,7 @@ export function weatherActivityGuidance(forecast: WeatherForecast, language: Lan
   tags.push('运动后拉伸放松')
 
   return {
-    summary: weatherHealthAdvice(forecast),
+    summary: weatherHealthAdvice(forecast, 'overview', language),
     detail,
     tags: tags.slice(0, 4),
     activityLabel: storm || rainProbability >= 70 || precipitation >= 25 ? '建议室内活动' : hot || uvIndex >= 8 ? '适合短时户外活动' : '适合户外活动',
@@ -196,29 +233,48 @@ export function weatherActivityGuidance(forecast: WeatherForecast, language: Lan
   }
 }
 
-export function weatherHealthAdvice(forecast: WeatherForecast, context: 'overview' | 'break' = 'overview'): string {
+const healthAdviceMessages = defineMessages({
+  stormOverview: { zh: '雷暴天气优先在室内活动，并远离敞开的窗边。', en: 'Stay active indoors during thunderstorms and keep away from open windows.' },
+  rainBreak: { zh: '有降水，休息时可在室内走动，避免久坐后立即冒雨外出。', en: 'When it is raining, walk indoors during breaks instead of heading straight outside.' },
+  rainOverview: { zh: '有降水，起身活动优先选择室内通道。', en: 'When it is raining, choose an indoor route for movement breaks.' },
+  uvBreak: { zh: '紫外线很强，这轮休息在室内放松肩颈更稳妥。', en: 'UV is very high; relax your neck and shoulders indoors for this break.' },
+  uvOverview: { zh: '紫外线很强，短时外出也要做好遮阳。', en: 'UV is very high; use sun protection even for a short trip outside.' },
+  hot: { zh: '体感炎热，起身后先补水，再做轻缓活动。', en: 'It feels hot. Hydrate before starting gentle movement.' },
+  cold: { zh: '体感较冷，先活动肩背和脚踝，再考虑到室外走动。', en: 'It feels cold. Warm up your shoulders, back, and ankles before going outside.' },
+  humid: { zh: '湿度偏高，活动强度保持轻缓，及时补水并留意闷热感。', en: 'Humidity is high. Keep activity light, hydrate, and watch for stuffiness.' },
+  windy: { zh: '风力较强，开窗和外出活动时注意避开强阵风。', en: 'Wind is strong. Avoid gusts when opening windows or moving outdoors.' },
+  calmBreak: { zh: '天气较平稳，可以走几步、看看远处，让肩颈和眼睛一起放松。', en: 'Conditions are stable. Walk a little and look into the distance to relax your neck, shoulders, and eyes.' },
+  calmOverview: { zh: '天气较平稳，工作间隙适合起身走动几分钟。', en: 'Conditions are stable; a short walk fits well between work sessions.' }
+})
+
+export function weatherHealthAdvice(
+  forecast: WeatherForecast,
+  context: 'overview' | 'break' = 'overview',
+  language: Language = 'zh-CN'
+): string {
   const today = forecast.daily[0]
   const rainProbability = today?.precipitationProbability ?? 0
   const uvIndex = Math.max(forecast.current.uvIndex, today?.uvIndexMax ?? 0)
-  if (forecast.current.weatherCode >= 95) return '雷暴天气优先在室内活动，并远离敞开的窗边。'
-  if (forecast.current.precipitation > 0 || rainProbability >= 70) return context === 'break' ? '有降水，休息时可在室内走动，避免久坐后立即冒雨外出。' : '有降水，起身活动优先选择室内通道。'
-  if (uvIndex >= 8) return context === 'break' ? '紫外线很强，这轮休息在室内放松肩颈更稳妥。' : '紫外线很强，短时外出也要做好遮阳。'
-  if (forecast.current.apparentTemperature >= 35) return '体感炎热，起身后先补水，再做轻缓活动。'
-  if (forecast.current.apparentTemperature <= 2) return '体感较冷，先活动肩背和脚踝，再考虑到室外走动。'
-  if (forecast.current.humidity >= 80) return '湿度偏高，活动强度保持轻缓，及时补水并留意闷热感。'
-  if (forecast.current.windSpeed >= 29 || forecast.current.windGusts >= 50) return '风力较强，开窗和外出活动时注意避开强阵风。'
-  return context === 'break' ? '天气较平稳，可以走几步、看看远处，让肩颈和眼睛一起放松。' : '天气较平稳，工作间隙适合起身走动几分钟。'
+  if (forecast.current.weatherCode >= 95) return messageText(healthAdviceMessages.stormOverview, language)
+  if (forecast.current.precipitation > 0 || rainProbability >= 70) return messageText(context === 'break' ? healthAdviceMessages.rainBreak : healthAdviceMessages.rainOverview, language)
+  if (uvIndex >= 8) return messageText(context === 'break' ? healthAdviceMessages.uvBreak : healthAdviceMessages.uvOverview, language)
+  if (forecast.current.apparentTemperature >= 35) return messageText(healthAdviceMessages.hot, language)
+  if (forecast.current.apparentTemperature <= 2) return messageText(healthAdviceMessages.cold, language)
+  if (forecast.current.humidity >= 80) return messageText(healthAdviceMessages.humid, language)
+  if (forecast.current.windSpeed >= 29 || forecast.current.windGusts >= 50) return messageText(healthAdviceMessages.windy, language)
+  return messageText(context === 'break' ? healthAdviceMessages.calmBreak : healthAdviceMessages.calmOverview, language)
 }
 
 export function toWeatherSummary(forecast: WeatherForecast): WeatherSummary {
   return {
     location: forecast.location.name,
-    condition: weatherCodeLabel(forecast.current.weatherCode),
+    // 灵动岛页面维护自己的条件词翻译表,因此这里固定输出中文标签。
+    condition: weatherCodeLabel(forecast.current.weatherCode, 'zh-CN'),
     temperature: forecast.current.temperature,
     humidity: forecast.current.humidity,
     uvIndex: forecast.current.uvIndex,
     windSpeed: forecast.current.windSpeed,
-    windLevel: windLevelLabel(forecast.current.windSpeed),
+    windLevel: windLevelLabel(forecast.current.windSpeed, 'zh-CN'),
     precipitation: forecast.daily[0]?.precipitationSum ?? forecast.current.precipitation,
     weatherCode: forecast.current.weatherCode
   }

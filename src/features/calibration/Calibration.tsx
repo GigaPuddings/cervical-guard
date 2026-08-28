@@ -2,38 +2,38 @@ import { AlertTriangle, ArrowLeft, ArrowRight, Camera, Check, LoaderCircle, Scan
 import { useMemo, useState } from 'react'
 import { Brand } from '../../components/Brand'
 import { SelectField } from '../../components/SelectField'
-import { localizeBackendMessage, type Language } from '../../i18n'
-import { defineMessages, localizeMessages, translateNow } from '../../runtimeI18n'
+import type { Language } from '../../i18n'
+import { defineMessages, localizeMessages, messageText } from '../../runtimeI18n'
 import { useVisionMonitor } from '../../vision/useVisionMonitor'
 
 const calibrationMessages = defineMessages({
-  headVisible: '头部完整清晰可见',
-  headStable: '头部位置保持稳定',
-  lightSuitable: '光线适合识别',
-  back: '返回',
-  step: '第 1 步，共 1 步',
-  title: '调整好你的坐姿',
-  description: '请自然坐直并正对屏幕。摄像头只需拍到完整、清晰的头部；肩膀和手臂不会参与识别。',
-  connected: '摄像头已连接',
-  preparing: '正在准备',
-  previewAlt: '摄像头校准预览',
-  connecting: '正在连接画面…',
-  requesting: '正在请求摄像头权限…',
-  loadingModel: '正在加载本地姿态模型…',
-  localOnly: '画面仅在此设备内存中处理',
-  camera: '摄像头',
-  checks: '校准检查',
-  naturalPosture: '保持自然坐姿',
-  baselineDescription: '我们只使用鼻尖、双眼和双耳记录自然坐姿基线。无需拍到肩部、胸部或下半身。',
-  baselineCapture: '基线采集',
-  holdStill: '请让完整头部在画面中稳定保持几秒',
-  baselineReady: '已获得稳定的头部位置基线',
-  cameraUnavailable: '摄像头暂时不可用',
-  previewUnavailable: '视频预览暂时不可用',
-  retry: '重试',
-  complete: '完成并开始检测',
-  timerFallback: '使用普通定时提醒',
-  disclaimer: '本应用提供健康行为提醒，不用于疾病诊断或治疗。'
+  headVisible: { zh: '头部完整清晰可见', en: 'Full head clearly visible' },
+  headStable: { zh: '头部位置保持稳定', en: 'Head position is stable' },
+  lightSuitable: { zh: '光线适合识别', en: 'Lighting is suitable' },
+  back: { zh: '返回', en: 'Back' },
+  step: { zh: '第 1 步，共 1 步', en: 'Step 1 of 1' },
+  title: { zh: '调整好你的坐姿', en: 'Set up your posture' },
+  description: { zh: '请自然坐直并正对屏幕。摄像头只需拍到完整、清晰的头部；肩膀和手臂不会参与识别。', en: 'Sit naturally upright and face the screen. Only your clearly visible head is needed; shoulders and arms are not analyzed.' },
+  connected: { zh: '摄像头已连接', en: 'Camera connected' },
+  preparing: { zh: '正在准备', en: 'Preparing' },
+  previewAlt: { zh: '摄像头校准预览', en: 'Camera calibration preview' },
+  connecting: { zh: '正在连接画面…', en: 'Connecting preview…' },
+  requesting: { zh: '正在请求摄像头权限…', en: 'Requesting camera access…' },
+  loadingModel: { zh: '正在加载本地姿态模型…', en: 'Loading local posture model…' },
+  localOnly: { zh: '画面仅在此设备内存中处理', en: 'Frames are processed in this device\'s memory only' },
+  camera: { zh: '摄像头', en: 'Camera' },
+  checks: { zh: '校准检查', en: 'Calibration checks' },
+  naturalPosture: { zh: '保持自然坐姿', en: 'Keep a natural posture' },
+  baselineDescription: { zh: '我们只使用鼻尖、双眼和双耳记录自然坐姿基线。无需拍到肩部、胸部或下半身。', en: 'We use the nose, eyes, and ears to record a natural-posture baseline. Shoulders, torso, and lower body are not needed.' },
+  baselineCapture: { zh: '基线采集', en: 'Baseline capture' },
+  holdStill: { zh: '请让完整头部在画面中稳定保持几秒', en: 'Keep your full head stable in frame for a few seconds' },
+  baselineReady: { zh: '已获得稳定的头部位置基线', en: 'A stable head-position baseline is ready' },
+  cameraUnavailable: { zh: '摄像头暂时不可用', en: 'Camera unavailable' },
+  previewUnavailable: { zh: '视频预览暂时不可用', en: 'Video preview unavailable' },
+  retry: { zh: '重试', en: 'Retry' },
+  complete: { zh: '完成并开始检测', en: 'Finish and start detection' },
+  timerFallback: { zh: '使用普通定时提醒', en: 'Use timer reminders' },
+  disclaimer: { zh: '本应用提供健康行为提醒，不用于疾病诊断或治疗。', en: 'This app provides behavior reminders and does not diagnose or treat disease.' }
 })
 
 interface CalibrationProps {
@@ -156,7 +156,7 @@ export function Calibration({ initialCameraId, language, busy, onComplete, onTim
               <AlertTriangle size={19} />
               <div className="flex flex-1 flex-col gap-1">
                 <strong className="text-xs">{vision.error ? messages.cameraUnavailable : messages.previewUnavailable}</strong>
-                <span className="text-[10px] leading-4">{localizeBackendMessage(vision.error, language) ?? translateNow(vision.previewError ?? '', language)}</span>
+                <span className="text-[10px] leading-4">{vision.error ?? (vision.previewError ? messageText(vision.previewError, language) : null)}</span>
               </div>
               {!vision.error && (
                 <button className="text-[10px] font-bold underline" onClick={vision.retryPreview}>

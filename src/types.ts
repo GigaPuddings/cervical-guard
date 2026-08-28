@@ -7,6 +7,7 @@ export type FrameQuality = 'good' | 'dark' | 'occluded' | 'multi_person' | 'unst
 export type PostureState = 'unknown' | 'sitting' | 'standing'
 export type ReminderKind = 'sedentary' | 'head_down' | 'combined'
 export type ReminderLevel = 'gentle' | 'noticeable' | 'strong'
+export type ReminderSound = 'auto' | 'system' | 'chime' | 'soft' | 'alert' | 'off'
 export type BehaviorEventType = 'away' | 'head_down' | 'break' | 'proactive_break' | 'early_break' | 'proactive_pause' | 'reminder'
 
 export interface VisionObservation {
@@ -48,6 +49,8 @@ export interface AppSettings {
   silentAutostart: boolean
   runInBackground: boolean
   soundEnabled: boolean
+  /** 提示音选项:auto 按提醒级别自动匹配,off 静音。 */
+  reminderSound: ReminderSound
   meetingMode: boolean
   fullscreenNotifications: boolean
   statisticsEnabled: boolean

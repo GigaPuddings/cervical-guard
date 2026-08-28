@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { outdoorActivityAdvice, rankChineseCityResults, weatherCodeLabel } from "./openMeteo";
+import { rankChineseCityResults, weatherCodeLabel, WeatherRequestError, weatherRequestMessage } from "./openMeteo";
 import { cloudCoverLabel, formatWeatherUpdatedAt, humidityLevelLabel, locationSubtitle, precipitationAmountLabel, precipitationProbabilityLabel, uvIndexLabel, uvProtectionLabel, weatherActivityGuidance, weatherHealthAdvice, windLevelLabel } from "./presentation";
 import type { WeatherForecast } from "./types";
 
@@ -22,6 +22,20 @@ describe("WMO weather labels", () => {
     expect(weatherCodeLabel(75)).toBe("有雪");
     expect(weatherCodeLabel(96)).toBe("雷暴");
     expect(weatherCodeLabel(999)).toBe("天气变化中");
+  });
+
+  it("localizes conditions without a phrase-replacement pipeline", () => {
+    expect(weatherCodeLabel(0, "en-US")).toBe("Clear");
+    expect(weatherCodeLabel(96, "en-US")).toBe("Thunderstorm");
+    expect(weatherCodeLabel(999, "en-US")).toBe("Changing weather");
+  });
+});
+
+describe("weather request failures", () => {
+  it("turns stable error codes into language-specific copy", () => {
+    expect(weatherRequestMessage(new WeatherRequestError("timeout"), "zh-CN")).toContain("超时");
+    expect(weatherRequestMessage(new WeatherRequestError("timeout"), "en-US")).toContain("timed out");
+    expect(weatherRequestMessage(new WeatherRequestError("unavailable", 503), "en-US")).toContain("503");
   });
 });
 
@@ -77,17 +91,5 @@ describe("weather presentation", () => {
     expect(guidance.temperaturePosition).toBeGreaterThanOrEqual(4);
     expect(guidance.temperaturePosition).toBeLessThanOrEqual(96);
     expect(weatherActivityGuidance(rainy, "en-US").activityLabel).toBe("Indoor activity recommended");
-  });
-});
-
-describe("outdoor activity advice", () => {
-  it("prioritizes severe conditions and rain", () => {
-    expect(outdoorActivityAdvice(forecast({ weatherCode: 95 }))).toContain("雷暴");
-    expect(outdoorActivityAdvice(forecast({}, 80))).toContain("室内");
-  });
-
-  it("handles heat and normal conditions", () => {
-    expect(outdoorActivityAdvice(forecast({ apparentTemperature: 36 }))).toContain("补水");
-    expect(outdoorActivityAdvice(forecast())).toContain("走动几分钟");
   });
 });

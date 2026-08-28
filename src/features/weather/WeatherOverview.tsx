@@ -1,24 +1,23 @@
 import { CloudSun, RefreshCw } from 'lucide-react'
 import type { Language } from '../../i18n'
-import { defineMessages, localizeMessages, translateNow } from '../../runtimeI18n'
+import { defineMessages, localizeMessages } from '../../runtimeI18n'
 import { weatherCodeLabel } from './openMeteo'
 import { windLevelLabel } from './presentation'
 import { usePrimaryWeather } from './usePrimaryWeather'
 import { WeatherGlyph } from './WeatherGlyph'
 
 const overviewMessages = defineMessages({
-  weather: '天气',
-  updating: '正在更新',
-  unavailable: '暂不可用',
-  reading: '正在读取最近天气',
-  todayWeather: '今日天气',
-  humidity: '湿度'
+  weather: { zh: '天气', en: 'weather' },
+  updating: { zh: '正在更新', en: 'Updating' },
+  unavailable: { zh: '暂不可用', en: 'Unavailable' },
+  reading: { zh: '正在读取最近天气', en: 'Loading recent weather' },
+  todayWeather: { zh: '今日天气', en: 'Today\'s weather' },
+  humidity: { zh: '湿度', en: 'Humidity' }
 })
 
 export function TodayWeatherHeader({ language }: { language: Language }) {
-  const { location, forecast, loading, error } = usePrimaryWeather()
+  const { location, forecast, loading, error } = usePrimaryWeather(language)
   const messages = localizeMessages(overviewMessages, language)
-  const t = (value: string) => translateNow(value, language)
 
   if (!location) return null
 
@@ -30,7 +29,7 @@ export function TodayWeatherHeader({ language }: { language: Language }) {
           <h3 className="text-[12px] font-bold">
             {location.name} · {messages.weather} · {loading ? messages.updating : messages.unavailable}
           </h3>
-          <p className="mt-0.5 truncate text-[9px] text-muted">{error ? t(error) : messages.reading}</p>
+          <p className="mt-0.5 truncate text-[9px] text-muted">{error ?? messages.reading}</p>
         </div>
       </div>
     )
@@ -44,10 +43,10 @@ export function TodayWeatherHeader({ language }: { language: Language }) {
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-baseline gap-3">
           <strong className="shrink-0 text-[36px] leading-none tracking-[-.04em]">{Math.round(forecast.current.temperature)}°</strong>
-          <b className="truncate text-[15px]">{t(weatherCodeLabel(forecast.current.weatherCode))}</b>
+          <b className="truncate text-[15px]">{weatherCodeLabel(forecast.current.weatherCode, language)}</b>
         </span>
         <span className="mt-3 block truncate text-[12px] text-muted">
-          {messages.humidity} {Math.round(forecast.current.humidity)}% · {t(windLevelLabel(forecast.current.windSpeed))} {Math.round(forecast.current.windSpeed)} km/h
+          {messages.humidity} {Math.round(forecast.current.humidity)}% · {windLevelLabel(forecast.current.windSpeed, language)} {Math.round(forecast.current.windSpeed)} km/h
         </span>
       </span>
     </div>

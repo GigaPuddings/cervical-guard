@@ -182,13 +182,13 @@ export function useAppUpdater(language: Language): AppUpdater {
 
   useEffect(() => {
     if (!isTauri()) return
+    // 托盘文案语言由后端统一读取设置,前端只同步更新状态。
     void invoke('set_update_tray_status', {
       stage,
       version: version || null,
-      progress,
-      language
+      progress
     }).catch(() => undefined)
-  }, [language, progress, stage, version])
+  }, [progress, stage, version])
 
   useEffect(
     () => () => {

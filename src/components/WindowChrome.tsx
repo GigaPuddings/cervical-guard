@@ -10,13 +10,13 @@ import { defineMessages, localizeMessages } from '../runtimeI18n'
 import { useAppStore } from '../store'
 
 const chromeMessages = defineMessages({
-  title: '健康提醒 · 姿态与久坐',
-  lightTheme: '切换到浅色模式',
-  darkTheme: '切换到深色模式',
-  minimize: '最小化',
-  restore: '还原',
-  maximize: '最大化',
-  close: '关闭'
+  title: { zh: '健康提醒 · 姿态与久坐', en: 'Health Reminder · Posture & Sitting' },
+  lightTheme: { zh: '切换到浅色模式', en: 'Switch to light mode' },
+  darkTheme: { zh: '切换到深色模式', en: 'Switch to dark mode' },
+  minimize: { zh: '最小化', en: 'Minimize' },
+  restore: { zh: '还原', en: 'Restore' },
+  maximize: { zh: '最大化', en: 'Maximize' },
+  close: { zh: '关闭', en: 'Close' }
 })
 
 export function WindowChrome() {

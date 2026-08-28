@@ -10,19 +10,19 @@ import { useAppStore } from './store'
 import type { AppSettings, AppSnapshot, CalibrationResult, VisionObservation } from './types'
 import { downloadText } from './utils'
 import { useVisionMonitor } from './vision/useVisionMonitor'
-import { languageOf, localizeBackendMessage, type Language } from './i18n'
+import { languageOf, type Language } from './i18n'
 import { defineMessages, localizeMessages } from './runtimeI18n'
 import { UpdateDialog, useAppUpdater } from './features/updates/UpdatePanel'
 
 const appMessages = defineMessages({
-  operationUnavailable: '操作暂时无法完成',
-  title: '健康提醒 · 姿态与久坐',
-  cameraFailure: '摄像头或姿态模型无法启动',
-  unavailableMark: '健',
-  unavailableTitle: '本地状态暂不可用',
-  unavailableHint: '请关闭后重新打开应用',
-  exportFilename: '健康提醒统计',
-  confirmDelete: '确认删除全部本地统计数据？此操作无法撤销。设置和校准信息会保留。'
+  operationUnavailable: { zh: '操作暂时无法完成', en: 'The operation is temporarily unavailable' },
+  title: { zh: '健康提醒 · 姿态与久坐', en: 'Health Reminder · Posture & Sitting' },
+  cameraFailure: { zh: '摄像头或姿态模型无法启动', en: 'The camera or posture model could not start' },
+  unavailableMark: { zh: '健', en: 'H' },
+  unavailableTitle: { zh: '本地状态暂不可用', en: 'Local state is unavailable' },
+  unavailableHint: { zh: '请关闭后重新打开应用', en: 'Close and reopen the app' },
+  exportFilename: { zh: '健康提醒统计', en: 'health-reminder-statistics' },
+  confirmDelete: { zh: '确认删除全部本地统计数据？此操作无法撤销。设置和校准信息会保留。', en: 'Delete all local statistics? This cannot be undone. Settings and calibration data will be kept.' }
 })
 
 function errorMessage(reason: unknown, fallback: string): string {
@@ -156,6 +156,7 @@ export function App() {
     cameraId: snapshot?.settings.cameraId ?? 'default',
     baseline: snapshot?.calibrationBaseline ?? null,
     headDownEnabled: snapshot?.settings.islandHeadDownEnabled ?? false,
+    language,
     onObservation
   })
 
@@ -196,7 +197,7 @@ export function App() {
         <div className="grid size-13 place-items-center rounded-[17px_17px_17px_6px] bg-accent text-[19px] font-extrabold text-inverse shadow-panel">{messages.unavailableMark}</div>
         <strong>{messages.unavailableTitle}</strong>
         <span>{messages.unavailableHint}</span>
-        {error && <small className="text-danger">{localizeBackendMessage(error, language)}</small>}
+        {error && <small className="text-danger">{error}</small>}
       </div>
     )
   }
@@ -296,7 +297,7 @@ export function App() {
   }
 
   if (showIntro || snapshot.lifecycle === 'unavailable') {
-    return <Onboarding busy={busy} language={language} cameraError={localizeBackendMessage(cameraSetupError, language)} onLanguage={language => void changeLanguage(language)} onCamera={() => void startCameraOnboarding()} onTimer={() => void startTimerOnboarding('prompt')} />
+    return <Onboarding busy={busy} language={language} cameraError={cameraSetupError} onLanguage={language => void changeLanguage(language)} onCamera={() => void startCameraOnboarding()} onTimer={() => void startTimerOnboarding('prompt')} />
   }
 
   if (snapshot.lifecycle === 'calibrating') {
@@ -320,7 +321,7 @@ export function App() {
         onLanguage={nextLanguage => void changeLanguage(nextLanguage)}
         updater={updater}
         landmarks={vision.landmarks}
-        error={localizeBackendMessage(snapshot.lifecycle === 'paused' ? null : (cameraFailure ?? error), language)}
+        error={snapshot.lifecycle === 'paused' ? null : (cameraFailure ?? error)}
         onPage={setPage}
         onBehaviorHistoryDate={loadBehaviorHistoryDate}
         onPause={minutes => {

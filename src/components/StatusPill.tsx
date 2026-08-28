@@ -4,14 +4,13 @@ import { defineMessages, localizeMessages } from "../runtimeI18n";
 import type { AppSnapshot } from "../types";
 
 const statusMessages = defineMessages({
-  unavailable: "尚未启用",
-  initializing: "正在启动",
-  calibrating: "正在校准",
-  monitoring: "检测进行中",
-  paused: "检测已暂停",
-  break: "休息中",
-  degraded: "定时提醒模式",
-});
+  unavailable: { zh: "尚未启用", en: 'Not enabled' },
+  initializing: { zh: "正在启动", en: 'Starting' },
+  calibrating: { zh: "正在校准", en: 'Calibrating' },
+  monitoring: { zh: "检测进行中", en: 'Monitoring' },
+  paused: { zh: "检测已暂停", en: 'Monitoring paused' },
+  break: { zh: "休息中", en: 'On break' },
+  degraded: { zh: "定时提醒模式", en: 'Timer reminder mode' },});
 
 export function StatusPill({ snapshot }: { snapshot: AppSnapshot }) {
   const labels = localizeMessages(statusMessages, languageOf(snapshot.settings.language));

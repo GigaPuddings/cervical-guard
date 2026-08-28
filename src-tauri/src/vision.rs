@@ -35,6 +35,7 @@ use ort::value::Tensor;
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
+use crate::messages::{current_language, msg, Language};
 use crate::model::{
     FrameQuality, HeadObservation, PersonObservation, PostureObservation, PostureState,
     VisionMetrics, VisionObservation, SCHEMA_VERSION,
@@ -252,37 +253,39 @@ fn diagnostic_code(detail: &str) -> Option<String> {
     None
 }
 
-fn camera_failure_message(kind: CameraFailureKind, detail: &str) -> String {
-    let diagnostic = diagnostic_code(detail)
-        .map(|code| format!("（错误码 {code}）"))
-        .unwrap_or_default();
-    match kind {
-        CameraFailureKind::PermissionDenied => {
-            "摄像头权限已关闭。请在 Windows“设置 > 隐私和安全性 > 相机”中允许桌面应用访问摄像头。"
-                .to_string()
-        }
-        CameraFailureKind::NoDevice => {
-            "未检测到可用摄像头。请确认设备已连接且未在设备管理器中禁用。".to_string()
-        }
-        CameraFailureKind::Busy => {
-            "摄像头正被其他应用独占。请关闭视频会议、直播或录屏软件后重试。".to_string()
-        }
-        CameraFailureKind::Unsupported => {
-            format!("摄像头不支持当前视频格式。请切换摄像头或更新设备驱动后重试。{diagnostic}")
-        }
-        CameraFailureKind::Driver => {
-            format!("摄像头驱动或硬件资源异常。请重新连接设备或更新驱动后重试。{diagnostic}")
-        }
-        CameraFailureKind::Read => {
-            format!("摄像头连接已中断，无法继续读取画面。请检查设备连接后重试。{diagnostic}")
-        }
-        CameraFailureKind::Unknown => {
-            format!("摄像头启动失败。请检查设备连接、驱动和其他应用后重试。{diagnostic}")
-        }
-    }
+/// 从原始错误文本中提取(失败类别, 可选诊断码)。原始文本只用于分类与取码，
+/// 用户可读文案统一由 messages 消息表按界面语言生成。
+fn camera_failure_parts(
+    detail: &str,
+    fallback: CameraFailureKind,
+) -> (CameraFailureKind, Option<String>) {
+    (
+        classify_camera_failure(detail, fallback),
+        diagnostic_code(detail),
+    )
 }
 
-fn camera_message(error: &nokhwa::NokhwaError) -> String {
+fn camera_failure_message(
+    kind: CameraFailureKind,
+    code: Option<&str>,
+    language: Language,
+) -> String {
+    let diagnostic = code
+        .map(|code| msg::DIAGNOSTIC_CODE.format(language, &[("code", code)]))
+        .unwrap_or_default();
+    let template = match kind {
+        CameraFailureKind::PermissionDenied => &msg::CAMERA_PERMISSION_DENIED_BY_USER,
+        CameraFailureKind::NoDevice => &msg::CAMERA_NO_DEVICE,
+        CameraFailureKind::Busy => &msg::CAMERA_BUSY,
+        CameraFailureKind::Unsupported => &msg::CAMERA_UNSUPPORTED_FORMAT,
+        CameraFailureKind::Driver => &msg::CAMERA_DRIVER_FAILURE,
+        CameraFailureKind::Read => &msg::CAMERA_READ_INTERRUPTED,
+        CameraFailureKind::Unknown => &msg::CAMERA_START_FAILED,
+    };
+    template.format(language, &[("code", diagnostic.as_str())])
+}
+
+pub(crate) fn camera_message(error: &nokhwa::NokhwaError, language: Language) -> String {
     use nokhwa::NokhwaError;
     let (detail, fallback) = match error {
         NokhwaError::OpenDeviceError(_, detail) | NokhwaError::OpenStreamError(detail) => {
@@ -291,13 +294,17 @@ fn camera_message(error: &nokhwa::NokhwaError) -> String {
         NokhwaError::ReadFrameError(detail) => (detail.as_str(), CameraFailureKind::Read),
         NokhwaError::ProcessFrameError { error, .. } => (error.as_str(), CameraFailureKind::Read),
         NokhwaError::GeneralError(detail) => (detail.as_str(), CameraFailureKind::Unknown),
-        _ => return camera_failure_message(CameraFailureKind::Unknown, &error.to_string()),
+        _ => {
+            let (kind, code) = camera_failure_parts(&error.to_string(), CameraFailureKind::Unknown);
+            return camera_failure_message(kind, code.as_deref(), language);
+        }
     };
-    camera_failure_message(classify_camera_failure(detail, fallback), detail)
+    let (kind, code) = camera_failure_parts(detail, fallback);
+    camera_failure_message(kind, code.as_deref(), language)
 }
 
 #[cfg(target_os = "windows")]
-fn ensure_camera_permission() -> Result<(), String> {
+fn ensure_camera_permission(language: Language) -> Result<(), String> {
     use windows::core::HSTRING;
     use windows::Security::Authorization::AppCapabilityAccess::{
         AppCapability, AppCapabilityAccessStatus,
@@ -314,16 +321,20 @@ fn ensure_camera_permission() -> Result<(), String> {
     }
 
     match status {
-        Ok(value) if value == AppCapabilityAccessStatus::DeniedByUser => Err(
-            "摄像头权限已关闭。请在 Windows“设置 > 隐私和安全性 > 相机”中允许桌面应用访问摄像头。"
-                .to_string(),
-        ),
-        Ok(value) if value == AppCapabilityAccessStatus::DeniedBySystem => Err(
-            "摄像头访问已被 Windows 或组织策略禁用。请联系系统管理员或检查摄像头隐私设置。"
-                .to_string(),
-        ),
+        Ok(value) if value == AppCapabilityAccessStatus::DeniedByUser => {
+            Err(msg::CAMERA_PERMISSION_DENIED_BY_USER
+                .get(language)
+                .to_string())
+        }
+        Ok(value) if value == AppCapabilityAccessStatus::DeniedBySystem => {
+            Err(msg::CAMERA_PERMISSION_DENIED_BY_SYSTEM
+                .get(language)
+                .to_string())
+        }
         Ok(value) if value == AppCapabilityAccessStatus::NotDeclaredByApp => {
-            Err("当前应用未声明摄像头能力。请重新安装完整版本后重试。".to_string())
+            Err(msg::CAMERA_CAPABILITY_NOT_DECLARED
+                .get(language)
+                .to_string())
         }
         Ok(_) => Ok(()),
         // Windows API 查询本身失败时交给 Media Foundation 实际打开结果分类；
@@ -333,7 +344,7 @@ fn ensure_camera_permission() -> Result<(), String> {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn ensure_camera_permission() -> Result<(), String> {
+fn ensure_camera_permission(_language: Language) -> Result<(), String> {
     Ok(())
 }
 
@@ -383,11 +394,14 @@ impl VisionService {
         }
     }
 
-    fn model_path(&self, app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-        let dir = app
-            .path()
-            .resource_dir()
-            .map_err(|error| format!("无法定位应用资源目录:{error}"))?;
+    fn model_path(
+        &self,
+        app: &tauri::AppHandle,
+        language: Language,
+    ) -> Result<std::path::PathBuf, String> {
+        let dir = app.path().resource_dir().map_err(|error| {
+            msg::MODEL_RESOURCE_DIR.format(language, &[("error", &error.to_string())])
+        })?;
         let candidates = [
             dir.join("resources").join("models").join(MODEL_NAME),
             dir.join("models").join(MODEL_NAME),
@@ -402,33 +416,43 @@ impl VisionService {
             .map(|path| path.display().to_string())
             .collect::<Vec<_>>()
             .join("、");
-        Err(format!("本地姿态模型缺失,已检查:{checked}"))
+        Err(msg::MODEL_MISSING.format(language, &[("paths", &checked)]))
     }
 
-    fn ensure_session(&self, app: &tauri::AppHandle) -> Result<(), String> {
+    fn ensure_session(&self, app: &tauri::AppHandle, language: Language) -> Result<(), String> {
         let mut guard = self
             .model
             .lock()
-            .map_err(|_| "姿态模型会话锁已损坏".to_string())?;
+            .map_err(|_| msg::MODEL_SESSION_LOCK.get(language).to_string())?;
         if guard.is_some() {
             return Ok(());
         }
-        let path = self.model_path(app)?;
+        let path = self.model_path(app, language)?;
         let session = Session::builder()
-            .map_err(|error| format!("创建推理引擎失败:{error}"))?
+            .map_err(|error| {
+                msg::MODEL_ENGINE_CREATE.format(language, &[("error", &error.to_string())])
+            })?
             .with_optimization_level(GraphOptimizationLevel::Level3)
-            .map_err(|error| format!("配置推理引擎失败:{error}"))?
+            .map_err(|error| {
+                msg::MODEL_ENGINE_CONFIG.format(language, &[("error", &error.to_string())])
+            })?
             .commit_from_file(path)
-            .map_err(|error| format!("加载本地姿态模型失败:{error}"))?;
+            .map_err(|error| {
+                msg::MODEL_ENGINE_LOAD.format(language, &[("error", &error.to_string())])
+            })?;
         *guard = Some(session);
         Ok(())
     }
 
-    pub fn list_cameras(&self) -> Result<Vec<CameraDevice>, String> {
-        ensure_camera_permission()?;
-        let infos = query(ApiBackend::Auto).map_err(|error| camera_message(&error))?;
+    pub fn list_cameras(&self, language: Language) -> Result<Vec<CameraDevice>, String> {
+        ensure_camera_permission(language)?;
+        let infos = query(ApiBackend::Auto).map_err(|error| camera_message(&error, language))?;
         if infos.is_empty() {
-            return Err(camera_failure_message(CameraFailureKind::NoDevice, ""));
+            return Err(camera_failure_message(
+                CameraFailureKind::NoDevice,
+                None,
+                language,
+            ));
         }
         Ok(infos
             .iter()
@@ -440,7 +464,8 @@ impl VisionService {
                 };
                 let name = info.human_name();
                 let label = if name.trim().is_empty() {
-                    format!("摄像头 {}", index + 1)
+                    msg::CAMERA_DEVICE_LABEL
+                        .format(language, &[("index", &(index + 1).to_string())])
                 } else {
                     name
                 };
@@ -457,23 +482,25 @@ impl VisionService {
         baseline: Option<f64>,
         head_down_enabled: bool,
     ) -> Result<(), String> {
+        // 文案语言在管线启动时刻确定；线程内再按需重新读取，跟随语言切换。
+        let language = current_language(app);
         self.stop_pipeline();
         if let Ok(mut guard) = self.latest_capture.lock() {
             *guard = None;
         }
         // 权限可能在设备枚举后被用户关闭，因此启动管线前再检查一次。
-        ensure_camera_permission()?;
-        self.ensure_session(app)?;
+        ensure_camera_permission(language)?;
+        self.ensure_session(app, language)?;
 
         let index = camera_id.parse::<u32>().unwrap_or(0);
         let requested = RequestedFormat::new::<RgbFormat>(RequestedFormatType::Closest(
             CameraFormat::new(Resolution::new(640, 480), FrameFormat::MJPEG, CAMERA_FPS),
         ));
         let mut camera = Camera::new(CameraIndex::Index(index), requested)
-            .map_err(|error| camera_message(&error))?;
+            .map_err(|error| camera_message(&error, language))?;
         camera
             .open_stream()
-            .map_err(|error| camera_message(&error))?;
+            .map_err(|error| camera_message(&error, language))?;
 
         let baseline = baseline.unwrap_or(-0.9);
         let stop_flag = Arc::new(AtomicBool::new(false));
@@ -509,7 +536,7 @@ impl VisionService {
         let mut guard = self
             .pipeline
             .lock()
-            .map_err(|_| "管线锁已损坏".to_string())?;
+            .map_err(|_| msg::ERR_PIPELINE_LOCK.get(language).to_string())?;
         *guard = Some(PipelineHandle {
             stop_flag,
             capture_thread: Some(capture_thread),
@@ -573,7 +600,10 @@ fn run_capture_loop(
             Err(error) => {
                 consecutive_failures += 1;
                 if consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
-                    let _ = app.emit("vision://error", camera_message(&error));
+                    let _ = app.emit(
+                        "vision://error",
+                        camera_message(&error, current_language(&app)),
+                    );
                     break;
                 }
                 thread::sleep(Duration::from_millis(50));
@@ -597,7 +627,10 @@ fn run_capture_loop(
                 Err(error) => {
                     consecutive_failures += 1;
                     if consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
-                        let _ = app.emit("vision://error", camera_message(&error));
+                        let _ = app.emit(
+                            "vision://error",
+                            camera_message(&error, current_language(&app)),
+                        );
                         break;
                     }
                     continue;
@@ -683,7 +716,7 @@ fn run_inference_loop(
         let raw_pose = match run_pose(&model, &rgb) {
             Ok(p) => p,
             Err(error) => {
-                let _ = app.emit("vision://error", error);
+                let _ = app.emit("vision://error", error.message(current_language(&app)));
                 break;
             }
         };
@@ -770,6 +803,28 @@ fn smooth_pose(raw: &PoseResult, history: &Option<PoseResult>, alpha: f64) -> Po
     smoothed
 }
 
+/// 推理线程内部错误分类。错误在 `vision://error` 发出时才按界面语言格式化，
+/// 分类与文案解耦，消息表是唯一文案来源。
+pub(crate) enum PoseError {
+    SessionLock,
+    SessionMissing,
+    InputBuild(String),
+    Infer(String),
+    OutputRead(String),
+}
+
+impl PoseError {
+    fn message(&self, language: Language) -> String {
+        match self {
+            Self::SessionLock => msg::MODEL_SESSION_LOCK.get(language).to_string(),
+            Self::SessionMissing => msg::MODEL_NOT_LOADED.get(language).to_string(),
+            Self::InputBuild(error) => msg::MODEL_INPUT_BUILD.format(language, &[("error", error)]),
+            Self::Infer(error) => msg::MODEL_INFER_FAILED.format(language, &[("error", error)]),
+            Self::OutputRead(error) => msg::MODEL_OUTPUT_READ.format(language, &[("error", error)]),
+        }
+    }
+}
+
 /// 运行 MoveNet SinglePose Lightning 推理:预处理 → ONNX 推理 → 关键点解码。
 ///
 /// MoveNet 输出单个张量 [1, 1, 17, 3],每个关键点为 (y, x, score)。
@@ -777,29 +832,25 @@ fn smooth_pose(raw: &PoseResult, history: &Option<PoseResult>, alpha: f64) -> Po
 fn run_pose(
     model: &Mutex<Option<Session>>,
     rgb: &ImageBuffer<Rgb<u8>, Vec<u8>>,
-) -> Result<PoseResult, String> {
-    let mut guard = model
-        .lock()
-        .map_err(|_| "姿态模型会话锁已损坏".to_string())?;
-    let session = guard
-        .as_mut()
-        .ok_or_else(|| "姿态模型尚未加载".to_string())?;
+) -> Result<PoseResult, PoseError> {
+    let mut guard = model.lock().map_err(|_| PoseError::SessionLock)?;
+    let session = guard.as_mut().ok_or(PoseError::SessionMissing)?;
 
     // ── 预处理:letterbox → NHWC int32 [0,255] ──
     let (pixels, lb) = letterbox_rgb(rgb, INPUT_SIZE);
     let shape = vec![1i64, i64::from(INPUT_SIZE), i64::from(INPUT_SIZE), 3];
-    let tensor =
-        Tensor::from_array((shape, pixels)).map_err(|error| format!("构造推理输入失败:{error}"))?;
+    let tensor = Tensor::from_array((shape, pixels))
+        .map_err(|error| PoseError::InputBuild(error.to_string()))?;
 
     // ── ONNX 推理 ──
     let outputs = session
         .run(ort::inputs![INPUT_NAME => tensor])
-        .map_err(|error| format!("姿态推理失败:{error}"))?;
+        .map_err(|error| PoseError::Infer(error.to_string()))?;
 
     // ── 提取输出张量 [1, 1, 17, 3] ──
     let (_, data) = outputs[0]
         .try_extract_tensor::<f32>()
-        .map_err(|error| format!("读取推理输出失败:{error}"))?;
+        .map_err(|error| PoseError::OutputRead(error.to_string()))?;
     let flat = data.to_vec();
 
     // ── 解码 17 个关键点 ──

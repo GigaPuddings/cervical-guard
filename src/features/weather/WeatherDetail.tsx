@@ -2,7 +2,7 @@ import { Activity, Cloud, CloudRain, Droplets, Leaf, MapPin, RefreshCw, SunMediu
 import { EmptyState } from '../../components/EmptyState'
 import { WeatherCard } from '../../components/WeatherCard'
 import type { Language } from '../../i18n'
-import { defineMessages, localizeMessages, translateNow } from '../../runtimeI18n'
+import { defineMessages, localizeMessages } from '../../runtimeI18n'
 import { cloudCoverLabel, formatWeatherUpdatedAt, humidityLevelLabel, locationSubtitle, precipitationAmountLabel, precipitationProbabilityLabel, uvIndexLabel, uvProtectionLabel, weatherActivityGuidance, windLevelLabel } from './presentation'
 import { weatherCodeLabel } from './openMeteo'
 import type { WeatherForecast, WeatherLocation } from './types'
@@ -10,44 +10,43 @@ import { useCityHeroImage } from './cityHero'
 import { WeatherGlyph } from './WeatherGlyph'
 
 const detailMessages = defineMessages({
-  addFirstCity: '添加第一个城市',
-  addFirstDescription: '天气详情、今日概览和休息建议会共用你选择的首选地点。',
-  loading: '正在获取天气…',
-  loadFailed: '天气加载失败',
-  retry: '重试',
-  feelsLike: '体感',
-  humidity: '湿度',
-  humidityHigh: '偏高',
-  uv: '紫外线',
-  wind: '风速',
-  precipitationToday: '降水量',
-  cloudCover: '云量',
-  precipitationProbability: '降水概率',
-  advice: '今日运动与护颈建议',
-  todayRange: '今日温度范围',
-  feelsWarm: '体感偏热',
-  clothing: '建议穿着轻薄透气衣物',
-  outside: '适合户外活动',
-  dataUpdated: '数据更新',
-  today: '今天',
-  rain: '降水',
-  source: '数据来源：Open-Meteo',
-  hydrate: '注意补水',
-  stretch: '运动后拉伸放松',
-  sunscreen: '注意防晒',
-  heroAlt: '上海浦东城市天际线',
-  sunscreenAdvice: '建议防晒',
-  little: '较少',
-  partlyCloudy: '晴间多云',
-  low: '较低',
-  uvAdvice: '紫外线较强时请注意防晒，并适当补水与短暂放松肩颈。',
-  dailyNeckAdvice: '温差较大时注意颈肩保暖；推荐轻中等强度活动，并搭配肩颈拉伸来缓解久坐紧张感。',
-  aiReference: 'AI 健康建议仅供日常参考'
+  addFirstCity: { zh: '添加第一个城市', en: 'Add your first city' },
+  addFirstDescription: { zh: '天气详情、今日概览和休息建议会共用你选择的首选地点。', en: 'Weather details, Today, and break advice share your preferred place.' },
+  loading: { zh: '正在获取天气…', en: 'Loading weather…' },
+  loadFailed: { zh: '天气加载失败', en: 'Weather failed to load' },
+  retry: { zh: '重试', en: 'Retry' },
+  feelsLike: { zh: '体感', en: 'Feels like' },
+  humidity: { zh: '湿度', en: 'Humidity' },
+  humidityHigh: { zh: '偏高', en: 'High' },
+  uv: { zh: '紫外线', en: 'UV index' },
+  wind: { zh: '风速', en: 'Wind speed' },
+  precipitationToday: { zh: '降水量', en: 'Precipitation' },
+  cloudCover: { zh: '云量', en: 'Cloud cover' },
+  precipitationProbability: { zh: '降水概率', en: 'Rain chance' },
+  advice: { zh: '今日运动与护颈建议', en: 'Today’s movement and neck-care advice' },
+  todayRange: { zh: '今日温度范围', en: 'Today’s temperature range' },
+  feelsWarm: { zh: '体感偏热', en: 'Feels warm' },
+  clothing: { zh: '建议穿着轻薄透气衣物', en: 'Wear lightweight, breathable clothing' },
+  outside: { zh: '适合户外活动', en: 'Suitable for outdoor activity' },
+  dataUpdated: { zh: '数据更新', en: 'Data updated' },
+  today: { zh: '今天', en: 'Today' },
+  rain: { zh: '降水', en: 'Rain' },
+  source: { zh: '数据来源：Open-Meteo', en: 'Source: Open-Meteo' },
+  hydrate: { zh: '注意补水', en: 'Stay hydrated' },
+  stretch: { zh: '运动后拉伸放松', en: 'Stretch after exercise' },
+  sunscreen: { zh: '注意防晒', en: 'Use sun protection' },
+  heroAlt: { zh: '上海浦东城市天际线', en: 'Shanghai Pudong skyline' },
+  sunscreenAdvice: { zh: '建议防晒', en: 'Sun protection recommended' },
+  little: { zh: '较少', en: 'Low' },
+  partlyCloudy: { zh: '晴间多云', en: 'Mostly clear' },
+  low: { zh: '较低', en: 'Lower' },
+  uvAdvice: { zh: '紫外线较强时请注意防晒，并适当补水与短暂放松肩颈。', en: 'Use sun protection in strong UV, hydrate, and briefly relax your neck and shoulders.' },
+  dailyNeckAdvice: { zh: '温差较大时注意颈肩保暖；推荐轻中等强度活动，并搭配肩颈拉伸来缓解久坐紧张感。', en: 'Keep your neck and shoulders warm as temperatures change. Pair light-to-moderate activity with neck and shoulder stretches to ease sitting tension.' },
+  aiReference: { zh: 'AI 健康建议仅供日常参考', en: 'AI health suggestions are for daily reference only' }
 })
 
 export function WeatherDetail({ language, location, forecast, error, loading, onRefresh }: { language: Language; location: WeatherLocation | undefined; forecast: WeatherForecast | undefined; error: string | undefined; loading: boolean; onRefresh: () => void; onRemove: () => void }) {
   const messages = localizeMessages(detailMessages, language)
-  const t = (value: string) => translateNow(value, language)
   if (!location)
     return (
       <article className="rounded-[16px] border border-dashed border-edge bg-panel-muted">
@@ -66,7 +65,7 @@ export function WeatherDetail({ language, location, forecast, error, loading, on
       <article className="grid min-h-0 place-content-center justify-items-center rounded-[16px] border border-edge bg-panel px-6 text-center shadow-panel">
         <Cloud size={28} className="text-muted" />
         <strong className="mt-3 text-[13px]">{messages.loadFailed}</strong>
-        <span className="mt-2 text-[10px] text-danger">{t(error)}</span>
+        <span className="mt-2 text-[10px] text-danger">{error}</span>
         <button className="mt-4 rounded-[10px] bg-accent px-4 py-2 text-[10px] font-bold text-inverse" onClick={onRefresh}>
           {messages.retry}
         </button>
@@ -78,7 +77,6 @@ export function WeatherDetail({ language, location, forecast, error, loading, on
 
 function WeatherDetailContent({ language, location, forecast, onRefresh }: { language: Language; location: WeatherLocation; forecast: WeatherForecast; onRefresh: () => void }) {
   const messages = localizeMessages(detailMessages, language)
-  const t = (value: string) => translateNow(value, language)
   const today = forecast.daily[0]
   const rangeMin = Math.round(today?.temperatureMin ?? forecast.current.temperature)
   const rangeMax = Math.round(today?.temperatureMax ?? forecast.current.temperature)
@@ -116,21 +114,21 @@ function WeatherDetailContent({ language, location, forecast, onRefresh }: { lan
           <div className="weather-hero-copy absolute inset-0 flex flex-col justify-between p-7 drop-shadow-[0_2px_8px_rgba(0,0,0,.35)]">
             <span className="weather-hero-condition flex items-center gap-2.5 text-[14px] font-bold">
               <WeatherGlyph code={forecast.current.weatherCode} size={31} />
-              {t(weatherCodeLabel(forecast.current.weatherCode))}
+              {weatherCodeLabel(forecast.current.weatherCode, language)}
             </span>
             <div>
               <strong className="weather-hero-temperature block text-[64px] font-black leading-none tracking-[-.055em]">{Math.round(forecast.current.temperature)}°</strong>
               <span className="weather-hero-feels mt-3 block text-[14px]">
                 {messages.feelsLike} {Math.round(forecast.current.apparentTemperature)}°
               </span>
-              <span className="weather-hero-activity mt-3 inline-flex rounded-full bg-panel/75 px-3 py-1 text-[10px] font-bold text-accent">{t(guidance.activityLabel)}</span>
+              <span className="weather-hero-activity mt-3 inline-flex rounded-full bg-panel/75 px-3 py-1 text-[10px] font-bold text-accent">{guidance.activityLabel}</span>
             </div>
           </div>
         </section>
         <div className="grid min-w-0 grid-cols-3 grid-rows-2 gap-2.5">
           <WeatherCard icon={Droplets} label={messages.humidity} value={`${Math.round(forecast.current.humidity)}%`} note={humidityLevelLabel(forecast.current.humidity, language)} />
-          <WeatherCard icon={SunMedium} label={messages.uv} value={`${t(uvIndexLabel(forecast.current.uvIndex))} · ${forecast.current.uvIndex.toFixed(1)}`} note={t(uvProtectionLabel(forecast.current.uvIndex))} />
-          <WeatherCard icon={Wind} label={messages.wind} value={`${Math.round(forecast.current.windSpeed)} km/h`} note={t(windLevelLabel(forecast.current.windSpeed))} />
+          <WeatherCard icon={SunMedium} label={messages.uv} value={`${uvIndexLabel(forecast.current.uvIndex, language)} · ${forecast.current.uvIndex.toFixed(1)}`} note={uvProtectionLabel(forecast.current.uvIndex, language)} />
+          <WeatherCard icon={Wind} label={messages.wind} value={`${Math.round(forecast.current.windSpeed)} km/h`} note={windLevelLabel(forecast.current.windSpeed, language)} />
           <WeatherCard icon={CloudRain} label={messages.precipitationToday} value={`${(today?.precipitationSum ?? 0).toFixed(1)} mm`} note={precipitationAmountLabel(today?.precipitationSum ?? 0, language)} />
           <WeatherCard icon={Cloud} label={messages.cloudCover} value={`${Math.round(forecast.current.cloudCover)}%`} note={cloudCoverLabel(forecast.current.cloudCover, language)} />
           <WeatherCard icon={Umbrella} label={messages.precipitationProbability} value={`${Math.round(today?.precipitationProbability ?? 0)}%`} note={precipitationProbabilityLabel(today?.precipitationProbability ?? 0, language)} />
@@ -146,14 +144,14 @@ function WeatherDetailContent({ language, location, forecast, onRefresh }: { lan
             <div className="min-w-0">
               <strong className="weather-advice-title block text-[15px]">{messages.advice}</strong>
               <p className="weather-advice-copy mt-2 line-clamp-3 text-[11px] leading-5 text-muted">
-                {t(guidance.summary)} {t(guidance.detail)}
+                {guidance.summary} {guidance.detail}
               </p>
             </div>
           </div>
           <div className="weather-advice-tags flex flex-wrap items-center gap-2 text-[9px] text-accent">
             {guidance.tags.map(tag => (
               <span className="rounded-full bg-accent-soft px-3 py-1" key={tag}>
-                {t(tag)}
+                {tag}
               </span>
             ))}
           </div>
@@ -178,8 +176,8 @@ function WeatherDetailContent({ language, location, forecast, onRefresh }: { lan
             <span>{rangeMin}°</span>
             <span>{rangeMax}°</span>
           </div>
-          <strong className="weather-range-feeling mt-2 block text-[10px] text-warning">{t(guidance.thermalLabel)}</strong>
-          <small className="weather-range-clothing mt-0.5 block text-[9px] text-muted">{t(guidance.clothing)}</small>
+          <strong className="weather-range-feeling mt-2 block text-[10px] text-warning">{guidance.thermalLabel}</strong>
+          <small className="weather-range-clothing mt-0.5 block text-[9px] text-muted">{guidance.clothing}</small>
         </section>
       </div>
 
@@ -205,7 +203,7 @@ function WeatherDetailContent({ language, location, forecast, onRefresh }: { lan
               <strong className="weather-forecast-temperature text-[12px]">
                 {Math.round(day.temperatureMin)}° / {Math.round(day.temperatureMax)}°
               </strong>
-              <span className="weather-forecast-condition text-[10px] text-muted">{t(weatherCodeLabel(day.weatherCode))}</span>
+              <span className="weather-forecast-condition text-[10px] text-muted">{weatherCodeLabel(day.weatherCode, language)}</span>
               <small className="weather-forecast-meta text-[9px] text-muted">
                 {messages.rain} {day.precipitationProbability.toFixed(0)}% · UV {day.uvIndexMax.toFixed(1)}
               </small>

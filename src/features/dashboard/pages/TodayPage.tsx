@@ -6,7 +6,7 @@ import { PoseCanvas } from '../../../components/PoseCanvas'
 import { SectionHeader } from '../../../components/SectionHeader'
 import { SessionProgressRing } from '../../../components/SessionProgressRing'
 import { languageOf } from '../../../i18n'
-import { defineMessages, localizeMessages, translateNow } from '../../../runtimeI18n'
+import { defineMessages, localizeMessages, messageText } from '../../../runtimeI18n'
 import type { AppSnapshot } from '../../../types'
 import { cn, compactDuration, percent } from '../../../utils'
 import { TodayWeatherHeader } from '../../weather/WeatherOverview'
@@ -15,73 +15,73 @@ import { resolvePosturePresentationState, type PosturePresentationState } from '
 import { buildHealthAdvice, buildTodayMetricInsights, formatReminderSchedule, formatRestCadence, reminderFollowupCount, type InsightIcon, type InsightTone } from '../todayInsights'
 
 const todayMessages = defineMessages({
-  today: '今天',
-  title: '照顾好当下的姿势',
-  subtitle: '每一次挺直，都是对未来的温柔。',
-  startBreak: '开始休息',
-  endBreak: '结束休息',
-  currentSession: '当前会话',
-  continuousSitting: '连续坐姿',
-  currentPosture: '当前姿态',
-  stability: '头前倾定度',
-  healthAdvice: '健康建议',
-  detectionStatus: '实时检测状态',
-  detecting: '检测中',
-  paused: '已暂停',
-  timing: '定时中',
-  preview: '摄像头画面预览',
-  previewHint: '请保持面部在画面中央',
-  enablePosture: '开启姿势检测',
-  connecting: '正在连接视频流…',
-  retry: '重试预览',
-  privacy: '隐私与遮罩',
-  privacyNote: '摄像头已授权 · 不保存 · 本地处理',
-  detectionSettings: '检测设置',
-  detectionSettingsNote: '姿态识别 · 久坐提醒 · 灵敏度',
-  sittingToday: '今日坐姿',
-  cumulativeHeadDown: '累计低头',
-  completedBreaks: '完成休息',
-  reminderFollowups: '延后/关闭',
-  awayActivity: '累计活动',
-  getMoving: '起来动一动吧！',
-  naturalPosture: '姿态自然',
-  postureGood: '姿态良好',
-  headDown: '低头过度',
-  standing: '已离座',
-  confirming: '确认姿态中',
-  postureEncouragement: '保持得不错，继续加油',
-  posturePaused: '检测已暂停',
-  posturePausedNote: '恢复检测后继续识别',
-  postureUnrecognized: '暂未识别',
-  postureUnrecognizedNote: '请保持头部清晰并正对屏幕',
-  postureLowConfidence: '识别度较低',
-  postureLowConfidenceNote: '请改善光线并保持头肩完整入镜',
-  frameQualityInsufficient: '画面质量不足',
-  frameDarkNote: '当前光线不足，请适当补光',
-  frameOccludedNote: '画面有遮挡，请保持头肩完整入镜',
-  frameMultiPersonNote: '画面中有多人，请仅保留当前使用者',
-  frameUnstableNote: '画面不稳定，请保持设备与坐姿稳定',
-  noPerson: '未检测到人',
-  unrecognized: '未识别',
-  identifying: '识别中',
-  needsAdjustment: '需调整',
-  frameDark: '光线不足',
-  frameOccluded: '画面遮挡',
-  frameMultiPerson: '多人入镜',
-  frameUnstable: '画面不稳定',
-  timerMode: '定时提醒已开启',
-  timerModeNote: '达到阈值后会提醒你起身活动',
-  breakActive: '休息进行中',
-  breakNote: '保持离座一会儿，给肩颈放松的时间',
-  minute: '分钟',
-  times: '次',
-  liftGaze: '抬起视线，轻轻放松颈部',
-  recommended: '建议',
-  rest: '休息',
-  active: '进行中',
-  stable: '稳定',
-  notApplicable: '不适用',
-  timerNoPose: '定时模式无需姿态判断'
+  today: { zh: '今天', en: 'Today' },
+  title: { zh: '照顾好当下的姿势', en: 'Take care of your posture' },
+  subtitle: { zh: '每一次挺直，都是对未来的温柔。', en: 'Every upright moment is a kindness to your future self.' },
+  startBreak: { zh: '开始休息', en: 'Start break' },
+  endBreak: { zh: '结束休息', en: 'End break' },
+  currentSession: { zh: '当前会话', en: 'Current session' },
+  continuousSitting: { zh: '连续坐姿', en: 'Continuous sitting' },
+  currentPosture: { zh: '当前姿态', en: 'Current posture' },
+  stability: { zh: '头前倾定度', en: 'Forward-head stability' },
+  healthAdvice: { zh: '健康建议', en: 'Health suggestion' },
+  detectionStatus: { zh: '实时检测状态', en: 'Live detection status' },
+  detecting: { zh: '检测中', en: 'Detecting' },
+  paused: { zh: '已暂停', en: 'Paused' },
+  timing: { zh: '定时中', en: 'Timer' },
+  preview: { zh: '摄像头画面预览', en: 'Camera preview' },
+  previewHint: { zh: '请保持面部在画面中央', en: 'Keep your face centered in the frame' },
+  enablePosture: { zh: '开启姿势检测', en: 'Enable posture detection' },
+  connecting: { zh: '正在连接视频流…', en: 'Connecting to camera preview…' },
+  retry: { zh: '重试预览', en: 'Retry preview' },
+  privacy: { zh: '隐私与遮罩', en: 'Privacy and masking' },
+  privacyNote: { zh: '摄像头已授权 · 不保存 · 本地处理', en: 'Camera authorized · not saved · processed locally' },
+  detectionSettings: { zh: '检测设置', en: 'Detection settings' },
+  detectionSettingsNote: { zh: '姿态识别 · 久坐提醒 · 灵敏度', en: 'Posture detection · sitting reminders · sensitivity' },
+  sittingToday: { zh: '今日坐姿', en: 'Sitting today' },
+  cumulativeHeadDown: { zh: '累计低头', en: 'Head-down time' },
+  completedBreaks: { zh: '完成休息', en: 'Completed breaks' },
+  reminderFollowups: { zh: '延后/关闭', en: 'Delayed/closed' },
+  awayActivity: { zh: '累计活动', en: 'Total activity' },
+  getMoving: { zh: '起来动一动吧！', en: 'Get up and move!' },
+  naturalPosture: { zh: '姿态自然', en: 'Natural posture' },
+  postureGood: { zh: '姿态良好', en: 'Good posture' },
+  headDown: { zh: '低头过度', en: 'Excessive head-down posture' },
+  standing: { zh: '已离座', en: 'Away from seat' },
+  confirming: { zh: '确认姿态中', en: 'Confirming posture' },
+  postureEncouragement: { zh: '保持得不错，继续加油', en: 'Looking good. Keep it up.' },
+  posturePaused: { zh: '检测已暂停', en: 'Monitoring paused' },
+  posturePausedNote: { zh: '恢复检测后继续识别', en: 'Posture detection continues after monitoring resumes.' },
+  postureUnrecognized: { zh: '暂未识别', en: 'Not recognized yet' },
+  postureUnrecognizedNote: { zh: '请保持头部清晰并正对屏幕', en: 'Keep your head clearly visible and face the screen.' },
+  postureLowConfidence: { zh: '识别度较低', en: 'Low recognition confidence' },
+  postureLowConfidenceNote: { zh: '请改善光线并保持头肩完整入镜', en: 'Improve the lighting and keep your head and shoulders fully in frame.' },
+  frameQualityInsufficient: { zh: '画面质量不足', en: 'Image quality needs attention' },
+  frameDarkNote: { zh: '当前光线不足，请适当补光', en: 'The scene is too dark. Add some light.' },
+  frameOccludedNote: { zh: '画面有遮挡，请保持头肩完整入镜', en: 'The view is obstructed. Keep your head and shoulders fully in frame.' },
+  frameMultiPersonNote: { zh: '画面中有多人，请仅保留当前使用者', en: 'Multiple people are visible. Keep only the current user in frame.' },
+  frameUnstableNote: { zh: '画面不稳定，请保持设备与坐姿稳定', en: 'The image is unstable. Keep the device and your posture steady.' },
+  noPerson: { zh: '未检测到人', en: 'No person detected' },
+  unrecognized: { zh: '未识别', en: 'Not recognized' },
+  identifying: { zh: '识别中', en: 'Recognizing' },
+  needsAdjustment: { zh: '需调整', en: 'Needs adjustment' },
+  frameDark: { zh: '光线不足', en: 'Low light' },
+  frameOccluded: { zh: '画面遮挡', en: 'View obstructed' },
+  frameMultiPerson: { zh: '多人入镜', en: 'Multiple people detected' },
+  frameUnstable: { zh: '画面不稳定', en: 'Unstable image' },
+  timerMode: { zh: '定时提醒已开启', en: 'Timer reminders are active' },
+  timerModeNote: { zh: '达到阈值后会提醒你起身活动', en: 'You will be reminded when the threshold is reached' },
+  breakActive: { zh: '休息进行中', en: 'Break in progress' },
+  breakNote: { zh: '保持离座一会儿，给肩颈放松的时间', en: 'Stay away briefly and give your neck and shoulders time to relax.' },
+  minute: { zh: '分钟', en: 'minutes' },
+  times: { zh: '次', en: 'times' },
+  liftGaze: { zh: '抬起视线，轻轻放松颈部', en: 'Lift your gaze and gently relax your neck.' },
+  recommended: { zh: '建议', en: 'Recommended' },
+  rest: { zh: '休息', en: 'Break' },
+  active: { zh: '进行中', en: 'Active' },
+  stable: { zh: '稳定', en: 'Stable' },
+  notApplicable: { zh: '不适用', en: 'Not applicable' },
+  timerNoPose: { zh: '定时模式无需姿态判断', en: 'Posture confidence is not used in timer mode' }
 })
 
 export function shouldShowPreviewCaption(lifecycle: AppSnapshot['lifecycle'], isCamera: boolean): boolean {
@@ -156,7 +156,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
         }
       />
 
-      {error ? <div className="absolute left-66 right-6 top-28 z-30 rounded-[12px] border border-warning/25 bg-warning-soft px-4 py-2 text-[10px] text-warning-foreground">{translateNow(error, language)}</div> : null}
+      {error ? <div className="absolute left-66 right-6 top-28 z-30 rounded-[12px] border border-warning/25 bg-warning-soft px-4 py-2 text-[10px] text-warning-foreground">{error}</div> : null}
 
       <div className="today-primary-grid grid min-h-0 gap-5 min-[1120px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.85fr)]">
         <section className="flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-edge bg-panel shadow-panel">
@@ -240,7 +240,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
             {cameraRunning && (!streamUrl || visionStatus !== 'ready' || !imgLoaded) ? (
               <div className="absolute inset-0 grid place-content-center justify-items-center gap-2 bg-panel-strong/90 text-[10px] text-inverse-muted">
                 <Camera size={21} />
-                <span>{previewError ? translateNow(previewError, language) : messages.connecting}</span>
+                <span>{previewError ? messageText(previewError, language) : messages.connecting}</span>
                 {previewError ? (
                   <button className="rounded-[8px] border border-inverse/20 px-3 py-1.5" onClick={onRetryPreview}>
                     {messages.retry}

@@ -5,7 +5,6 @@ pub(crate) struct UpdateUiState {
     pub(crate) stage: String,
     pub(crate) version: Option<String>,
     pub(crate) progress: u8,
-    pub(crate) language: String,
 }
 
 impl Default for UpdateUiState {
@@ -14,7 +13,6 @@ impl Default for UpdateUiState {
             stage: "idle".to_string(),
             version: None,
             progress: 0,
-            language: "zh-CN".to_string(),
         }
     }
 }
@@ -107,10 +105,9 @@ pub(crate) fn tray_menu(
     update_stage: &str,
     update_version: Option<&str>,
     update_progress: u8,
-    language: &str,
+    language: Language,
     lifecycle: MonitoringLifecycle,
 ) -> tauri::Result<Menu<tauri::Wry>> {
-    let english = language == "en-US";
     let monitoring_active = matches!(
         lifecycle,
         MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded
@@ -119,23 +116,15 @@ pub(crate) fn tray_menu(
     let status = MenuItem::with_id(
         app,
         "monitoring-status",
-        match (english, lifecycle) {
-            (true, MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded) => {
-                "Health Reminder · Monitoring"
+        match lifecycle {
+            MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded => {
+                msg::TRAY_STATUS_MONITORING.get(language)
             }
-            (true, MonitoringLifecycle::Paused) => "Health Reminder · Monitoring paused",
-            (true, MonitoringLifecycle::Break) => "Health Reminder · Break in progress",
-            (true, MonitoringLifecycle::Initializing) => "Health Reminder · Starting monitoring",
-            (true, MonitoringLifecycle::Calibrating) => "Health Reminder · Calibrating",
-            (true, MonitoringLifecycle::Unavailable) => "Health Reminder · Monitoring unavailable",
-            (false, MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded) => {
-                "健康提醒 · 正在检测"
-            }
-            (false, MonitoringLifecycle::Paused) => "健康提醒 · 检测已暂停",
-            (false, MonitoringLifecycle::Break) => "健康提醒 · 主动休息中",
-            (false, MonitoringLifecycle::Initializing) => "健康提醒 · 正在启动检测",
-            (false, MonitoringLifecycle::Calibrating) => "健康提醒 · 正在校准",
-            (false, MonitoringLifecycle::Unavailable) => "健康提醒 · 检测不可用",
+            MonitoringLifecycle::Paused => msg::TRAY_STATUS_PAUSED.get(language),
+            MonitoringLifecycle::Break => msg::TRAY_STATUS_BREAK.get(language),
+            MonitoringLifecycle::Initializing => msg::TRAY_STATUS_INITIALIZING.get(language),
+            MonitoringLifecycle::Calibrating => msg::TRAY_STATUS_CALIBRATING.get(language),
+            MonitoringLifecycle::Unavailable => msg::TRAY_STATUS_UNAVAILABLE.get(language),
         },
         false,
         None::<&str>,
@@ -144,44 +133,32 @@ pub(crate) fn tray_menu(
     let show = MenuItem::with_id(
         app,
         "show",
-        if english {
-            "Open main window"
-        } else {
-            "打开主窗口"
-        },
+        msg::TRAY_SHOW_MAIN_WINDOW.get(language),
         true,
         None::<&str>,
     )?;
     let pause = MenuItem::with_id(
         app,
         "pause",
-        match (english, lifecycle) {
-            (true, MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded) => {
-                "Pause monitoring"
+        match lifecycle {
+            MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded => {
+                msg::TRAY_PAUSE_MONITORING.get(language)
             }
-            (true, MonitoringLifecycle::Paused) => "Resume monitoring",
-            (true, MonitoringLifecycle::Break) => "Break controls are in the main window",
-            (true, _) => "Monitoring controls unavailable",
-            (false, MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded) => "暂停检测",
-            (false, MonitoringLifecycle::Paused) => "恢复检测",
-            (false, MonitoringLifecycle::Break) => "请在主窗口结束休息",
-            (false, _) => "检测操作暂不可用",
+            MonitoringLifecycle::Paused => msg::TRAY_RESUME_MONITORING.get(language),
+            MonitoringLifecycle::Break => msg::TRAY_BREAK_HINT.get(language),
+            _ => msg::TRAY_CONTROLS_UNAVAILABLE.get(language),
         },
         pause_action_enabled,
         None::<&str>,
     )?;
     let separator_before_update = PredefinedMenuItem::separator(app)?;
-    let update_text = update_tray_text(english, update_stage, update_version, update_progress);
+    let update_text = update_tray_text(language, update_stage, update_version, update_progress);
     let update = MenuItem::with_id(app, "update", update_text, true, None::<&str>)?;
     let separator_before_quit = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(
         app,
         "quit",
-        if english {
-            "Quit Health Reminder"
-        } else {
-            "退出健康提醒"
-        },
+        msg::TRAY_QUIT.get(language),
         !matches!(update_stage, "downloading" | "restarting"),
         None::<&str>,
     )?;
@@ -201,32 +178,38 @@ pub(crate) fn tray_menu(
 }
 
 pub(crate) fn update_tray_text(
-    english: bool,
+    language: Language,
     stage: &str,
     version: Option<&str>,
     progress: u8,
 ) -> String {
-    match (english, stage, version) {
-        (true, "checking", _) => "Checking for updates…".to_string(),
-        (false, "checking", _) => "正在检查更新…".to_string(),
-        (true, "downloading", Some(version)) => {
-            format!("↓ Downloading v{version} · {}%", progress.min(100))
-        }
-        (false, "downloading", Some(version)) => {
-            format!("↓ 正在下载 v{version} · {}%", progress.min(100))
-        }
-        (true, "downloading", None) => format!("↓ Downloading update · {}%", progress.min(100)),
-        (false, "downloading", None) => format!("↓ 正在下载更新 · {}%", progress.min(100)),
-        (true, "restarting", _) => "Update installed · Restarting…".to_string(),
-        (false, "restarting", _) => "更新已安装 · 正在重启…".to_string(),
-        (true, "error", _) => "Update failed · Click to retry".to_string(),
-        (false, "error", _) => "更新失败 · 点击重试".to_string(),
-        (true, "latest", _) => "Check for updates (up to date)".to_string(),
-        (false, "latest", _) => "检查更新（当前已是最新）".to_string(),
-        (true, _, Some(version)) => format!("View update v{version}"),
-        (false, _, Some(version)) => format!("查看新版本 v{version}"),
-        (true, _, None) => "Check for updates…".to_string(),
-        (false, _, None) => "检查更新…".to_string(),
+    let progress = progress.min(100).to_string();
+    match (stage, version) {
+        ("checking", _) => msg::TRAY_UPDATE_CHECKING.get(language).to_string(),
+        ("downloading", Some(version)) => msg::TRAY_UPDATE_DOWNLOADING.format(
+            language,
+            &[("version", version), ("progress", progress.as_str())],
+        ),
+        ("downloading", None) => msg::TRAY_UPDATE_DOWNLOADING_NO_VERSION
+            .format(language, &[("progress", progress.as_str())]),
+        ("restarting", _) => msg::TRAY_UPDATE_RESTARTING.get(language).to_string(),
+        ("error", _) => msg::TRAY_UPDATE_ERROR.get(language).to_string(),
+        ("latest", _) => msg::TRAY_UPDATE_LATEST.get(language).to_string(),
+        (_, Some(version)) => msg::TRAY_UPDATE_VIEW.format(language, &[("version", version)]),
+        (_, None) => msg::TRAY_UPDATE_CHECK.get(language).to_string(),
+    }
+}
+
+pub(crate) fn tray_tooltip_text(
+    language: Language,
+    stage: &str,
+    version: Option<&str>,
+    progress: u8,
+) -> String {
+    if matches!(stage, "idle" | "latest") {
+        msg::TRAY_TOOLTIP.get(language).to_string()
+    } else {
+        update_tray_text(language, stage, version, progress)
     }
 }
 
@@ -272,9 +255,10 @@ pub(crate) fn tray_icon_with_update_badge(
 }
 
 pub(crate) fn set_tray_update_badge(app: &AppHandle, visible: bool) -> Result<(), String> {
+    let language = current_language(app);
     let tray = app
         .tray_by_id(MAIN_TRAY_ID)
-        .ok_or_else(|| "系统托盘尚未就绪".to_string())?;
+        .ok_or_else(|| msg::ERR_TRAY_NOT_READY.get(language).to_string())?;
     let Some(base) = app.default_window_icon() else {
         return Ok(());
     };
@@ -287,32 +271,66 @@ pub(crate) fn set_tray_update_badge(app: &AppHandle, visible: bool) -> Result<()
 }
 
 pub(crate) fn rebuild_tray_menu(app: &AppHandle) -> Result<(), String> {
-    let context = app
-        .try_state::<AppContext>()
-        .ok_or_else(|| "应用状态尚未就绪".to_string())?;
+    let fallback_language = current_language(app);
+    let context = app.try_state::<AppContext>().ok_or_else(|| {
+        msg::ERR_APP_STATE_NOT_READY
+            .get(fallback_language)
+            .to_string()
+    })?;
     let update = context
         .update_ui
         .lock()
-        .map_err(|_| "更新状态锁已损坏".to_string())?
+        .map_err(|_| {
+            msg::ERR_UPDATE_STATE_LOCK
+                .get(fallback_language)
+                .to_string()
+        })?
         .clone();
-    let lifecycle = context
-        .core
-        .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?
-        .snapshot()
-        .lifecycle;
+    let (language, lifecycle) = {
+        let mut core = context
+            .core
+            .lock()
+            .map_err(|_| msg::ERR_STATE_LOCK.get(fallback_language).to_string())?;
+        let snapshot = core.snapshot();
+        (
+            Language::of_settings(&snapshot.settings),
+            snapshot.lifecycle,
+        )
+    };
     let menu = tray_menu(
         app,
         &update.stage,
         update.version.as_deref(),
         update.progress,
-        &update.language,
+        language,
         lifecycle,
     )
     .map_err(|error| error.to_string())?;
     app.tray_by_id(MAIN_TRAY_ID)
-        .ok_or_else(|| "系统托盘尚未就绪".to_string())?
+        .ok_or_else(|| msg::ERR_TRAY_NOT_READY.get(language).to_string())?
         .set_menu(Some(menu))
+        .map_err(|error| error.to_string())
+}
+
+pub(crate) fn refresh_tray_labels(app: &AppHandle) -> Result<(), String> {
+    let language = current_language(app);
+    let context = app
+        .try_state::<AppContext>()
+        .ok_or_else(|| msg::ERR_APP_STATE_NOT_READY.get(language).to_string())?;
+    let update = context
+        .update_ui
+        .lock()
+        .map_err(|_| msg::ERR_UPDATE_STATE_LOCK.get(language).to_string())?
+        .clone();
+    rebuild_tray_menu(app)?;
+    app.tray_by_id(MAIN_TRAY_ID)
+        .ok_or_else(|| msg::ERR_TRAY_NOT_READY.get(language).to_string())?
+        .set_tooltip(Some(tray_tooltip_text(
+            language,
+            &update.stage,
+            update.version.as_deref(),
+            update.progress,
+        )))
         .map_err(|error| error.to_string())
 }
 
@@ -322,38 +340,29 @@ pub(crate) fn set_update_tray_status(
     stage: String,
     version: Option<String>,
     progress: u8,
-    language: String,
 ) -> Result<(), String> {
     if let Some(context) = app.try_state::<AppContext>() {
         if let Ok(mut update_ui) = context.update_ui.lock() {
             update_ui.stage.clone_from(&stage);
             update_ui.version.clone_from(&version);
             update_ui.progress = progress.min(100);
-            update_ui.language.clone_from(&language);
         }
     }
     rebuild_tray_menu(&app)?;
-    let tray = app
-        .tray_by_id(MAIN_TRAY_ID)
-        .ok_or_else(|| "系统托盘尚未就绪".to_string())?;
+    let tray = app.tray_by_id(MAIN_TRAY_ID).ok_or_else(|| {
+        msg::ERR_TRAY_NOT_READY
+            .get(current_language(&app))
+            .to_string()
+    })?;
     set_tray_update_badge(&app, tray_update_badge_visible(&stage, version.as_deref()))?;
-    let update_label = update_tray_text(
-        language == "en-US",
+    let language = current_language(&app);
+    tray.set_tooltip(Some(tray_tooltip_text(
+        language,
         &stage,
         version.as_deref(),
         progress.min(100),
-    );
-    let tooltip = if matches!(stage.as_str(), "idle" | "latest") {
-        if language == "en-US" {
-            "Health Reminder · Posture & Sitting".to_string()
-        } else {
-            "健康提醒 · 姿态与久坐".to_string()
-        }
-    } else {
-        update_label
-    };
-    tray.set_tooltip(Some(tooltip))
-        .map_err(|error| error.to_string())
+    )))
+    .map_err(|error| error.to_string())
 }
 
 pub(crate) fn build_tray(app: &tauri::App) -> tauri::Result<()> {
@@ -363,9 +372,16 @@ pub(crate) fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         .lock()
         .map(|mut core| core.snapshot().lifecycle)
         .unwrap_or(MonitoringLifecycle::Paused);
-    let menu = tray_menu(app.handle(), "idle", None, 0, "zh-CN", lifecycle)?;
+    let menu = tray_menu(
+        app.handle(),
+        "idle",
+        None,
+        0,
+        current_language(app.handle()),
+        lifecycle,
+    )?;
     let mut builder = TrayIconBuilder::with_id(MAIN_TRAY_ID)
-        .tooltip("健康提醒 · 姿态与久坐")
+        .tooltip(msg::TRAY_TOOLTIP.get(current_language(app.handle())))
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| {

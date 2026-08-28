@@ -3,7 +3,9 @@ mod commands;
 mod core;
 mod database;
 mod island;
+mod messages;
 mod model;
+mod sound;
 mod tray;
 mod vision;
 
@@ -12,10 +14,12 @@ use std::time::{Duration, Instant};
 
 use core::RuntimeState;
 use database::Database;
+use messages::{current_language, msg, Language};
 use model::{
     AppSettings, AppSnapshot, BehaviorHistoryEvent, BehaviorState, CalibrationResult,
     DailyStatistics, MonitoringLifecycle, MonitoringMode, PermissionState, VisionObservation,
 };
+use sound::{play_reminder_sound, resolve_reminder_sound, ReminderSound};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::webview::PageLoadEvent;

@@ -15,10 +15,10 @@ import { TodayPage } from './pages/TodayPage'
 export type { DashboardProps } from './dashboardTypes'
 
 const dashboardMessages = defineMessages({
-  closeNavigation: '关闭导航',
-  openNavigation: '打开导航',
-  reportTitle: '健康报告正在汇总',
-  reportDescription: '完成更多检测与休息记录后，这里会生成一份仅保存在本机的健康习惯报告。'
+  closeNavigation: { zh: '关闭导航', en: 'Close navigation' },
+  openNavigation: { zh: '打开导航', en: 'Open navigation' },
+  reportTitle: { zh: '健康报告正在汇总', en: 'Your health report is being prepared' },
+  reportDescription: { zh: '完成更多检测与休息记录后，这里会生成一份仅保存在本机的健康习惯报告。', en: 'After more detection and break activity, a private on-device habit report will appear here.' }
 })
 
 export function Dashboard(props: DashboardProps) {

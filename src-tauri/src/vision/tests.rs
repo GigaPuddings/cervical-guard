@@ -14,7 +14,7 @@ fn camera_permission_error_is_not_reported_as_external_occupancy() {
         "0".to_string(),
         "Access is denied. (0x80070005)".to_string(),
     );
-    let message = camera_message(&error);
+    let message = camera_message(&error, Language::ZhCn);
     assert!(message.contains("权限已关闭"), "{message}");
     assert!(!message.contains("其他应用"), "{message}");
 }
@@ -25,15 +25,22 @@ fn only_an_explicit_sharing_violation_is_reported_as_busy() {
             "The process cannot access the device because it is being used by another process. (0x80070020)"
                 .to_string(),
         );
-    let message = camera_message(&error);
+    let message = camera_message(&error, Language::ZhCn);
     assert!(message.contains("其他应用独占"), "{message}");
 }
 
 #[test]
 fn missing_camera_has_a_distinct_message() {
     let error = nokhwa::NokhwaError::OpenDeviceError("0".to_string(), "No device".to_string());
-    let message = camera_message(&error);
+    let message = camera_message(&error, Language::ZhCn);
     assert!(message.contains("未检测到可用摄像头"), "{message}");
+}
+
+#[test]
+fn camera_error_copy_follows_the_requested_language() {
+    let error = nokhwa::NokhwaError::OpenDeviceError("0".to_string(), "No device".to_string());
+    assert!(camera_message(&error, Language::ZhCn).contains("未检测到可用摄像头"));
+    assert!(camera_message(&error, Language::EnUs).contains("No available camera"));
 }
 
 #[test]
@@ -42,7 +49,7 @@ fn driver_resource_failure_is_not_reported_as_busy() {
         "Hardware MFT failed to start streaming due to lack of hardware resources. (0xC00D3704)"
             .to_string(),
     );
-    let message = camera_message(&error);
+    let message = camera_message(&error, Language::ZhCn);
     assert!(message.contains("驱动或硬件资源异常"), "{message}");
     assert!(message.contains("0xC00D3704"), "{message}");
     assert!(!message.contains("其他应用"), "{message}");
@@ -54,7 +61,7 @@ fn unknown_open_failure_stays_neutral_and_keeps_hresult() {
         "0".to_string(),
         "Unspecified failure. (0x80004005)".to_string(),
     );
-    let message = camera_message(&error);
+    let message = camera_message(&error, Language::ZhCn);
     assert!(message.contains("摄像头启动失败"), "{message}");
     assert!(message.contains("0x80004005"), "{message}");
     assert!(!message.contains("其他应用独占"), "{message}");

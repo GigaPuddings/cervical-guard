@@ -1,6 +1,6 @@
 import { AlertTriangle, ArrowRight, Camera, Check, Clock3, EyeOff, LoaderCircle, ShieldCheck, WifiOff } from 'lucide-react'
 import { Brand } from '../../components/Brand'
-import { copy, localizeBackendMessage, type Language } from '../../i18n'
+import { copy, type Language } from '../../i18n'
 
 interface OnboardingProps {
   busy: boolean
@@ -44,7 +44,7 @@ export function Onboarding({ busy, language, cameraError, onCamera, onTimer, onL
               <AlertTriangle className="mt-0.5 shrink-0" size={16} />
               <div>
                 <strong className="block text-xs">{t.camera.unsupported}</strong>
-                <span className="mt-1 block text-[10px] leading-4">{localizeBackendMessage(cameraError, language)}</span>
+                <span className="mt-1 block text-[10px] leading-4">{cameraError}</span>
                 <small className="mt-1 block text-[9px] opacity-80">{t.onboarding.fallback}</small>
               </div>
             </div>

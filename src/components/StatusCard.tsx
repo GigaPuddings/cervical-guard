@@ -7,20 +7,20 @@ import type { AppSnapshot } from '../types'
 import { cn } from '../utils'
 
 const statusMessages = defineMessages({
-  onBreak: '休息中',
-  paused: '检测已暂停',
-  detecting: '检测中',
-  preparing: '正在准备',
-  cameraConnected: '摄像头已连接',
-  timerReminder: '普通定时提醒',
-  endBreak: '结束休息',
-  pauseDetection: '暂停检测',
-  resumeDetection: '恢复检测',
-  lastDetection: '上次检测',
-  noDetectionRecord: '暂无检测记录',
-  pause30: '暂停 30 分钟',
-  pauseHour: '暂停 1 小时',
-  pauseManual: '暂停到手动恢复'
+  onBreak: { zh: '休息中', en: 'On break' },
+  paused: { zh: '检测已暂停', en: 'Monitoring paused' },
+  detecting: { zh: '检测中', en: 'Detecting' },
+  preparing: { zh: '正在准备', en: 'Preparing' },
+  cameraConnected: { zh: '摄像头已连接', en: 'Camera connected' },
+  timerReminder: { zh: '普通定时提醒', en: 'Timer reminders' },
+  endBreak: { zh: '结束休息', en: 'End break' },
+  pauseDetection: { zh: '暂停检测', en: 'Pause detection' },
+  resumeDetection: { zh: '恢复检测', en: 'Resume detection' },
+  lastDetection: { zh: '上次检测', en: 'Last detection' },
+  noDetectionRecord: { zh: '暂无检测记录', en: 'No detection recorded yet' },
+  pause30: { zh: '暂停 30 分钟', en: 'Pause for 30 minutes' },
+  pauseHour: { zh: '暂停 1 小时', en: 'Pause for 1 hour' },
+  pauseManual: { zh: '暂停到手动恢复', en: 'Pause until resumed' }
 })
 
 export function formatDetectionTimestamp(timestamp: string | null, language: Language): string | null {

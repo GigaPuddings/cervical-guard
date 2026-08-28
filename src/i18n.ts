@@ -78,7 +78,7 @@ export const copy = {
       unsupported: 'Camera posture detection is unavailable on this device',
       retry: 'Check again'
     },
-    settings: { language: 'Interface language', chinese: '简体中文', chineseShort: '中', english: 'English' },
+    settings: { language: 'language', chinese: '简体中文', chineseShort: '中', english: 'English' },
     updater: {
       title: 'App updates',
       description: 'Check and install signed updates from GitHub Releases.',
@@ -111,24 +111,4 @@ export const copy = {
 
 export function languageOf(value: unknown): Language {
   return value === 'en-US' ? 'en-US' : 'zh-CN'
-}
-
-const cameraErrorTranslations: Array<[prefix: string, translation: string]> = [
-  ['摄像头权限已关闭。', 'Camera access is turned off. Allow desktop apps to access the camera in Windows Settings > Privacy & security > Camera.'],
-  ['摄像头访问已被 Windows 或组织策略禁用。', 'Camera access is blocked by Windows or an organization policy. Check the camera privacy policy or contact your administrator.'],
-  ['当前应用未声明摄像头能力。', 'This installation does not declare camera access. Reinstall the complete application and try again.'],
-  ['未检测到可用摄像头。', 'No available camera was detected. Check that the device is connected and enabled in Device Manager.'],
-  ['摄像头正被其他应用独占。', 'Another application has exclusive access to the camera. Close video-meeting, streaming, or recording apps and try again.'],
-  ['摄像头不支持当前视频格式。', 'The camera does not support the required video format. Try another camera or update its driver.'],
-  ['摄像头驱动或硬件资源异常。', 'The camera driver or hardware resource failed. Reconnect the device or update its driver.'],
-  ['摄像头连接已中断，', 'The camera connection was interrupted. Check the device connection and try again.'],
-  ['摄像头启动失败。', 'The camera could not start. Check the device, its driver, and other applications, then try again.']
-]
-
-export function localizeBackendMessage(value: string | null, language: Language): string | null {
-  if (!value || language === 'zh-CN') return value
-  const match = cameraErrorTranslations.find(([prefix]) => value.startsWith(prefix))
-  if (!match) return value
-  const diagnostic = value.match(/错误码\s+(0x[0-9A-Fa-f]{8})/)?.[1]
-  return `${match[1]}${diagnostic ? ` (error code ${diagnostic})` : ''}`
 }

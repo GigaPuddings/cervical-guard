@@ -2,6 +2,7 @@ import type { AppUpdater } from '../updates/updateTypes'
 import type { AppPage, AppSettings, AppSnapshot, BehaviorHistoryEvent, DailyStatistics, LandmarkPoint } from '../../types'
 import type { VisionStatus } from '../../vision/useVisionMonitor'
 import type { Language } from '../../i18n'
+import type { MessagePair } from '../../runtimeI18n'
 
 export interface DashboardProps {
   snapshot: AppSnapshot
@@ -10,7 +11,7 @@ export interface DashboardProps {
   behaviorHistory: BehaviorHistoryEvent[]
   visionStatus: VisionStatus
   streamUrl: string | null
-  previewError: string | null
+  previewError: MessagePair | null
   landmarks: LandmarkPoint[]
   error: string | null
   onPage: (page: AppPage) => void

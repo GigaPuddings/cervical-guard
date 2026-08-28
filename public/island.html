@@ -195,10 +195,7 @@
         '阵雪': 'Snow showers', '雷暴': 'Thunderstorm', '天气变化中': 'Changing weather',
       };
       const localizeCondition = (value) => language === 'en-US' ? (weatherConditions[value] || value) : value;
-      const localizeReminderTitle = (value) => {
-        if (language !== 'en-US') return value;
-        return ({ '该舒展一下了': 'Time to stretch', '起来走一走吧': 'Take a short walk', '试着抬起头': 'Lift your head' })[value] || value;
-      };
+      // 提醒标题由 Rust 状态机按界面语言生成,无需再映射。
       const applyLanguage = (snapshot) => {
         const next = snapshot && snapshot.settings
           ? (snapshot.settings.language === 'en-US' ? 'en-US' : 'zh-CN')
@@ -350,7 +347,7 @@
         if (!reminder) return;
         setIcon('bell');
         renderMeta(`${tr('已连续', 'Continuous')} ${duration(reminder.durationSeconds)}`);
-        title.textContent = localizeReminderTitle(reminder.title) || tr('该舒展一下了', 'Time to stretch');
+        title.textContent = reminder.title || tr('该舒展一下了', 'Time to stretch');
         enterMode('reminder');
       };
       const renderBreak = (snapshot) => {

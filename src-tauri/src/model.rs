@@ -1,6 +1,8 @@
 use chrono::{Datelike, Local, Timelike, Weekday};
 use serde::{Deserialize, Serialize};
 
+use crate::messages::{msg, Language};
+
 pub const SCHEMA_VERSION: u8 = 2;
 pub const MIN_HEAD_DOWN_CONFIRMATION_SECS: u64 = 5;
 pub const MAX_HEAD_DOWN_CONFIRMATION_SECS: u64 = 30;
@@ -109,9 +111,10 @@ pub struct VisionObservation {
 }
 
 impl VisionObservation {
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate_with_language(&self, language: Language) -> Result<(), String> {
         if self.schema_version != SCHEMA_VERSION {
-            return Err(format!("不支持的观察值协议版本：{}", self.schema_version));
+            return Err(msg::ERR_OBSERVATION_VERSION
+                .format(language, &[("version", &self.schema_version.to_string())]));
         }
         let scores = [
             self.person.confidence,
@@ -123,13 +126,13 @@ impl VisionObservation {
             .iter()
             .any(|value| !value.is_finite() || !(0.0..=1.0).contains(value))
         {
-            return Err("观察值置信度必须位于 0 到 1 之间".to_string());
+            return Err(msg::ERR_OBSERVATION_CONFIDENCE.get(language).to_string());
         }
         if self.person.present && self.person.uncertain {
-            return Err("人物观察值不能同时标记为在场和不确定".to_string());
+            return Err(msg::ERR_OBSERVATION_PERSON.get(language).to_string());
         }
         if !self.captured_at_monotonic_ms.is_finite() || !self.metrics.pose_ms.is_finite() {
-            return Err("观察值包含无效数值".to_string());
+            return Err(msg::ERR_OBSERVATION_NUMBERS.get(language).to_string());
         }
         Ok(())
     }
@@ -159,6 +162,9 @@ pub struct AppSettings {
     pub silent_autostart: bool,
     pub run_in_background: bool,
     pub sound_enabled: bool,
+    /// 提示音选项：auto（按提醒级别自动匹配）/ system / chime / soft / alert / off。
+    #[serde(default = "default_reminder_sound")]
+    pub reminder_sound: String,
     pub meeting_mode: bool,
     pub fullscreen_notifications: bool,
     pub statistics_enabled: bool,
@@ -212,6 +218,7 @@ impl Default for AppSettings {
             silent_autostart: true,
             run_in_background: true,
             sound_enabled: false,
+            reminder_sound: default_reminder_sound(),
             meeting_mode: false,
             fullscreen_notifications: false,
             statistics_enabled: true,
@@ -238,11 +245,15 @@ impl Default for AppSettings {
 
 impl AppSettings {
     pub fn validate(&self) -> Result<(), String> {
+        let language = Language::of_settings(self);
         if self.schema_version != SCHEMA_VERSION {
-            return Err("设置协议版本不兼容".into());
+            return Err(msg::ERR_SCHEMA_VERSION.get(language).to_string());
         }
         if !matches!(self.language.as_str(), "zh-CN" | "en-US") {
-            return Err("不支持的界面语言".into());
+            return Err(msg::ERR_LANGUAGE.get(language).to_string());
+        }
+        if !crate::sound::ReminderSound::ALL.contains(&self.reminder_sound.as_str()) {
+            return Err(msg::ERR_REMINDER_SOUND.get(language).to_string());
         }
         if !(1..=120).contains(&self.sedentary_minutes)
             || !(5..=14_400).contains(&self.sedentary_seconds)
@@ -253,15 +264,19 @@ impl AppSettings {
                 .contains(&self.head_down_confirmation_seconds)
             || !(5..=30).contains(&self.head_down_strong_minutes)
         {
-            return Err("提醒阈值超出允许范围".into());
+            return Err(msg::ERR_REMINDER_THRESHOLDS.get(language).to_string());
         }
         if !matches!(self.sensitivity.as_str(), "low" | "balanced" | "high") {
-            return Err("无效的检测灵敏度".into());
+            return Err(msg::ERR_SENSITIVITY.get(language).to_string());
         }
-        parse_minutes(&self.workday_start).ok_or("工作开始时间格式无效")?;
-        parse_minutes(&self.workday_end).ok_or("工作结束时间格式无效")?;
-        parse_minutes(&self.quiet_start).ok_or("静默开始时间格式无效")?;
-        parse_minutes(&self.quiet_end).ok_or("静默结束时间格式无效")?;
+        parse_minutes(&self.workday_start)
+            .ok_or_else(|| msg::ERR_WORKDAY_START.get(language).to_string())?;
+        parse_minutes(&self.workday_end)
+            .ok_or_else(|| msg::ERR_WORKDAY_END.get(language).to_string())?;
+        parse_minutes(&self.quiet_start)
+            .ok_or_else(|| msg::ERR_QUIET_START.get(language).to_string())?;
+        parse_minutes(&self.quiet_end)
+            .ok_or_else(|| msg::ERR_QUIET_END.get(language).to_string())?;
         Ok(())
     }
 
@@ -320,6 +335,10 @@ fn default_head_down_confirmation_seconds() -> u64 {
 
 fn default_language() -> String {
     "zh-CN".into()
+}
+
+fn default_reminder_sound() -> String {
+    "auto".into()
 }
 
 fn default_enabled() -> bool {
@@ -399,7 +418,7 @@ pub enum ReminderKind {
     Combined,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReminderLevel {
     Gentle,

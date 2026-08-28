@@ -76,6 +76,56 @@ fn legacy_settings_enable_silent_autostart_during_migration() {
 }
 
 #[test]
+fn legacy_settings_default_to_auto_reminder_sound() {
+    let mut json = serde_json::to_value(AppSettings::default()).unwrap();
+    json.as_object_mut().unwrap().remove("reminderSound");
+    let settings: AppSettings = serde_json::from_value(json).unwrap();
+    assert_eq!(settings.reminder_sound, "auto");
+    assert!(settings.validate().is_ok());
+}
+
+#[test]
+fn observation_validation_errors_follow_requested_language() {
+    let mut observation = VisionObservation {
+        schema_version: SCHEMA_VERSION + 1,
+        sequence: 1,
+        captured_at_monotonic_ms: 0.0,
+        person: PersonObservation {
+            present: true,
+            uncertain: false,
+            confidence: 0.9,
+        },
+        posture: PostureObservation {
+            state: PostureState::Sitting,
+            confidence: 0.9,
+        },
+        head: HeadObservation {
+            down_score: 0.1,
+            confidence: 0.9,
+        },
+        frame_quality: FrameQuality::Good,
+        metrics: VisionMetrics {
+            pose_ms: 12.0,
+            dropped_frames: 0,
+        },
+    };
+
+    assert_eq!(
+        observation.validate_with_language(Language::EnUs),
+        Err(format!(
+            "Unsupported observation protocol version: {}",
+            SCHEMA_VERSION + 1
+        ))
+    );
+    observation.schema_version = SCHEMA_VERSION;
+    observation.person.confidence = 1.2;
+    assert_eq!(
+        observation.validate_with_language(Language::ZhCn),
+        Err("观察值置信度必须位于 0 到 1 之间".to_string())
+    );
+}
+
+#[test]
 fn legacy_meta_defaults_new_session_fields_during_migration() {
     let meta: PersistedMeta = serde_json::from_value(serde_json::json!({
         "onboarded": true,

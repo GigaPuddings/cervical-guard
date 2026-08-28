@@ -3,16 +3,35 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { coreClient } from '../infra/client'
+import { languageOf, type Language } from '../i18n'
+import { defineMessages, messageText, type MessagePair } from '../runtimeI18n'
 import type { CameraDevice, LandmarkPoint, VisionFrame, VisionObservation } from '../types'
 import { PREVIEW_START_TIMEOUT_MS, shouldReportPreviewFailure } from './previewPolicy'
 
 export type VisionStatus = 'idle' | 'requesting' | 'loading_model' | 'ready' | 'error'
+
+const visionMessages = defineMessages({
+  startFailed: {
+    zh: '摄像头或本地姿态模型无法启动',
+    en: 'The camera or posture model could not start'
+  },
+  desktopOnly: {
+    zh: '请在桌面应用中运行',
+    en: 'Please run the app in the desktop application'
+  },
+  previewStalled: {
+    zh: '视频预览暂时未取得画面，但本地姿态分析仍会继续。请重试预览。',
+    en: 'The video preview has not produced a frame yet, but local posture analysis continues. Retry the preview.'
+  }
+})
 
 interface UseVisionOptions {
   active: boolean
   cameraId: string
   baseline: number | null
   headDownEnabled?: boolean
+  /** 用于生成会话启动失败等兜底文案;预览错误以消息对返回,由展示层本地化。 */
+  language?: Language
   onObservation?: (observation: VisionObservation) => void
 }
 
@@ -22,11 +41,12 @@ interface VisionMonitor {
   /** 最新 JPEG data URL，用于在 Dashboard 中渲染可见预览。 */
   streamUrl: string | null
   status: VisionStatus
+  /** 后端错误(已由后端本地化)或本地兜底文案(按当前语言生成)。 */
   error: string | null
   /** 首帧是否已渲染完成(用于控制 loading 遮罩的消失时机)。 */
   previewReady: boolean
-  /** 仅代表预览流失败；姿态推理仍可能正常运行。 */
-  previewError: string | null
+  /** 仅代表预览流失败；姿态推理仍可能正常运行。消息对由展示层本地化。 */
+  previewError: MessagePair | null
   observation: VisionObservation | null
   /** 最近一帧的 17 个关键点(归一化坐标 [0,1]),用于 canvas 叠加绘制。 */
   landmarks: LandmarkPoint[]
@@ -38,11 +58,6 @@ interface VisionMonitor {
 
 /** React 状态更新节流间隔(≈12 FPS),回调全速触发。 */
 const UI_UPDATE_INTERVAL_MS = 80
-function messageOf(reason: unknown): string {
-  if (typeof reason === 'string' && reason) return reason
-  if (reason instanceof Error && reason.message) return reason.message
-  return '摄像头或本地姿态模型无法启动'
-}
 
 export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
   const previewRef = useRef<HTMLImageElement>(null)
@@ -55,7 +70,7 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
   const [calibrationSamples, setCalibrationSamples] = useState<number[]>([])
   const [devices, setDevices] = useState<CameraDevice[]>([])
   const [previewReady, setPreviewReady] = useState(false)
-  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState<MessagePair | null>(null)
   const previewFailures = useRef(0)
   const retryTimer = useRef<number | null>(null)
 
@@ -70,7 +85,7 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
     if (retryTimer.current !== null) window.clearTimeout(retryTimer.current)
     retryTimer.current = window.setTimeout(() => {
       retryTimer.current = null
-      setPreviewError('视频预览暂时未取得画面，但本地姿态分析仍会继续。请重试预览。')
+      setPreviewError(visionMessages.previewStalled)
     }, PREVIEW_START_TIMEOUT_MS)
   }, [])
 
@@ -89,7 +104,7 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
       previewFailures.current += 1
       if (!shouldReportPreviewFailure(previewFailures.current)) return
       setPreviewReady(false)
-      setPreviewError('视频预览暂时未取得画面，但本地姿态分析仍会继续。请重试预览。')
+      setPreviewError(visionMessages.previewStalled)
     }
     img.src = streamUrl
     return () => {
@@ -148,7 +163,7 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
         setStatus('requesting')
 
         if (!isTauri()) {
-          setError('请在桌面应用中运行')
+          setError(messageText(visionMessages.desktopOnly, languageOf(options.language)))
           setStatus('error')
           return
         }
@@ -208,11 +223,12 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
         previewWatchdog = window.setTimeout(() => {
           if (cancelled || previewReceived) return
           setPreviewReady(false)
-          setPreviewError('视频预览暂时未取得画面，但本地姿态分析仍会继续。请重试预览。')
+          setPreviewError(visionMessages.previewStalled)
         }, PREVIEW_START_TIMEOUT_MS)
       } catch (reason) {
         if (cancelled) return
-        setError(messageOf(reason))
+        const fallback = messageText(visionMessages.startFailed, languageOf(options.language))
+        setError(typeof reason === 'string' && reason ? reason : reason instanceof Error && reason.message ? reason.message : fallback)
         setStatus('error')
       }
     }
@@ -231,7 +247,7 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
       setLandmarks([])
       setObservation(null)
     }
-  }, [options.active, options.baseline, options.cameraId, options.headDownEnabled])
+  }, [options.active, options.baseline, options.cameraId, options.headDownEnabled, options.language])
 
   return { previewRef, streamUrl, status, error, observation, landmarks, calibrationSamples, devices, resetSamples, previewReady, previewError, retryPreview }
 }

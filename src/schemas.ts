@@ -18,6 +18,7 @@ const settingsSchema = z.object({
   silentAutostart: z.boolean().default(true),
   runInBackground: z.boolean(),
   soundEnabled: z.boolean(),
+  reminderSound: z.enum(['auto', 'system', 'chime', 'soft', 'alert', 'off']).default('auto'),
   meetingMode: z.boolean(),
   fullscreenNotifications: z.boolean(),
   statisticsEnabled: z.boolean(),

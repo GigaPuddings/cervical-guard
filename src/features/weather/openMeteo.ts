@@ -1,10 +1,24 @@
 import { z } from 'zod'
 import type { Language } from '../../i18n'
+import { defineMessages, formatMessage, messageText } from '../../runtimeI18n'
 import type { CitySearchResult, DailyWeather, WeatherForecast, WeatherLocation } from './types'
 
 const FORECAST_ENDPOINT = 'https://api.open-meteo.com/v1/forecast'
 const GEOCODING_ENDPOINT = 'https://geocoding-api.open-meteo.com/v1/search'
 const REQUEST_TIMEOUT_MS = 8_000
+
+/** 天气请求失败的稳定分类；文案由展示层按当前语言从消息表生成。 */
+export type WeatherRequestCode = 'unavailable' | 'timeout' | 'unrecognized' | 'connection' | 'noDaily'
+
+export class WeatherRequestError extends Error {
+  constructor(
+    readonly code: WeatherRequestCode,
+    readonly status?: number
+  ) {
+    super(`weather request failed: ${code}${status ? ` (HTTP ${status})` : ''}`)
+    this.name = 'WeatherRequestError'
+  }
+}
 
 const geocodingSchema = z.object({
   results: z
@@ -63,16 +77,16 @@ async function requestJson(url: URL, signal?: AbortSignal): Promise<unknown> {
   signal?.addEventListener('abort', abortFromCaller, { once: true })
   try {
     const response = await fetch(url, { headers: { Accept: 'application/json' }, signal: controller.signal })
-    if (!response.ok) throw new Error(`天气服务暂不可用（HTTP ${response.status}）`)
+    if (!response.ok) throw new WeatherRequestError('unavailable', response.status)
     return await response.json()
   } catch (reason) {
+    if (reason instanceof WeatherRequestError) throw reason
     if (reason instanceof DOMException && reason.name === 'AbortError') {
       if (signal?.aborted) throw reason
-      throw new Error('天气服务响应超时，请稍后重试', { cause: reason })
+      throw new WeatherRequestError('timeout')
     }
-    if (reason instanceof Error && reason.message.startsWith('天气服务暂不可用')) throw reason
-    if (reason instanceof SyntaxError) throw new Error('天气服务返回了无法识别的数据', { cause: reason })
-    throw new Error('天气服务连接失败，请检查网络后重试', { cause: reason })
+    if (reason instanceof SyntaxError) throw new WeatherRequestError('unrecognized')
+    throw new WeatherRequestError('connection')
   } finally {
     window.clearTimeout(timeoutId)
     signal?.removeEventListener('abort', abortFromCaller)
@@ -184,7 +198,7 @@ export async function fetchOpenMeteoForecast(location: WeatherLocation, signal?:
       sunset: parsed.daily.sunset[index]!
     })
   }
-  if (daily.length === 0) throw new Error('天气服务没有返回逐日预报')
+  if (daily.length === 0) throw new WeatherRequestError('noDaily')
   return {
     location,
     timezone: parsed.timezone,
@@ -208,28 +222,51 @@ export async function fetchOpenMeteoForecast(location: WeatherLocation, signal?:
   }
 }
 
-export function weatherCodeLabel(code: number): string {
-  if (code === 0) return '晴'
-  if (code === 1) return '大部晴朗'
-  if (code === 2) return '局部多云'
-  if (code === 3) return '阴'
-  if (code === 45 || code === 48) return '有雾'
-  if (code >= 51 && code <= 57) return '毛毛雨'
-  if (code >= 61 && code <= 67) return '有雨'
-  if (code >= 71 && code <= 77) return '有雪'
-  if (code >= 80 && code <= 82) return '阵雨'
-  if (code === 85 || code === 86) return '阵雪'
-  if (code === 95 || code === 96 || code === 99) return '雷暴'
-  return '天气变化中'
+const weatherConditionMessages = defineMessages({
+  clear: { zh: '晴', en: 'Clear' },
+  mostlyClear: { zh: '大部晴朗', en: 'Mostly clear' },
+  partlyCloudy: { zh: '局部多云', en: 'Partly cloudy' },
+  overcast: { zh: '阴', en: 'Overcast' },
+  fog: { zh: '有雾', en: 'Foggy' },
+  drizzle: { zh: '毛毛雨', en: 'Drizzle' },
+  rain: { zh: '有雨', en: 'Rain' },
+  snow: { zh: '有雪', en: 'Snow' },
+  showers: { zh: '阵雨', en: 'Showers' },
+  snowShowers: { zh: '阵雪', en: 'Snow showers' },
+  thunderstorm: { zh: '雷暴', en: 'Thunderstorm' },
+  changing: { zh: '天气变化中', en: 'Changing weather' }
+})
+
+export function weatherCodeLabel(code: number, language: Language = 'zh-CN'): string {
+  const label = (pair: { zh: string; en: string }) => (language === 'en-US' ? pair.en : pair.zh)
+  if (code === 0) return label(weatherConditionMessages.clear)
+  if (code === 1) return label(weatherConditionMessages.mostlyClear)
+  if (code === 2) return label(weatherConditionMessages.partlyCloudy)
+  if (code === 3) return label(weatherConditionMessages.overcast)
+  if (code === 45 || code === 48) return label(weatherConditionMessages.fog)
+  if (code >= 51 && code <= 57) return label(weatherConditionMessages.drizzle)
+  if (code >= 61 && code <= 67) return label(weatherConditionMessages.rain)
+  if (code >= 71 && code <= 77) return label(weatherConditionMessages.snow)
+  if (code >= 80 && code <= 82) return label(weatherConditionMessages.showers)
+  if (code === 85 || code === 86) return label(weatherConditionMessages.snowShowers)
+  if (code === 95 || code === 96 || code === 99) return label(weatherConditionMessages.thunderstorm)
+  return label(weatherConditionMessages.changing)
 }
 
-export function outdoorActivityAdvice(forecast: WeatherForecast): string {
-  const today = forecast.daily[0]
-  const rainProbability = today?.precipitationProbability ?? 0
-  if (forecast.current.weatherCode >= 95) return '当前可能有雷暴，休息活动优先安排在室内。'
-  if (rainProbability >= 70 || forecast.current.precipitation > 0) return '降水概率较高，起身活动建议优先选择室内。'
-  if (forecast.current.apparentTemperature >= 35) return '体感炎热，短暂活动时注意补水，避免暴晒。'
-  if (forecast.current.apparentTemperature <= 2) return '体感较冷，外出活动前注意保暖。'
-  if (forecast.current.windGusts >= 50) return '阵风较强，开窗或外出活动时请留意安全。'
-  return '天气适合短暂起身活动，工作间隙可以走动几分钟。'
+/** 把天气请求失败分类转换为当前语言的用户文案。 */
+export function weatherRequestMessage(
+  reason: WeatherRequestError,
+  language: Language = 'zh-CN'
+): string {
+  const messages = defineMessages({
+    unavailable: { zh: '天气服务暂不可用（HTTP {status}）', en: 'The weather service is unavailable (HTTP {status})' },
+    timeout: { zh: '天气服务响应超时，请稍后重试', en: 'The weather service timed out. Try again later.' },
+    unrecognized: { zh: '天气服务返回了无法识别的数据', en: 'The weather service returned unrecognized data.' },
+    connection: { zh: '天气服务连接失败，请检查网络后重试', en: 'Could not connect to the weather service. Check your network and try again.' },
+    noDaily: { zh: '天气服务没有返回逐日预报', en: 'The weather service returned no daily forecast.' }
+  })
+  if (reason.code === 'unavailable') {
+    return formatMessage(messageText(messages.unavailable, language), { status: reason.status ?? 0 })
+  }
+  return messageText(messages[reason.code], language)
 }

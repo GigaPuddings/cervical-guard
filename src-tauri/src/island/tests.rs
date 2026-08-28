@@ -1,9 +1,11 @@
 use crate::app_runtime::guard_protocol_response;
 use crate::island::*;
+use crate::messages::Language;
 use crate::model::{AppSettings, MonitoringLifecycle};
+use crate::sound::reminder_sound_enabled;
 use crate::tray::{
-    normalized_proxy, tray_icon_with_update_badge, tray_update_badge_visible, update_tray_text,
-    UpdateUiState,
+    normalized_proxy, tray_icon_with_update_badge, tray_tooltip_text, tray_update_badge_visible,
+    update_tray_text, UpdateUiState,
 };
 
 #[test]
@@ -17,14 +19,34 @@ fn updater_tray_reports_progress_and_keeps_the_process_alive() {
     assert!(downloading.keeps_app_alive());
     assert_eq!(
         update_tray_text(
-            false,
+            Language::ZhCn,
             &downloading.stage,
             downloading.version.as_deref(),
             37
         ),
         "↓ 正在下载 v0.2.0 · 37%"
     );
+    assert_eq!(
+        update_tray_text(Language::EnUs, "latest", None, 0),
+        "Check for updates (up to date)"
+    );
     assert!(!UpdateUiState::default().keeps_app_alive());
+}
+
+#[test]
+fn tray_tooltip_follows_current_language() {
+    assert_eq!(
+        tray_tooltip_text(Language::ZhCn, "idle", None, 0),
+        "健康提醒 · 姿态与久坐"
+    );
+    assert_eq!(
+        tray_tooltip_text(Language::EnUs, "idle", None, 0),
+        "Health Reminder · Posture & Sitting"
+    );
+    assert_eq!(
+        tray_tooltip_text(Language::ZhCn, "downloading", Some("0.2.0"), 37),
+        "↓ 正在下载 v0.2.0 · 37%"
+    );
 }
 
 #[test]

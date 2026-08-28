@@ -5,7 +5,7 @@ import { defineMessages, localizeMessages } from '../runtimeI18n'
 import { cn } from '../utils'
 
 const selectMessages = defineMessages({
-  empty: '请选择'
+  empty: { zh: '请选择', en: 'Select' }
 })
 
 export interface SelectOption<T extends string | number> {

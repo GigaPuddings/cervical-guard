@@ -3,10 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EmptyState } from '../../components/EmptyState'
 import { SectionHeader } from '../../components/SectionHeader'
 import type { Language } from '../../i18n'
-import { defineMessages, localizeMessages, translateNow } from '../../runtimeI18n'
+import { defineMessages, localizeMessages, messageText } from '../../runtimeI18n'
 import { cn } from '../../utils'
-import { searchChineseCities, weatherCodeLabel } from './openMeteo'
-import { locationSubtitle } from './presentation'
+import { searchChineseCities, weatherCodeLabel, WeatherRequestError, weatherRequestMessage } from './openMeteo'
+import { localizeGeoTerm, locationSubtitle } from './presentation'
 import { getWeatherForecast, loadPreferredWeatherLocation, loadWeatherLocations, removeCachedForecast, savePreferredWeatherLocation, saveWeatherLocations } from './repository'
 import { MAX_WEATHER_LOCATIONS, type CitySearchResult, type WeatherForecast, type WeatherLocation } from './types'
 import { publishWeatherToReminderIsland } from './usePrimaryWeather'
@@ -14,38 +14,40 @@ import { WeatherDetail } from './WeatherDetail'
 import { WeatherGlyph } from './WeatherGlyph'
 
 const weatherPageMessages = defineMessages({
-  requestCancelled: '请求已取消',
-  operationUnavailable: '操作暂时无法完成',
-  alreadySaved: '已在关注列表中',
-  maxPrefix: '最多关注',
-  maxSuffix: '个地点，请先移除一个',
-  added: '已添加',
-  addedSuffix: '，并设为概览天气',
-  searchTooShort: '请输入至少 2 个字符，例如“北京”或“杭州市”',
-  noSearchResults: '没有找到匹配的中国城市，请尝试输入完整城市名',
-  eyebrow: '天气与活动',
-  title: '今天适合怎么动一动',
-  subtitle: '结合天气与环境，给你更合适的运动与护颈建议。',
-  searchCity: '搜索中国城市',
-  searchPlaceholder: '输入城市名，例如：南京、杭州、深圳',
-  search: '搜索',
-  selected: '已添加',
-  defaultCity: '并设为默认城市',
-  results: '城市搜索结果',
-  city: '城市',
-  savedPlaces: '关注地点',
-  noPlaces: '还没有地点',
-  addCityHint: '输入城市名称并搜索添加',
-  addCity: '添加城市',
-  waitingWeather: '等待天气',
-  remove: '移除'
+  requestCancelled: { zh: '请求已取消', en: 'Request canceled' },
+  operationUnavailable: { zh: '操作暂时无法完成', en: 'The operation is temporarily unavailable' },
+  alreadySaved: { zh: '已在关注列表中', en: 'is already saved' },
+  maxPrefix: { zh: '最多关注', en: 'You can save up to' },
+  maxSuffix: { zh: '个地点，请先移除一个', en: 'places; remove one first' },
+  added: { zh: '已添加', en: 'Added' },
+  addedSuffix: { zh: '，并设为概览天气', en: ' and set it as overview weather' },
+  searchTooShort: { zh: '请输入至少 2 个字符，例如“北京”或“杭州市”', en: 'Enter at least 2 characters, such as “Beijing” or “Hangzhou”.' },
+  noSearchResults: { zh: '没有找到匹配的中国城市，请尝试输入完整城市名', en: 'No matching Chinese city was found. Try the full city name.' },
+  eyebrow: { zh: '天气与活动', en: 'Weather & activity' },
+  title: { zh: '今天适合怎么动一动', en: 'How to move today' },
+  subtitle: { zh: '结合天气与环境，给你更合适的运动与护颈建议。', en: 'Weather-aware movement and neck-care suggestions for your day.' },
+  searchCity: { zh: '搜索中国城市', en: 'Search Chinese cities' },
+  searchPlaceholder: { zh: '输入城市名，例如：南京、杭州、深圳', en: 'Enter a city, for example: Nanjing, Hangzhou, or Shenzhen' },
+  search: { zh: '搜索', en: 'Search' },
+  selected: { zh: '已添加', en: 'Added' },
+  defaultCity: { zh: '并设为默认城市', en: 'and set as the default city' },
+  results: { zh: '城市搜索结果', en: 'City search results' },
+  city: { zh: '城市', en: 'City' },
+  savedPlaces: { zh: '关注地点', en: 'Saved places' },
+  noPlaces: { zh: '还没有地点', en: 'No places yet' },
+  addCityHint: { zh: '输入城市名称并搜索添加', en: 'Search for a city to add it' },
+  addCity: { zh: '添加城市', en: 'Add city' },
+  waitingWeather: { zh: '等待天气', en: 'Waiting for weather' },
+  remove: { zh: '移除', en: 'Remove' }
 })
 
-export function reasonMessage(reason: unknown): string {
-  if (reason instanceof DOMException && reason.name === 'AbortError') return weatherPageMessages.requestCancelled
+/** 把天气请求失败转换为当前语言的用户文案;未知错误保留原始消息。 */
+export function reasonMessage(reason: unknown, language: Language = 'zh-CN'): string {
+  if (reason instanceof WeatherRequestError) return weatherRequestMessage(reason, language)
+  if (reason instanceof DOMException && reason.name === 'AbortError') return messageText(weatherPageMessages.requestCancelled, language)
   if (reason instanceof Error) return reason.message
   if (typeof reason === 'string' && reason.trim()) return reason.trim()
-  return weatherPageMessages.operationUnavailable
+  return messageText(weatherPageMessages.operationUnavailable, language)
 }
 
 export function locationNeedsLanguageRefresh(location: WeatherLocation, language: Language): boolean {
@@ -56,7 +58,6 @@ export function locationNeedsLanguageRefresh(location: WeatherLocation, language
 
 export function WeatherPage({ language }: { language: Language }) {
   const messages = localizeMessages(weatherPageMessages, language)
-  const t = (value: string) => translateNow(value, language)
   const [locations, setLocations] = useState<WeatherLocation[]>(loadWeatherLocations)
   const [activeLocationId, setActiveLocationId] = useState<string | null>(() => loadPreferredWeatherLocation()?.id ?? null)
   const [forecasts, setForecasts] = useState<Record<string, WeatherForecast>>({})
@@ -88,7 +89,7 @@ export function WeatherPage({ language }: { language: Language }) {
       const forecast = await getWeatherForecast(location, force)
       if (mounted.current) setForecasts(current => ({ ...current, [location.id]: forecast }))
     } catch (reason) {
-      if (mounted.current) setErrors(current => ({ ...current, [location.id]: reasonMessage(reason) }))
+      if (mounted.current) setErrors(current => ({ ...current, [location.id]: reasonMessage(reason, language) }))
     } finally {
       if (mounted.current)
         setLoadingIds(current => {
@@ -97,7 +98,7 @@ export function WeatherPage({ language }: { language: Language }) {
           return next
         })
     }
-  }, [])
+  }, [language])
 
   useEffect(() => {
     for (const location of locations) {
@@ -178,7 +179,7 @@ export function WeatherPage({ language }: { language: Language }) {
       setResults(next)
       if (!next.length) setSearchError(messages.noSearchResults)
     } catch (reason) {
-      setSearchError(reasonMessage(reason))
+      setSearchError(reasonMessage(reason, language))
     } finally {
       setSearching(false)
     }
@@ -212,7 +213,7 @@ export function WeatherPage({ language }: { language: Language }) {
               {messages.search}
             </button>
           </div>
-          <p className={cn('mt-1.5 px-2 text-[9px] text-muted', searchError && 'text-danger')}>{searchError ? t(searchError) : (notice ?? `${messages.selected} ${locations.map(location => location.name).join('、')}，${messages.defaultCity}`)}</p>
+          <p className={cn('mt-1.5 px-2 text-[9px] text-muted', searchError && 'text-danger')}>{searchError ?? (notice ?? `${messages.selected} ${locations.map(location => location.name).join('、')}，${messages.defaultCity}`)}</p>
           {results.length ? (
             <div className="absolute inset-x-0 top-15.5 grid max-h-60 grid-cols-2 gap-2 overflow-y-auto rounded-[14px] border border-edge bg-panel p-2 shadow-panel" aria-label={messages.results}>
               {results.map(result => (
@@ -251,7 +252,7 @@ export function WeatherPage({ language }: { language: Language }) {
                       </span>
                       <span className="min-w-0 flex-1">
                         <strong className="weather-location-name block truncate text-[14px]">{location.name}</strong>
-                        <small className="weather-location-meta mt-1 block truncate text-[10px] text-muted">{forecast ? `${Math.round(forecast.current.temperature)}° · ${t(weatherCodeLabel(forecast.current.weatherCode))}` : t(location.admin1 || messages.waitingWeather)}</small>
+                        <small className="weather-location-meta mt-1 block truncate text-[10px] text-muted">{forecast ? `${Math.round(forecast.current.temperature)}° · ${weatherCodeLabel(forecast.current.weatherCode, language)}` : (location.admin1 ? localizeGeoTerm(location.admin1, language) : messages.waitingWeather)}</small>
                       </span>
                       {forecast ? <WeatherGlyph className="weather-location-glyph shrink-0 text-accent" code={forecast.current.weatherCode} size={22} /> : null}
                     </button>

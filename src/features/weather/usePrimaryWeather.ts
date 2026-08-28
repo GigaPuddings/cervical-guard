@@ -1,6 +1,8 @@
 import { isTauri } from '@tauri-apps/api/core'
 import { emitTo } from '@tauri-apps/api/event'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { Language } from '../../i18n'
+import { defineMessages, messageText } from '../../runtimeI18n'
 import { getWeatherForecast, loadPreferredWeatherLocation, WEATHER_PREFERENCE_EVENT } from './repository'
 import { toWeatherSummary } from './presentation'
 import { WEATHER_CACHE_TTL_MS, type WeatherForecast, type WeatherLocation } from './types'
@@ -13,8 +15,13 @@ export function isPrimaryWeatherRefreshDue(forecast: WeatherForecast | null, now
   return !Number.isFinite(fetchedAt) || now - fetchedAt >= WEATHER_CACHE_TTL_MS
 }
 
-function reasonMessage(reason: unknown): string {
-  return reason instanceof Error ? reason.message : '天气暂时无法加载'
+const primaryWeatherMessages = defineMessages({
+  loadFailed: { zh: '天气暂时无法加载', en: 'Weather is temporarily unavailable' }
+})
+
+function reasonMessage(reason: unknown, language: Language): string {
+  if (reason instanceof Error) return reason.message
+  return messageText(primaryWeatherMessages.loadFailed, language)
 }
 
 export async function publishWeatherToReminderIsland(forecast: WeatherForecast | null): Promise<void> {
@@ -34,7 +41,7 @@ export interface PrimaryWeatherState {
   refresh: (force?: boolean) => Promise<void>
 }
 
-export function usePrimaryWeather(): PrimaryWeatherState {
+export function usePrimaryWeather(language: Language = 'zh-CN'): PrimaryWeatherState {
   const [location, setLocation] = useState<WeatherLocation | null>(loadPreferredWeatherLocation)
   const [forecast, setForecast] = useState<WeatherForecast | null>(null)
   const [loading, setLoading] = useState(Boolean(location))
@@ -63,11 +70,11 @@ export function usePrimaryWeather(): PrimaryWeatherState {
       setForecast(next)
       void publishWeatherToReminderIsland(next)
     } catch (reason) {
-      if (requestId === refreshRequestRef.current) setError(reasonMessage(reason))
+      if (requestId === refreshRequestRef.current) setError(reasonMessage(reason, language))
     } finally {
       if (requestId === refreshRequestRef.current) setLoading(false)
     }
-  }, [])
+  }, [language])
 
   useEffect(() => {
     void refresh()

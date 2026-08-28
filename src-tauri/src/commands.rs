@@ -1,10 +1,20 @@
 use super::*;
 
+fn state_lock_error() -> String {
+    msg::ERR_STATE_LOCK.get(Language::ZhCn).to_string()
+}
+
+fn database_lock_error() -> String {
+    msg::ERR_DATABASE_LOCK.get(Language::ZhCn).to_string()
+}
+
+fn command_language(context: &State<'_, AppContext>) -> Result<Language, String> {
+    let core = context.core.lock().map_err(|_| state_lock_error())?;
+    Ok(Language::of_settings(core.settings()))
+}
+
 pub(crate) fn persist(context: &AppContext, core: &RuntimeState) -> Result<(), String> {
-    let database = context
-        .database
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_string())?;
+    let database = context.database.lock().map_err(|_| database_lock_error())?;
     database.save_settings(core.settings())?;
     database.save_meta(&core.persisted_meta())?;
     database.save_daily(core.today())
@@ -14,10 +24,7 @@ pub(crate) fn snapshot_after(
     context: &AppContext,
     operation: impl FnOnce(&mut RuntimeState) -> Result<(), String>,
 ) -> Result<AppSnapshot, String> {
-    let mut core = context
-        .core
-        .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?;
+    let mut core = context.core.lock().map_err(|_| state_lock_error())?;
     operation(&mut core)?;
     let snapshot = core.snapshot();
     persist(context, &core)?;
@@ -29,17 +36,14 @@ pub(crate) fn get_app_snapshot(
     app: AppHandle,
     context: State<'_, AppContext>,
 ) -> Result<AppSnapshot, String> {
-    let mut core = context
-        .core
-        .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?;
+    let mut core = context.core.lock().map_err(|_| state_lock_error())?;
     let reminder = core.tick();
     let snapshot = core.snapshot();
     persist(&context, &core)?;
     drop(core);
     if let Some(reminder) = reminder {
-        let sound_enabled = reminder_sound_enabled(&snapshot.settings);
-        present_reminder_island(&app, reminder, sound_enabled);
+        let sound = resolve_reminder_sound(&snapshot.settings, reminder.level);
+        present_reminder_island(&app, reminder, sound);
     }
     Ok(snapshot)
 }
@@ -86,10 +90,7 @@ pub(crate) fn ingest_observation(
     context: State<'_, AppContext>,
     observation: VisionObservation,
 ) -> Result<AppSnapshot, String> {
-    let mut core = context
-        .core
-        .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?;
+    let mut core = context.core.lock().map_err(|_| state_lock_error())?;
     let reminder = core.ingest(observation)?;
     let snapshot = core.snapshot();
     // 提醒展示可能访问窗口和播放声音，必须在释放核心状态锁后执行。
@@ -97,8 +98,8 @@ pub(crate) fn ingest_observation(
     // 导致检测运行数分钟后确定性死锁。
     drop(core);
     if let Some(reminder) = reminder {
-        let sound_enabled = reminder_sound_enabled(&snapshot.settings);
-        present_reminder_island(&app, reminder, sound_enabled);
+        let sound = resolve_reminder_sound(&snapshot.settings, reminder.level);
+        present_reminder_island(&app, reminder, sound);
     }
     // 高频观测只更新内存状态;后台 1 秒 tick 已统一持久化,避免每帧重复
     // 写 SQLite。用户操作命令仍同步落盘,这里只增加最多约 1 秒的运行
@@ -112,19 +113,13 @@ pub(crate) fn pause_monitoring(
     context: State<'_, AppContext>,
     minutes: Option<u64>,
 ) -> Result<AppSnapshot, String> {
-    let mut core = context
-        .core
-        .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?;
+    let mut core = context.core.lock().map_err(|_| state_lock_error())?;
     core.pause(minutes);
     let snapshot = core.snapshot();
     persist(&context, &core)?;
     drop(core);
     {
-        let database = context
-            .database
-            .lock()
-            .map_err(|_| "数据库锁已损坏".to_string())?;
+        let database = context.database.lock().map_err(|_| database_lock_error())?;
         database.record_event(
             "proactive_pause",
             minutes.unwrap_or(0).saturating_mul(60),
@@ -134,7 +129,7 @@ pub(crate) fn pause_monitoring(
     context
         .island_ui
         .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?
+        .map_err(|_| state_lock_error())?
         .request_pause_status();
     suppress_island_hover_until_cursor_exit(&context)?;
     rebuild_tray_menu(&app)?;
@@ -150,7 +145,7 @@ pub(crate) fn resume_monitoring(
     context
         .island_ui
         .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?
+        .map_err(|_| state_lock_error())?
         .clear_pause_status_request();
     rebuild_tray_menu(&app)?;
     Ok(snapshot)
@@ -166,10 +161,7 @@ pub(crate) fn start_break(
     let restore_main_after_break = app.get_webview_window("main").is_some_and(|window| {
         window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false)
     });
-    let mut core = context
-        .core
-        .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?;
+    let mut core = context.core.lock().map_err(|_| state_lock_error())?;
     let event_type = if core.current_reminder().is_some() {
         "break"
     } else if core.snapshot().seated_seconds < core.settings().sedentary_seconds {
@@ -179,15 +171,12 @@ pub(crate) fn start_break(
     };
     core.start_break();
     {
-        let database = context
-            .database
-            .lock()
-            .map_err(|_| "数据库锁已损坏".to_string())?;
+        let database = context.database.lock().map_err(|_| database_lock_error())?;
         let event_id = database.start_event(event_type, Some("started"))?;
         context
             .island_ui
             .lock()
-            .map_err(|_| "状态锁已损坏".to_string())?
+            .map_err(|_| state_lock_error())?
             .active_break_event = Some((event_id, Instant::now()));
     }
     let snapshot = core.snapshot();
@@ -196,7 +185,7 @@ pub(crate) fn start_break(
     context
         .island_ui
         .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?
+        .map_err(|_| state_lock_error())?
         .remember_main_visibility_for_break(restore_main_after_break);
     let _ = app.emit("monitoring://snapshot", &snapshot);
     rebuild_tray_menu(&app)?;
@@ -209,10 +198,7 @@ pub(crate) fn end_break(
     app: AppHandle,
     context: State<'_, AppContext>,
 ) -> Result<AppSnapshot, String> {
-    let mut core = context
-        .core
-        .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?;
+    let mut core = context.core.lock().map_err(|_| state_lock_error())?;
     core.end_break();
     let snapshot = core.snapshot();
     persist(&context, &core)?;
@@ -220,21 +206,18 @@ pub(crate) fn end_break(
     let active_event = context
         .island_ui
         .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?
+        .map_err(|_| state_lock_error())?
         .active_break_event
         .take();
     if let Some((event_id, started_at)) = active_event {
         context
             .database
             .lock()
-            .map_err(|_| "数据库锁已损坏".to_string())?
+            .map_err(|_| database_lock_error())?
             .finish_event(&event_id, started_at.elapsed().as_secs(), Some("completed"))?;
     }
     let restore_main_after_break = {
-        let mut ui = context
-            .island_ui
-            .lock()
-            .map_err(|_| "状态锁已损坏".to_string())?;
+        let mut ui = context.island_ui.lock().map_err(|_| state_lock_error())?;
         let restore = ui.take_main_restore_after_break();
         ui.suppress_hover_until_cursor_exit();
         restore
@@ -254,10 +237,7 @@ pub(crate) fn snooze_reminder(
     context: State<'_, AppContext>,
     minutes: u64,
 ) -> Result<AppSnapshot, String> {
-    let mut core = context
-        .core
-        .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?;
+    let mut core = context.core.lock().map_err(|_| state_lock_error())?;
     let duration = core
         .current_reminder()
         .map(|item| item.duration_seconds)
@@ -265,10 +245,7 @@ pub(crate) fn snooze_reminder(
     let had_reminder = core.current_reminder().is_some();
     core.snooze(minutes);
     if had_reminder {
-        let database = context
-            .database
-            .lock()
-            .map_err(|_| "数据库锁已损坏".to_string())?;
+        let database = context.database.lock().map_err(|_| database_lock_error())?;
         database.record_event("reminder", duration, Some("snoozed"))?;
     }
     let snapshot = core.snapshot();
@@ -282,10 +259,7 @@ pub(crate) fn dismiss_reminder(
     app: AppHandle,
     context: State<'_, AppContext>,
 ) -> Result<AppSnapshot, String> {
-    let mut core = context
-        .core
-        .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?;
+    let mut core = context.core.lock().map_err(|_| state_lock_error())?;
     let current_reminder = core.current_reminder().cloned();
     let duration = current_reminder
         .as_ref()
@@ -293,10 +267,7 @@ pub(crate) fn dismiss_reminder(
         .unwrap_or(0);
     core.dismiss();
     if current_reminder.is_some() {
-        let database = context
-            .database
-            .lock()
-            .map_err(|_| "数据库锁已损坏".to_string())?;
+        let database = context.database.lock().map_err(|_| database_lock_error())?;
         database.record_event("reminder", duration, Some("dismissed"))?;
     }
     let snapshot = core.snapshot();
@@ -315,10 +286,7 @@ pub(crate) fn update_settings(
     // 先验证再修改系统自启动，避免无效设置导致 OS 状态与数据库状态分叉。
     settings.validate()?;
     let autostart_changed = {
-        let core = context
-            .core
-            .lock()
-            .map_err(|_| "状态锁已损坏".to_string())?;
+        let core = context.core.lock().map_err(|_| state_lock_error())?;
         core.settings().autostart != settings.autostart
     };
     if autostart_changed {
@@ -327,7 +295,12 @@ pub(crate) fn update_settings(
         } else {
             app.autolaunch().disable()
         };
-        result.map_err(|error| format!("无法更新开机启动设置：{error}"))?;
+        result.map_err(|error| {
+            msg::ERR_AUTOSTART_UPDATE.format(
+                Language::of_settings(&settings),
+                &[("error", &error.to_string())],
+            )
+        })?;
     }
     let snapshot = snapshot_after(&context, |core| core.update_settings(settings))?;
     if !snapshot.settings.island_enabled
@@ -337,6 +310,7 @@ pub(crate) fn update_settings(
     {
         hide_island_window(&app);
     }
+    refresh_tray_labels(&app)?;
     Ok(snapshot)
 }
 
@@ -345,10 +319,7 @@ pub(crate) fn get_statistics(
     context: State<'_, AppContext>,
     days: u32,
 ) -> Result<Vec<DailyStatistics>, String> {
-    let database = context
-        .database
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_string())?;
+    let database = context.database.lock().map_err(|_| database_lock_error())?;
     database.statistics(days)
 }
 
@@ -360,7 +331,7 @@ pub(crate) fn get_behavior_history(
     context
         .database
         .lock()
-        .map_err(|_| "数据库锁已损坏".to_string())?
+        .map_err(|_| database_lock_error())?
         .behavior_history(days)
 }
 
@@ -372,7 +343,7 @@ pub(crate) fn get_behavior_history_for_date(
     context
         .database
         .lock()
-        .map_err(|_| "数据库锁已损坏".to_string())?
+        .map_err(|_| database_lock_error())?
         .behavior_history_for_date(&local_date)
 }
 
@@ -383,10 +354,7 @@ pub(crate) fn set_island_menu_open(
     open: bool,
 ) -> Result<(), String> {
     let detail_expanded = {
-        let mut ui = context
-            .island_ui
-            .lock()
-            .map_err(|_| "状态锁已损坏".to_string())?;
+        let mut ui = context.island_ui.lock().map_err(|_| state_lock_error())?;
         let detail_expanded = ui.detail_expanded;
         ui.menu_open = open;
         detail_expanded
@@ -410,12 +378,11 @@ pub(crate) fn mute_island(
     permanent: bool,
 ) -> Result<AppSnapshot, String> {
     if permanent {
-        let mut core = context
-            .core
-            .lock()
-            .map_err(|_| "状态锁已损坏".to_string())?;
+        let mut core = context.core.lock().map_err(|_| state_lock_error())?;
         if !core.settings().island_permanent_close_enabled {
-            return Err("请先在偏好设置中允许彻底关闭灵动岛".into());
+            return Err(msg::ERR_ISLAND_PERMANENT_CLOSE
+                .get(Language::of_settings(core.settings()))
+                .to_string());
         }
         let mut settings = core.settings().clone();
         settings.island_enabled = false;
@@ -428,10 +395,7 @@ pub(crate) fn mute_island(
     }
     let duration = minutes.unwrap_or(10).clamp(1, 120);
     {
-        let mut ui = context
-            .island_ui
-            .lock()
-            .map_err(|_| "状态锁已损坏".to_string())?;
+        let mut ui = context.island_ui.lock().map_err(|_| state_lock_error())?;
         ui.muted_until = Some(Instant::now() + Duration::from_secs(duration * 60));
         ui.menu_open = false;
         ui.detail_expanded = false;
@@ -442,21 +406,18 @@ pub(crate) fn mute_island(
     let snapshot = context
         .core
         .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?
+        .map_err(|_| state_lock_error())?
         .snapshot();
     Ok(snapshot)
 }
 
 #[tauri::command]
 pub(crate) fn export_statistics(context: State<'_, AppContext>) -> Result<String, String> {
-    let database = context
-        .database
-        .lock()
-        .map_err(|_| "数据库锁已损坏".to_string())?;
+    // 导出内容的语言跟随界面设置，保证 CSV 表头与当前界面一致。
+    let language = command_language(&context)?;
+    let database = context.database.lock().map_err(|_| database_lock_error())?;
     let rows = database.statistics(366)?;
-    let mut csv = String::from(
-        "日期,坐姿秒数,最长连续坐姿秒数,低头秒数,疑似手机秒数,休息次数,提醒次数,稍后提醒次数,关闭提醒次数,延后或关闭提醒次数,离座秒数,离座次数\n",
-    );
+    let mut csv = String::from(msg::CSV_STATISTICS_HEADER.get(language)) + "\n";
     for item in rows {
         csv.push_str(&format!(
             "{},{},{},{},{},{},{},{},{},{},{},{}\n",
@@ -474,7 +435,9 @@ pub(crate) fn export_statistics(context: State<'_, AppContext>) -> Result<String
             item.away_count,
         ));
     }
-    csv.push_str("\n行为时间,行为类型,持续秒数,操作\n");
+    csv.push('\n');
+    csv.push_str(msg::CSV_EVENTS_HEADER.get(language));
+    csv.push('\n');
     for event in database.export_events(366)? {
         csv.push_str(&format!(
             "{},{},{},{}\n",
@@ -490,10 +453,7 @@ pub(crate) fn export_statistics(context: State<'_, AppContext>) -> Result<String
 #[tauri::command]
 pub(crate) fn delete_local_data(context: State<'_, AppContext>) -> Result<AppSnapshot, String> {
     {
-        let database = context
-            .database
-            .lock()
-            .map_err(|_| "数据库锁已损坏".to_string())?;
+        let database = context.database.lock().map_err(|_| database_lock_error())?;
         database.delete_statistics()?;
     }
     snapshot_after(&context, |core| {
@@ -506,12 +466,16 @@ pub(crate) fn delete_local_data(context: State<'_, AppContext>) -> Result<AppSna
 pub(crate) async fn list_cameras(
     context: State<'_, AppContext>,
 ) -> Result<Vec<vision::CameraDevice>, String> {
+    // 文案语言在进入阻塞线程前读取，避免跨线程二次加锁。
+    let language = command_language(&context)?;
     // Windows 某些摄像头驱动在枚举设备/检查权限时会阻塞数秒。放入阻塞线程池，
     // 避免查询期间冻结 WebView 主线程，造成入口按钮“无法点击”的错觉。
     let service = Arc::clone(&context.vision);
-    tauri::async_runtime::spawn_blocking(move || service.list_cameras())
+    tauri::async_runtime::spawn_blocking(move || service.list_cameras(language))
         .await
-        .map_err(|error| format!("摄像头设备查询线程异常:{error}"))?
+        .map_err(|error| {
+            msg::ERR_CAMERA_QUERY_THREAD.format(language, &[("error", &error.to_string())])
+        })?
 }
 
 /// 启动摄像头与姿态检测管线；预览帧通过 `vision://preview` 事件推送。
@@ -523,18 +487,24 @@ pub(crate) async fn start_vision(
     baseline: Option<f64>,
     head_down_enabled: bool,
 ) -> Result<(), String> {
+    let language = command_language(&context)?;
     let service = Arc::clone(&context.vision);
     tauri::async_runtime::spawn_blocking(move || {
         service.start(&app, &camera_id, baseline, head_down_enabled)
     })
     .await
-    .map_err(|error| format!("摄像头会话线程异常:{error}"))?
+    .map_err(|error| {
+        msg::ERR_VISION_SESSION_THREAD.format(language, &[("error", &error.to_string())])
+    })?
 }
 
 #[tauri::command]
 pub(crate) async fn stop_vision(context: State<'_, AppContext>) -> Result<(), String> {
+    let language = command_language(&context)?;
     let service = Arc::clone(&context.vision);
     tauri::async_runtime::spawn_blocking(move || service.stop())
         .await
-        .map_err(|error| format!("摄像头会话线程异常:{error}"))?
+        .map_err(|error| {
+            msg::ERR_VISION_SESSION_THREAD.format(language, &[("error", &error.to_string())])
+        })?
 }

@@ -1,5 +1,9 @@
 use super::*;
 
+fn island_state_lock_error() -> String {
+    msg::ERR_STATE_LOCK.get(Language::ZhCn).to_string()
+}
+
 /// 灵动岛窗口的两种形态尺寸（逻辑像素）。
 pub(crate) const ISLAND_COMPACT_WIDTH: f64 = 360.0;
 pub(crate) const ISLAND_COMPACT_HEIGHT: f64 = 76.0;
@@ -167,11 +171,6 @@ impl IslandUiState {
     }
 }
 
-pub(crate) fn reminder_sound_enabled(settings: &AppSettings) -> bool {
-    // 会议模式的产品承诺是“安静通知”，优先级高于声音开关。
-    settings.sound_enabled && !settings.meeting_mode
-}
-
 pub(crate) fn island_feature_settings(
     app: &AppHandle,
     feature: impl FnOnce(&AppSettings) -> bool,
@@ -319,23 +318,6 @@ pub(crate) fn island_height_for_menu(open: bool, detail_expanded: bool) -> f64 {
         ISLAND_COMPACT_HEIGHT
     }
 }
-
-#[cfg(target_os = "windows")]
-pub(crate) fn play_notification_sound() {
-    #[link(name = "user32")]
-    extern "system" {
-        fn MessageBeep(sound_type: u32) -> i32;
-    }
-
-    // MB_ICONASTERISK：使用 Windows 当前声音方案中的“信息”提示音；若系统
-    // 已静音或禁用了该声音，尊重系统级设置。
-    unsafe {
-        let _ = MessageBeep(0x0000_0040);
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-pub(crate) fn play_notification_sound() {}
 
 /// 计算灵动岛窗口左上角位置（逻辑像素）：主显示器顶部居中。
 pub(crate) fn island_origin(app: &AppHandle, width: f64) -> (f64, f64) {
@@ -556,21 +538,19 @@ pub(crate) fn suppress_island_hover_until_cursor_exit(context: &AppContext) -> R
     let mut ui = context
         .island_ui
         .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?;
+        .map_err(|_| island_state_lock_error())?;
     ui.suppress_hover_until_cursor_exit();
     Ok(())
 }
 
-/// 展示正式提醒。声音策略必须由调用方在释放核心状态锁前读取并作为值传入；
+/// 展示正式提醒。提示音选项必须由调用方在释放核心状态锁前解析并作为值传入；
 /// 本函数不得再次获取 `AppContext::core`，否则观测触发提醒时会发生同线程锁重入死锁。
 pub(crate) fn present_reminder_island(
     app: &AppHandle,
     reminder: model::ReminderPayload,
-    sound_enabled: bool,
+    sound: Option<ReminderSound>,
 ) {
-    if sound_enabled {
-        play_notification_sound();
-    }
+    play_reminder_sound(sound);
     let app_handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         let Some(settings) =
@@ -816,14 +796,11 @@ pub(crate) fn collapse_island_detail(
     context: State<'_, AppContext>,
 ) -> Result<(), String> {
     let (snapshot, has_reminder, break_active, away_notice) = {
-        let mut core = context
-            .core
-            .lock()
-            .map_err(|_| "状态锁已损坏".to_string())?;
+        let mut core = context.core.lock().map_err(|_| island_state_lock_error())?;
         let ui = context
             .island_ui
             .lock()
-            .map_err(|_| "状态锁已损坏".to_string())?;
+            .map_err(|_| island_state_lock_error())?;
         let snapshot = core.snapshot();
         (
             snapshot.clone(),
@@ -836,7 +813,7 @@ pub(crate) fn collapse_island_detail(
         let mut ui = context
             .island_ui
             .lock()
-            .map_err(|_| "状态锁已损坏".to_string())?;
+            .map_err(|_| island_state_lock_error())?;
         ui.detail_expanded = false;
         ui.last_collapsed_at = Some(Instant::now());
     }
@@ -876,13 +853,13 @@ pub(crate) fn dismiss_behavior_notice(
     let snapshot = context
         .core
         .lock()
-        .map_err(|_| "状态锁已损坏".to_string())?
+        .map_err(|_| island_state_lock_error())?
         .snapshot();
     {
         let mut ui = context
             .island_ui
             .lock()
-            .map_err(|_| "状态锁已损坏".to_string())?;
+            .map_err(|_| island_state_lock_error())?;
         ui.suppress_hover_until_cursor_exit();
     }
     if island_status_enabled_for_context(&context, &snapshot.settings, snapshot.lifecycle) {

@@ -2,6 +2,7 @@ use std::path::Path;
 
 use rusqlite::{params, Connection};
 
+use crate::messages::{msg, Language};
 use crate::model::{AppSettings, BehaviorHistoryEvent, DailyStatistics, PersistedMeta};
 
 pub struct Database {
@@ -360,7 +361,7 @@ impl Database {
         local_date: &str,
     ) -> Result<Vec<BehaviorHistoryEvent>, String> {
         chrono::NaiveDate::parse_from_str(local_date, "%Y-%m-%d")
-            .map_err(|_| "行为记录日期格式无效".to_string())?;
+            .map_err(|_| msg::ERR_EVENT_DATE.get(Language::ZhCn).to_string())?;
         let mut statement = self.connection.prepare(
             "SELECT id, event_type, started_at, ended_at, COALESCE(duration_seconds, 0), reminder_action
              FROM behavior_events

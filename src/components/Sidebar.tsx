@@ -9,17 +9,17 @@ import { Brand } from './Brand'
 import { StatusCard } from './StatusCard'
 
 const sidebarMessages = defineMessages({
-  today: '今日概览',
-  statistics: '习惯趋势',
-  weather: '天气与活动',
-  settings: '偏好设置',
-  closeNavigation: '关闭导航',
-  mainNavigation: '主导航',
-  privacy: '本地隐私模式',
-  privacyNote: '画面不保存，不上传',
-  interfaceLanguage: '界面语言',
-  help: '使用帮助',
-  behaviorTool: '行为提醒工具'
+  today: { zh: '今日概览', en: 'Today' },
+  statistics: { zh: '习惯趋势', en: 'Trends' },
+  weather: { zh: '天气与活动', en: 'Weather & activity' },
+  settings: { zh: '偏好设置', en: 'Preferences' },
+  closeNavigation: { zh: '关闭导航', en: 'Close navigation' },
+  mainNavigation: { zh: '主导航', en: 'Main navigation' },
+  privacy: { zh: '本地隐私模式', en: 'Local privacy mode' },
+  privacyNote: { zh: '画面不保存，不上传', en: 'Frames are neither saved nor uploaded' },
+  interfaceLanguage: { zh: '界面语言', en: 'language' },
+  help: { zh: '使用帮助', en: 'Help' },
+  behaviorTool: { zh: '行为提醒工具', en: 'Behavior reminder tool' }
 })
 
 export function Sidebar({
