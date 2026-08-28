@@ -5,16 +5,13 @@ import { Calibration } from './features/calibration/Calibration'
 import { Dashboard } from './features/dashboard/Dashboard'
 import { Onboarding } from './features/onboarding/Onboarding'
 import { HelpDialog } from './features/help/HelpDialog'
-import { BreakIsland } from './features/reminders/BreakIsland'
-import { ReminderOverlay } from './features/reminders/ReminderOverlay'
 import { coreClient } from './infra/client'
-import { mockCore } from './infra/mockCore'
 import { useAppStore } from './store'
 import type { AppSettings, AppSnapshot, CalibrationResult, VisionObservation } from './types'
 import { downloadText } from './utils'
 import { useVisionMonitor } from './vision/useVisionMonitor'
 import { languageOf, localizeBackendMessage, type Language } from './i18n'
-import { defineMessages, localizeMessages, translateNow } from './runtimeI18n'
+import { defineMessages, localizeMessages } from './runtimeI18n'
 import { UpdateDialog, useAppUpdater } from './features/updates/UpdatePanel'
 
 const appMessages = defineMessages({
@@ -25,8 +22,7 @@ const appMessages = defineMessages({
   unavailableTitle: '本地状态暂不可用',
   unavailableHint: '请关闭后重新打开应用',
   exportFilename: '健康提醒统计',
-  confirmDelete: '确认删除全部本地统计数据？此操作无法撤销。设置和校准信息会保留。',
-  previewReminder: '预览提醒'
+  confirmDelete: '确认删除全部本地统计数据？此操作无法撤销。设置和校准信息会保留。'
 })
 
 function errorMessage(reason: unknown, fallback: string): string {
@@ -108,22 +104,6 @@ export function App() {
   }, [messages.operationUnavailable, setError, setSnapshot])
 
   useEffect(() => {
-    // Tauri 后台每秒广播完整快照；同时轮询会产生重复 IPC，并可能让较早发出的
-    // 旧响应覆盖刚收到的“开始休息”等新状态。浏览器模拟环境才需要主动轮询。
-    if (isTauri() || !snapshot || snapshot.lifecycle === 'unavailable' || snapshot.lifecycle === 'calibrating') return
-    const timer = window.setInterval(() => {
-      const epoch = snapshotEpoch.current
-      void coreClient
-        .getSnapshot()
-        .then(value => {
-          if (epoch === snapshotEpoch.current) setSnapshot(value)
-        })
-        .catch(() => undefined)
-    }, 1_000)
-    return () => window.clearInterval(timer)
-  }, [setSnapshot, snapshot?.lifecycle])
-
-  useEffect(() => {
     if (page !== 'statistics') return
     void Promise.all([coreClient.getStatistics(30), coreClient.getBehaviorHistoryForDate(currentLocalDateKey())])
       .then(([rows, events]) => {
@@ -148,11 +128,7 @@ export function App() {
     const reminder = snapshot?.currentReminder
     if (!reminder || reminder.id === lastReminderId.current) return
     lastReminderId.current = reminder.id
-    if (!isTauri()) {
-      const silent = !snapshot.settings.soundEnabled || snapshot.settings.meetingMode
-      void coreClient.notify(translateNow(reminder.title, language), translateNow(reminder.message, language), silent)
-    }
-  }, [language, snapshot?.currentReminder, snapshot?.settings.meetingMode, snapshot?.settings.soundEnabled])
+  }, [snapshot?.currentReminder])
 
   const onObservation = useCallback(
     (observation: VisionObservation) => {
@@ -174,8 +150,7 @@ export function App() {
 
   // 休息期间也保持摄像头低功耗运行：既能在休息中感知离座行为，
   // 也让休息结束的瞬间检测管线已就绪，避免重新打开摄像头导致的 ingest 失败。
-  const visualDemo = import.meta.env.DEV && new URLSearchParams(window.location.search).get('demo') === 'target'
-  const cameraActive = Boolean(!visualDemo && snapshot && (snapshot.lifecycle === 'monitoring' || snapshot.lifecycle === 'break') && snapshot.monitoringMode === 'camera' && snapshot.calibrated)
+  const cameraActive = Boolean(snapshot && (snapshot.lifecycle === 'monitoring' || snapshot.lifecycle === 'break') && snapshot.monitoringMode === 'camera' && snapshot.calibrated)
   const vision = useVisionMonitor({
     active: cameraActive,
     cameraId: snapshot?.settings.cameraId ?? 'default',
@@ -366,21 +341,6 @@ export function App() {
       />
       <HelpDialog open={helpOpen} language={language} onClose={() => setHelpOpen(false)} />
       <UpdateDialog updater={updater} language={language} />
-      {/* 浏览器开发环境保留页面内预览；桌面端只允许 Rust 创建的独立
-          reminder-island 窗口承载提醒，避免在主窗口顶部重复渲染“伪灵动岛”。 */}
-      {!isTauri() && snapshot.currentReminder && <ReminderOverlay reminder={snapshot.currentReminder} language={language} onBreak={() => void run(() => coreClient.startBreak())} onSnooze={() => void run(() => coreClient.snoozeReminder(10))} onDismiss={() => void run(() => coreClient.dismissReminder())} onPause={() => void run(() => coreClient.pauseMonitoring(60))} />}
-      {!isTauri() && snapshot.lifecycle === 'break' && <BreakIsland snapshot={snapshot} language={language} onEnd={() => void run(() => coreClient.endBreak())} />}
-      {!isTauri() && import.meta.env.DEV && (
-        <button
-          className="fixed bottom-3 right-3 z-80 rounded-lg border border-dashed border-edge bg-panel/85 px-2 py-1 text-[8px] text-muted"
-          onClick={() => {
-            mockCore.triggerDemoReminder()
-            void coreClient.getSnapshot().then(setSnapshot)
-          }}
-        >
-          {messages.previewReminder}
-        </button>
-      )}
     </>
   )
 }

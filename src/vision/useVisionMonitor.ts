@@ -36,8 +36,6 @@ interface VisionMonitor {
   retryPreview: () => void
 }
 
-/** 非生产(mock)模式下的模拟轮询间隔。 */
-const MOCK_FRAME_INTERVAL_MS = 240
 /** React 状态更新节流间隔(≈12 FPS),回调全速触发。 */
 const UI_UPDATE_INTERVAL_MS = 80
 function messageOf(reason: unknown): string {
@@ -122,7 +120,6 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
 
     let cancelled = false
     let unlisten: (() => void) | null = null
-    let mockTimer: number | null = null
     let previewWatchdog: number | null = null
     let previewReceived = false
     let lastUiUpdate = 0
@@ -150,45 +147,49 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
         setError(null)
         setStatus('requesting')
 
-        if (isTauri()) {
-          // 先挂载监听器再启动摄像头，确保相机很快就绪时也不会漏掉首帧或错误。
-          const [unlistenFrame, unlistenPreview, unlistenError] = await Promise.all([
-            listen<VisionFrame>('vision://frame', event => {
-              if (cancelled) return
-              handleFrame(event.payload)
-            }),
-            listen<string>('vision://preview', event => {
-              if (cancelled || !event.payload.startsWith('data:image/jpeg;base64,')) return
-              previewReceived = true
-              if (previewWatchdog !== null) {
-                window.clearTimeout(previewWatchdog)
-                previewWatchdog = null
-              }
-              previewFailures.current = 0
-              if (retryTimer.current !== null) {
-                window.clearTimeout(retryTimer.current)
-                retryTimer.current = null
-              }
-              setPreviewError(null)
-              setStreamUrl(event.payload)
-            }),
-            listen<string>('vision://error', event => {
-              if (cancelled) return
-              setError(event.payload)
-              setStatus('error')
-            })
-          ])
-          if (cancelled) {
-            unlistenFrame()
-            unlistenPreview()
-            unlistenError()
-            return
-          }
-          unlisten = () => {
-            unlistenFrame()
-            unlistenPreview()
-            unlistenError()
-          }
+        if (!isTauri()) {
+          setError('请在桌面应用中运行')
+          setStatus('error')
+          return
+        }
+
+        // 先挂载监听器再启动摄像头，确保相机很快就绪时也不会漏掉首帧或错误。
+        const [unlistenFrame, unlistenPreview, unlistenError] = await Promise.all([
+          listen<VisionFrame>('vision://frame', event => {
+            if (cancelled) return
+            handleFrame(event.payload)
+          }),
+          listen<string>('vision://preview', event => {
+            if (cancelled || !event.payload.startsWith('data:image/jpeg;base64,')) return
+            previewReceived = true
+            if (previewWatchdog !== null) {
+              window.clearTimeout(previewWatchdog)
+              previewWatchdog = null
+            }
+            previewFailures.current = 0
+            if (retryTimer.current !== null) {
+              window.clearTimeout(retryTimer.current)
+              retryTimer.current = null
+            }
+            setPreviewError(null)
+            setStreamUrl(event.payload)
+          }),
+          listen<string>('vision://error', event => {
+            if (cancelled) return
+            setError(event.payload)
+            setStatus('error')
+          })
+        ])
+        if (cancelled) {
+          unlistenFrame()
+          unlistenPreview()
+          unlistenError()
+          return
+        }
+        unlisten = () => {
+          unlistenFrame()
+          unlistenPreview()
+          unlistenError()
         }
 
         const cameraList = await coreClient.listCameras()
@@ -203,29 +204,12 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
         }
         setStatus('ready')
 
-        if (isTauri()) {
-          // 推理就绪并不等于 WebView 已收到预览帧；超时只影响预览提示，不降级姿态分析。
-          previewWatchdog = window.setTimeout(() => {
-            if (cancelled || previewReceived) return
-            setPreviewReady(false)
-            setPreviewError('视频预览暂时未取得画面，但本地姿态分析仍会继续。请重试预览。')
-          }, PREVIEW_START_TIMEOUT_MS)
-        } else {
-          // 开发/mock 模式用品牌图标代替预览，并用定时器模拟观测值。
-          setStreamUrl('/favicon.svg')
-          mockTimer = window.setInterval(async () => {
-            if (cancelled) return
-            try {
-              const frame = await coreClient.captureFrame()
-              if (cancelled) return
-              handleFrame(frame)
-            } catch (reason) {
-              if (cancelled) return
-              setError(messageOf(reason))
-              setStatus('error')
-            }
-          }, MOCK_FRAME_INTERVAL_MS)
-        }
+        // 推理就绪并不等于 WebView 已收到预览帧；超时只影响预览提示，不降级姿态分析。
+        previewWatchdog = window.setTimeout(() => {
+          if (cancelled || previewReceived) return
+          setPreviewReady(false)
+          setPreviewError('视频预览暂时未取得画面，但本地姿态分析仍会继续。请重试预览。')
+        }, PREVIEW_START_TIMEOUT_MS)
       } catch (reason) {
         if (cancelled) return
         setError(messageOf(reason))
@@ -237,7 +221,6 @@ export function useVisionMonitor(options: UseVisionOptions): VisionMonitor {
     return () => {
       cancelled = true
       if (unlisten) unlisten()
-      if (mockTimer !== null) window.clearInterval(mockTimer)
       if (previewWatchdog !== null) window.clearTimeout(previewWatchdog)
       if (retryTimer.current !== null) {
         window.clearTimeout(retryTimer.current)

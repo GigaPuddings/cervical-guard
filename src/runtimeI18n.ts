@@ -175,7 +175,6 @@ const zhToEn: Record<string, string> = {
   本地隐私模式: 'Local privacy mode',
   '画面不保存、不上传': 'Frames are neither saved nor uploaded',
   使用帮助: 'Help',
-  预览提醒: 'Preview reminder',
   '健康提醒 v0.1.0 · 行为提醒工具': 'Health Reminder v0.1.0 · Behavior reminder',
   今天: 'Today',
   照顾好当下的姿势: 'Take care of your posture',

@@ -1,10 +1,12 @@
 import { create } from 'zustand'
+import { isTauri } from '@tauri-apps/api/core'
 import { snapshotSchema } from './schemas'
 import type { AppPage, AppSnapshot, BehaviorHistoryEvent, DailyStatistics } from './types'
 
 const SNAPSHOT_CACHE_KEY = 'cervical-guard-last-snapshot'
 
 function loadCachedSnapshot(): AppSnapshot | null {
+  if (typeof window === 'undefined' || !isTauri()) return null
   try {
     const raw = window.localStorage.getItem(SNAPSHOT_CACHE_KEY)
     if (!raw) return null
@@ -27,6 +29,7 @@ function loadCachedSnapshot(): AppSnapshot | null {
 }
 
 function cacheSnapshot(snapshot: AppSnapshot): void {
+  if (typeof window === 'undefined' || !isTauri()) return
   try {
     window.localStorage.setItem(SNAPSHOT_CACHE_KEY, JSON.stringify(snapshot))
   } catch {

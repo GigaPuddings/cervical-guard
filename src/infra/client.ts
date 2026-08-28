@@ -1,10 +1,9 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { behaviorHistorySchema, snapshotSchema, statisticsSchema } from '../schemas'
-import type { AppSettings, AppSnapshot, CalibrationResult, CameraDevice, DailyStatistics, BehaviorHistoryEvent, VisionFrame, VisionObservation } from '../types'
-import { mockCore } from './mockCore'
+import type { AppSettings, AppSnapshot, CalibrationResult, CameraDevice, DailyStatistics, BehaviorHistoryEvent, VisionObservation } from '../types'
 
 async function command<T>(name: string, args?: Record<string, unknown>): Promise<T> {
-  if (!isTauri()) return mockCore.command<T>(name, args)
+  if (!isTauri()) throw new Error('请在桌面应用中运行')
   return invoke<T>(name, args)
 }
 
@@ -92,22 +91,5 @@ export const coreClient = {
 
   async stopVision(): Promise<void> {
     await command<unknown>('stop_vision')
-  },
-
-  async captureFrame(): Promise<VisionFrame> {
-    return command<VisionFrame>('capture_frame')
-  },
-
-  async notify(title: string, body: string, silent = true): Promise<void> {
-    if (!isTauri()) {
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, { body, silent })
-      }
-      return
-    }
-    const { isPermissionGranted, requestPermission, sendNotification } = await import('@tauri-apps/plugin-notification')
-    let granted = await isPermissionGranted()
-    if (!granted) granted = (await requestPermission()) === 'granted'
-    if (granted) sendNotification({ title, body })
   }
 }
