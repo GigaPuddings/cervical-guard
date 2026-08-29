@@ -1,30 +1,30 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="dark" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#28784b" />
+    <meta name="theme-color" content="#0d120f" />
     <meta name="description" content="健康提醒 - 本地运行的姿态与久坐健康行为提醒应用" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>健康提醒 · 姿态与久坐</title>
     <style>
       :root {
-        color-scheme: light dark;
+        color-scheme: dark;
         font-family: "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif;
-        background: #f7f8f5;
+        background: #0d120f;
       }
       html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-      body { background: #f7f8f5; }
+      body { background: #0d120f; }
       .boot-shell {
-        --boot-green: #34734a;
-        --boot-ink: #203027;
-        --boot-muted: #75847b;
-        --boot-line: rgba(52, 115, 74, .14);
+        --boot-green: #79c58e;
+        --boot-ink: #edf4ef;
+        --boot-muted: #98a99f;
+        --boot-line: rgba(121, 197, 142, .11);
         position: relative; isolation: isolate; display: grid; width: 100%; height: 100%; place-items: center;
         overflow: hidden; color: var(--boot-ink);
         background:
-          radial-gradient(circle at 50% 42%, rgba(209, 229, 210, .52), transparent 28%),
-          linear-gradient(145deg, #f8faf7 0%, #f2f6f1 55%, #edf3ee 100%);
+          radial-gradient(circle at 50% 42%, rgba(45, 87, 57, .34), transparent 30%),
+          linear-gradient(145deg, #111813, #0d120f);
         transition: opacity .18s ease, transform .22s cubic-bezier(.2,.8,.2,1), filter .18s ease;
       }
       .boot-shell.boot-exit { opacity: 0; filter: blur(2px); transform: scale(1.012); }
@@ -58,13 +58,6 @@
       @keyframes boot-breathe { 50% { opacity: .54; transform: scale(1.055); } }
       @keyframes boot-orbit { to { transform: rotate(360deg); } }
       @keyframes boot-progress { from { transform: translateX(-125%); } to { transform: translateX(310%); } }
-      @media (prefers-color-scheme: dark) {
-        :root, body { background: #0d120f; }
-        .boot-shell {
-          --boot-ink: #edf4ef; --boot-muted: #98a99f; --boot-line: rgba(121, 197, 142, .11);
-          background: radial-gradient(circle at 50% 42%, rgba(45, 87, 57, .34), transparent 30%), linear-gradient(145deg, #111813, #0d120f);
-        }
-      }
       @media (prefers-reduced-motion: reduce) {
         .boot-orbit, .boot-orbit::after, .boot-progress span { animation-duration: .01ms; animation-iteration-count: 1; }
       }

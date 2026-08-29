@@ -1,52 +1,7 @@
 @import "tailwindcss";
 
-/* Tailwind v4 dark variant: adding `.dark` to <html> activates dark:* utilities. */
-@custom-variant dark (&:where(.dark, .dark *));
-
-/*
- * Product design tokens. Components consume semantic utilities such as
- * bg-panel / border-edge / text-muted; light and dark values live here only.
- */
+/* Product design tokens. Dark mode is the product default and only shipped theme. */
 :root {
-  color-scheme: light;
-  --theme-canvas: #f7f8f5;
-  --theme-sidebar: #fbfcfa;
-  --theme-panel: #ffffff;
-  --theme-panel-muted: #f8faf7;
-  --theme-panel-strong: #16251d;
-  --theme-foreground: #18231d;
-  --theme-muted: #6b756f;
-  --theme-subtle: #909993;
-  --theme-edge: #e5e9e5;
-  --theme-edge-soft: #edf0ed;
-  --theme-accent: #28784b;
-  --theme-accent-strong: #20643e;
-  --theme-accent-soft: #e7f1e8;
-  --theme-accent-soft-strong: #cfe2d2;
-  --theme-warning: #b67822;
-  --theme-warning-soft: #f7ecd8;
-  --theme-warning-foreground: #865a1f;
-  --theme-danger: #b75555;
-  --theme-danger-soft: #f6e5e2;
-  --theme-info: #4a6f83;
-  --theme-info-soft: #e7f0f3;
-  --theme-neutral-soft: #eef1ef;
-  --theme-field: #fbfcfb;
-  --theme-inverse: #f8f3f3;
-  --theme-inverse-muted: #b8c6bc;
-  --theme-break: #315c3e;
-  --theme-break-soft: #d8e8d5;
-  --theme-focus: #28784b;
-  --theme-session-ring-track: #e9efeb;
-  --theme-session-ring-start: #28784b;
-  --theme-session-ring-mid: #58a76c;
-  --theme-session-ring-end: #7dbe85;
-  --theme-session-ring-dot-stroke: #ffffff;
-  --theme-shadow-panel: 0 10px 30px rgba(24, 35, 29, 0.045);
-  --theme-shadow-control: 0 5px 16px rgba(24, 35, 29, 0.07);
-}
-
-.dark {
   color-scheme: dark;
   --theme-canvas: #0d120f;
   --theme-sidebar: #101712;
