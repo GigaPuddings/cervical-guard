@@ -35,6 +35,16 @@ fn behavior_history_returns_structured_events_newest_first() {
 }
 
 #[test]
+fn delete_event_removes_a_started_event() {
+    let database = Database::memory();
+    let event_id = database.start_event("break", Some("started")).unwrap();
+
+    database.delete_event(&event_id).unwrap();
+
+    assert!(database.behavior_history(1).unwrap().is_empty());
+}
+
+#[test]
 fn reminder_followups_are_counted_from_behavior_events() {
     let database = Database::memory();
     database

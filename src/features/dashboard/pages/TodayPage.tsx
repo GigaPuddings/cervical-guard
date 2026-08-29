@@ -72,7 +72,7 @@ const todayMessages = defineMessages({
   timerMode: { zh: '定时提醒已开启', en: 'Timer reminders are active' },
   timerModeNote: { zh: '达到阈值后会提醒你起身活动', en: 'You will be reminded when the threshold is reached' },
   breakActive: { zh: '休息进行中', en: 'Break in progress' },
-  breakNote: { zh: '保持离座一会儿，给肩颈放松的时间', en: 'Stay away briefly and give your neck and shoulders time to relax.' },
+  breakNote: { zh: '休息满 1 分钟后才会计入完成休息', en: 'Breaks count after at least 1 minute.' },
   minute: { zh: '分钟', en: 'minutes' },
   times: { zh: '次', en: 'times' },
   liftGaze: { zh: '抬起视线，轻轻放松颈部', en: 'Lift your gaze and gently relax your neck.' },
@@ -85,7 +85,7 @@ const todayMessages = defineMessages({
 })
 
 export function shouldShowPreviewCaption(lifecycle: AppSnapshot['lifecycle'], isCamera: boolean): boolean {
-  return !(isCamera && (lifecycle === 'monitoring' || lifecycle === 'break'))
+  return !(isCamera && lifecycle === 'monitoring')
 }
 
 export function shouldShowPreviewPlaceholder(lifecycle: AppSnapshot['lifecycle'], isCamera: boolean): boolean {
@@ -99,6 +99,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
   const showPreviewCaption = shouldShowPreviewCaption(snapshot.lifecycle, isCamera)
   const showPreviewPlaceholder = shouldShowPreviewPlaceholder(snapshot.lifecycle, isCamera)
   const cameraRunning = isCamera && !showPreviewPlaceholder
+  const detectionStatusLabel = snapshot.lifecycle === 'break' ? messages.breakActive : snapshot.lifecycle === 'paused' ? messages.paused : isCamera ? messages.detecting : messages.timing
   const [imgLoaded, setImgLoaded] = useState(false)
   const streamSession = streamUrl?.startsWith('data:image/') ? 'event-preview' : (streamUrl?.split('?', 1)[0] ?? null)
   useEffect(() => setImgLoaded(false), [streamSession])
@@ -218,7 +219,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
               <Camera size={17} />
               {messages.detectionStatus}
             </span>
-            <span className="rounded-full bg-accent-soft px-3 py-1 text-[9px] text-accent">● {snapshot.lifecycle === 'paused' ? messages.paused : isCamera ? messages.detecting : messages.timing}</span>
+            <span className="rounded-full bg-accent-soft px-3 py-1 text-[9px] text-accent">● {detectionStatusLabel}</span>
           </header>
           <div className="relative mx-4 min-h-0 overflow-hidden rounded-[14px]" style={{ background: 'radial-gradient(circle at 72% 20%, #285A3E 0%, #214B35 34%, #183C2B 66%, #123125 100%)' }}>
             {cameraRunning && streamUrl ? (

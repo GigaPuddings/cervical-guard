@@ -21,7 +21,9 @@ function loadCachedSnapshot(): AppSnapshot | null {
       nextReminderAt: null,
       reminderRemainingSeconds: null,
       pausedUntil: null,
-      breakRemainingSeconds: 0
+      pausedStartedAt: null,
+      breakRemainingSeconds: 0,
+      breakRestSeconds: 0
     }
   } catch {
     return null

@@ -712,6 +712,7 @@ fn break_completion_requires_manual_confirmation() {
     assert!(state.advance(total + 1, now).is_none());
     assert_eq!(state.snapshot.lifecycle, MonitoringLifecycle::Break);
     assert_eq!(state.snapshot.break_remaining_seconds, 0);
+    assert_eq!(state.snapshot.break_rest_seconds, total + 1);
     assert_eq!(state.snapshot.today.break_count, 0);
     // 手动确认后才完成休息并恢复检测。
     state.end_break();
@@ -734,7 +735,7 @@ fn break_confirmation_starts_a_clean_camera_session_without_follow_up_reminder()
     state.snapshot.lifecycle = MonitoringLifecycle::Monitoring;
     state.start_break();
     let now = Instant::now();
-    // 休息期间人物一直坐着（无站立/离座），有效休息为 0。
+    // 主动休息期间不再用摄像头确认离座，休息时长只看用户主动休息多久。
     state.snapshot.person_present = true;
     state.snapshot.behavior = BehaviorState::SittingNormal;
     let total = state.snapshot.settings.break_minutes * 60;
@@ -742,7 +743,7 @@ fn break_confirmation_starts_a_clean_camera_session_without_follow_up_reminder()
     assert!(state.advance(total + 1, now).is_none());
     assert_eq!(state.snapshot.lifecycle, MonitoringLifecycle::Break);
     assert_eq!(state.snapshot.break_remaining_seconds, 0);
-    // 手动确认后保留休息期间已经确认的坐姿，立即开始新一轮倒计时。
+    // 手动确认后保留休息前最后一个姿态，立即开始新一轮倒计时。
     state.end_break();
     assert_eq!(state.snapshot.lifecycle, MonitoringLifecycle::Monitoring);
     assert_eq!(state.snapshot.behavior, BehaviorState::SittingNormal);
@@ -764,7 +765,7 @@ fn real_rest_during_break_avoids_notice() {
     state.snapshot.lifecycle = MonitoringLifecycle::Monitoring;
     state.start_break();
     let now = Instant::now();
-    // 休息期间人物离座（有效休息充足）。
+    // 休息期间人物离座状态不会影响主动休息时长的统计。
     state.snapshot.person_present = false;
     state.snapshot.behavior = BehaviorState::NoPerson;
     let total = state.snapshot.settings.break_minutes * 60;
@@ -782,6 +783,45 @@ fn real_rest_during_break_avoids_notice() {
         snapshot.reminder_remaining_seconds,
         Some(snapshot.settings.sedentary_seconds)
     );
+}
+
+#[test]
+fn short_manual_break_is_not_counted_or_used_to_reset_sitting_time() {
+    let mut state = state();
+    state.snapshot.seated_seconds = 120;
+    state.snapshot.head_down_seconds = 30;
+    state.start_break();
+    let now = Instant::now();
+
+    state.advance(MIN_RECORDED_BREAK_SECS - 1, now);
+    state.end_break();
+
+    assert_eq!(state.snapshot.lifecycle, MonitoringLifecycle::Degraded);
+    assert_eq!(state.snapshot.today.break_count, 0);
+    assert_eq!(state.snapshot.seated_seconds, 120);
+    assert_eq!(state.snapshot.head_down_seconds, 30);
+    assert_eq!(state.snapshot.break_rest_seconds, 0);
+}
+
+#[test]
+fn camera_observations_are_ignored_during_manual_breaks() {
+    let mut state = camera_state();
+    state.start_break();
+    state.snapshot.person_present = true;
+    state.snapshot.behavior = BehaviorState::SittingNormal;
+    let mut item = observation(PostureState::Sitting, 1.0);
+    item.person.present = false;
+    item.person.confidence = 0.0;
+    item.frame_quality = FrameQuality::Dark;
+
+    let reminder = state.ingest(item).unwrap();
+
+    assert!(reminder.is_none());
+    assert_eq!(state.snapshot.lifecycle, MonitoringLifecycle::Break);
+    assert!(state.snapshot.person_present);
+    assert_eq!(state.snapshot.behavior, BehaviorState::SittingNormal);
+    assert_eq!(state.snapshot.frame_quality, FrameQuality::Unstable);
+    assert!(state.snapshot.last_observation_at.is_none());
 }
 
 #[test]

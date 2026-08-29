@@ -148,9 +148,7 @@ export function App() {
     [messages.operationUnavailable, setSnapshot]
   )
 
-  // 休息期间也保持摄像头低功耗运行：既能在休息中感知离座行为，
-  // 也让休息结束的瞬间检测管线已就绪，避免重新打开摄像头导致的 ingest 失败。
-  const cameraActive = Boolean(snapshot && (snapshot.lifecycle === 'monitoring' || snapshot.lifecycle === 'break') && snapshot.monitoringMode === 'camera' && snapshot.calibrated)
+  const cameraActive = Boolean(snapshot && snapshot.lifecycle === 'monitoring' && snapshot.monitoringMode === 'camera' && snapshot.calibrated)
   const vision = useVisionMonitor({
     active: cameraActive,
     cameraId: snapshot?.settings.cameraId ?? 'default',
@@ -185,10 +183,10 @@ export function App() {
     if (cameraActive) fallbackStarted.current = false
   }, [cameraActive])
 
-  // 手动暂停会按设计停止摄像头会话，不属于设备故障。恢复后等待当前会话
-  // 自己产生错误或超时，不能沿用暂停前残留的失败横幅。
+  // 手动暂停和主动休息都会按设计停止摄像头会话，不属于设备故障。
+  // 恢复后等待当前会话自己产生错误或超时，不能沿用上一轮残留的失败横幅。
   useEffect(() => {
-    if (snapshot?.lifecycle === 'paused' || cameraActive) setCameraFailure(null)
+    if (snapshot?.lifecycle === 'paused' || snapshot?.lifecycle === 'break' || cameraActive) setCameraFailure(null)
   }, [cameraActive, snapshot?.lifecycle])
 
   if (!snapshot) {

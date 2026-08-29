@@ -114,9 +114,11 @@ export interface AppSnapshot {
   /** 当前会话离座活动秒数（人物不在座时累加）。 */
   awaySeconds: number
   breakRemainingSeconds: number
-  /** 本次休息中检测到的有效休息秒数（确认离座）。 */
+  /** 本次主动休息已持续秒数。 */
   breakRestSeconds: number
   pausedUntil: string | null
+  /** 本次暂停开始时间（RFC3339）。 */
+  pausedStartedAt: string | null
   currentReminder: ReminderPayload | null
   nextReminderAt: string | null
   reminderRemainingSeconds: number | null

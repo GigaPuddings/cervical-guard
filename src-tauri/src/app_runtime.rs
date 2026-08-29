@@ -267,11 +267,13 @@ pub(crate) fn run() {
                     }
                     if snapshot.today.break_count > last_break_count
                         && snapshot.lifecycle != MonitoringLifecycle::Break
+                        && last_behavior == BehaviorState::NoPerson
                     {
                         if let Ok(database) = context.database.lock() {
-                            let _ = database.record_event(
+                            let _ = database.record_completed_event(
                                 "break",
-                                snapshot.away_seconds,
+                                &behavior_started_wall,
+                                behavior_started_at.elapsed().as_secs(),
                                 Some("observed"),
                             );
                         }

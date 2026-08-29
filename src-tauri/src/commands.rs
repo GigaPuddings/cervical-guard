@@ -1,4 +1,5 @@
 use super::*;
+use crate::core::MIN_RECORDED_BREAK_SECS;
 
 fn state_lock_error() -> String {
     msg::ERR_STATE_LOCK.get(Language::ZhCn).to_string()
@@ -209,12 +210,14 @@ pub(crate) fn end_break(
         .map_err(|_| state_lock_error())?
         .active_break_event
         .take();
-    if let Some((event_id, started_at)) = active_event {
-        context
-            .database
-            .lock()
-            .map_err(|_| database_lock_error())?
-            .finish_event(&event_id, started_at.elapsed().as_secs(), Some("completed"))?;
+    if let Some((event_id, _started_at)) = active_event {
+        let duration = snapshot.break_rest_seconds;
+        let database = context.database.lock().map_err(|_| database_lock_error())?;
+        if duration >= MIN_RECORDED_BREAK_SECS {
+            database.finish_event(&event_id, duration, Some("completed"))?;
+        } else {
+            database.delete_event(&event_id)?;
+        }
     }
     let restore_main_after_break = {
         let mut ui = context.island_ui.lock().map_err(|_| state_lock_error())?;

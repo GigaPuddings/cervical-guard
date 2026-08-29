@@ -80,6 +80,7 @@ export const snapshotSchema = z.object({
   breakRemainingSeconds: z.number().nonnegative(),
   breakRestSeconds: z.number().nonnegative().default(0),
   pausedUntil: z.string().nullable(),
+  pausedStartedAt: z.string().nullable().default(null),
   currentReminder: reminderSchema.nullable(),
   nextReminderAt: z.string().nullable(),
   reminderRemainingSeconds: z.number().nonnegative().nullable(),

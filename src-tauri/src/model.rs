@@ -455,10 +455,13 @@ pub struct AppSnapshot {
     #[serde(default)]
     pub away_seconds: u64,
     pub break_remaining_seconds: u64,
-    /// 本次休息中检测到的有效休息秒数（站立或离座）。
+    /// 本次主动休息已持续秒数。进入休息后不再依赖摄像头确认离座。
     #[serde(default)]
     pub break_rest_seconds: u64,
     pub paused_until: Option<String>,
+    /// 本次暂停开始时间（RFC3339），用于灵动岛暂停详情展示。
+    #[serde(default)]
+    pub paused_started_at: Option<String>,
     pub current_reminder: Option<ReminderPayload>,
     pub next_reminder_at: Option<String>,
     pub reminder_remaining_seconds: Option<u64>,

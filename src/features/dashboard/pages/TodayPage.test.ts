@@ -12,6 +12,11 @@ describe('today detection preview caption', () => {
     expect(shouldShowPreviewPlaceholder('paused', true)).toBe(true)
   })
 
+  it('keeps the placeholder caption during an active break', () => {
+    expect(shouldShowPreviewCaption('break', true)).toBe(true)
+    expect(shouldShowPreviewPlaceholder('break', true)).toBe(true)
+  })
+
   it('keeps the placeholder caption for timer-only monitoring', () => {
     expect(shouldShowPreviewCaption('degraded', false)).toBe(true)
   })

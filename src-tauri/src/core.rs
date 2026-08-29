@@ -18,6 +18,7 @@ const DEFAULT_PERSON_ABSENCE_CONFIRMATION_SECS: u64 = 3;
 const HEAD_DOWN_EXIT_CONFIRMATION_SECS: u64 = 6;
 const HEAD_DOWN_STATISTICS_MIN_SECS: u64 = 60;
 const HEAD_DOWN_SEGMENT_MERGE_GRACE_SECS: u64 = 15;
+pub(crate) const MIN_RECORDED_BREAK_SECS: u64 = 60;
 
 pub struct RuntimeState {
     snapshot: AppSnapshot,
@@ -34,6 +35,7 @@ pub struct RuntimeState {
     snoozed_until: Option<Instant>,
     last_sedentary_reminder: Option<Instant>,
     last_head_reminder: Option<Instant>,
+    break_started_at: Option<Instant>,
     effective_break_recorded: bool,
 }
 
@@ -98,6 +100,20 @@ impl RuntimeState {
         }
     }
 
+    fn sync_active_break_elapsed(&mut self, now: Instant) {
+        if let Some(started_at) = self.break_started_at {
+            self.snapshot.break_rest_seconds = self
+                .snapshot
+                .break_rest_seconds
+                .max(now.duration_since(started_at).as_secs());
+        }
+    }
+
+    fn advance_active_break_elapsed(&mut self, elapsed: u64, now: Instant) {
+        self.snapshot.break_rest_seconds = self.snapshot.break_rest_seconds.saturating_add(elapsed);
+        self.sync_active_break_elapsed(now);
+    }
+
     pub fn load(database: &Database) -> Self {
         let settings = database.load_settings();
         let meta = database.load_meta();
@@ -149,6 +165,7 @@ impl RuntimeState {
             break_remaining_seconds: 0,
             break_rest_seconds: 0,
             paused_until: None,
+            paused_started_at: None,
             current_reminder: None,
             next_reminder_at: None,
             reminder_remaining_seconds: None,
@@ -183,6 +200,7 @@ impl RuntimeState {
             snoozed_until: None,
             last_sedentary_reminder: None,
             last_head_reminder: None,
+            break_started_at: None,
             effective_break_recorded: false,
         }
     }
@@ -282,6 +300,7 @@ impl RuntimeState {
             if self.paused_deadline.is_some_and(|deadline| now >= deadline) {
                 self.paused_deadline = None;
                 self.snapshot.paused_until = None;
+                self.snapshot.paused_started_at = None;
                 self.snapshot.lifecycle = if self.snapshot.monitoring_mode == MonitoringMode::Camera
                     && self.snapshot.calibrated
                     && self.snapshot.permission == PermissionState::Granted
@@ -295,19 +314,10 @@ impl RuntimeState {
         }
 
         if self.snapshot.lifecycle == MonitoringLifecycle::Break {
-            // 休息期间摄像头保持低功耗观测：确认离座才计为有效休息，
-            // 让系统知道本次真实休息了多久，而不是只依赖倒计时。
-            let resting = self.snapshot.monitoring_mode == MonitoringMode::Camera
-                && (!self.snapshot.person_present
-                    || self.snapshot.behavior == BehaviorState::NoPerson);
-            if resting {
-                self.snapshot.break_rest_seconds =
-                    self.snapshot.break_rest_seconds.saturating_add(elapsed);
-            }
-            // 倒计时到 0 后不自动结束休息——系统无法仅凭持续监测判断用户是否
-            // 真正休息完毕。保持 Break 生命周期，前端展示"确认结束"按钮，
-            // 由用户手动调用 end_break() 完成。摄像头在此期间持续运行，
-            // 确保用户确认结束时检测管线已就绪。
+            // 主动休息期间不再使用摄像头判断“是否真的离座”。用户点击开始休息
+            // 即进入休息流程，统计只按主动休息持续时间计算。
+            self.advance_active_break_elapsed(elapsed, now);
+            // 倒计时到 0 后不自动结束休息，仍由用户手动调用 end_break() 完成。
             self.snapshot.break_remaining_seconds = self
                 .snapshot
                 .break_remaining_seconds
@@ -548,6 +558,7 @@ impl RuntimeState {
         }
         self.snapshot.current_reminder = None;
         self.snapshot.paused_until = None;
+        self.snapshot.paused_started_at = None;
         self.paused_deadline = None;
         self.last_tick = Instant::now();
         Ok(())
@@ -555,13 +566,15 @@ impl RuntimeState {
 
     pub fn pause(&mut self, minutes: Option<u64>) {
         self.tick();
+        let now = Utc::now();
         self.snapshot.lifecycle = MonitoringLifecycle::Paused;
         self.snapshot.current_reminder = None;
         self.paused_deadline =
             minutes.map(|value| Instant::now() + Duration::from_secs(value.clamp(1, 24 * 60) * 60));
         self.snapshot.paused_until = minutes.map(|value| {
-            (Utc::now() + chrono::Duration::minutes(value.clamp(1, 24 * 60) as i64)).to_rfc3339()
+            (now + chrono::Duration::minutes(value.clamp(1, 24 * 60) as i64)).to_rfc3339()
         });
+        self.snapshot.paused_started_at = Some(now.to_rfc3339());
     }
 
     pub fn resume(&mut self) -> Result<(), String> {
@@ -580,20 +593,32 @@ impl RuntimeState {
 
     pub fn start_break(&mut self) {
         self.tick();
+        let now = Instant::now();
         self.effective_break_recorded = false;
+        self.break_started_at = Some(now);
         self.snapshot.lifecycle = MonitoringLifecycle::Break;
         self.snapshot.break_remaining_seconds = self.snapshot.settings.break_minutes * 60;
         self.snapshot.break_rest_seconds = 0;
+        self.snapshot.paused_until = None;
+        self.snapshot.paused_started_at = None;
+        self.paused_deadline = None;
         self.snapshot.current_reminder = None;
         self.snapshot.next_reminder_at = None;
         self.snapshot.reminder_remaining_seconds = None;
-        self.last_tick = Instant::now();
+        self.last_tick = now;
     }
 
     pub fn end_break(&mut self) {
-        // 用户已经完成一次明确的休息流程。确认后直接开始全新的监测会话，
-        // 不再立刻生成“休息不足”的二次提醒，以免阻塞下一轮倒计时。
-        self.complete_break();
+        self.tick();
+        self.sync_active_break_elapsed(Instant::now());
+        if self.snapshot.break_rest_seconds >= MIN_RECORDED_BREAK_SECS {
+            // 用户已经完成一次明确且足够长的休息流程。确认后直接开始全新的监测
+            // 会话，不再立刻生成“休息不足”的二次提醒，以免阻塞下一轮倒计时。
+            self.complete_break();
+        } else {
+            // 少于 1 分钟的误触/临时点击不计为休息，也不重置连续坐姿或低头计时。
+            self.cancel_short_break();
+        }
     }
 
     /// 休息结束后自动恢复监测（摄像头就绪则回到 Monitoring，否则退化为定时模式），
@@ -628,9 +653,20 @@ impl RuntimeState {
         self.head_candidate_since = None;
         self.person_missing_since = None;
         self.sitting_candidate_since = None;
-        // 休息期间摄像头一直在低功耗观测。保留最后一个有效姿态，避免用户
+        // 休息期间不消费摄像头观测。保留休息前最后一个有效姿态，避免用户
         // 点击“确认结束”后被无条件打回 Unknown，导致新会话无故停在 0 秒。
-        // 若用户仍离座，sedentary_clock_running() 会继续正确地暂停计时。
+        self.break_started_at = None;
+        self.resume_after_break();
+        self.last_tick = Instant::now();
+    }
+
+    fn cancel_short_break(&mut self) {
+        self.break_started_at = None;
+        self.snapshot.break_remaining_seconds = 0;
+        self.snapshot.break_rest_seconds = 0;
+        self.snapshot.current_reminder = None;
+        self.snapshot.next_reminder_at = None;
+        self.snapshot.reminder_remaining_seconds = None;
         self.resume_after_break();
         self.last_tick = Instant::now();
     }
@@ -729,12 +765,14 @@ impl RuntimeState {
         observation: VisionObservation,
     ) -> Result<Option<ReminderPayload>, String> {
         observation.validate_with_language(Language::of_settings(&self.snapshot.settings))?;
-        // Monitoring 正常检测；Break 期间也接受观测，用于感知真实休息行为。
+        // Monitoring 正常检测；Break 期间用户已进入主动休息流程，不再消费摄像头
+        // 观测去确认离座，避免休息提醒后继续占用识别管线。
+        if self.snapshot.lifecycle == MonitoringLifecycle::Break {
+            let _ = self.tick();
+            return Ok(None);
+        }
         if self.snapshot.monitoring_mode != MonitoringMode::Camera
-            || !matches!(
-                self.snapshot.lifecycle,
-                MonitoringLifecycle::Monitoring | MonitoringLifecycle::Break
-            )
+            || !matches!(self.snapshot.lifecycle, MonitoringLifecycle::Monitoring)
         {
             return Err(msg::ERR_CAMERA_NOT_RUNNING
                 .get(Language::of_settings(&self.snapshot.settings))

@@ -332,6 +332,13 @@ impl Database {
         Ok(())
     }
 
+    pub fn delete_event(&self, id: &str) -> Result<(), String> {
+        self.connection
+            .execute("DELETE FROM behavior_events WHERE id = ?1", [id])
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
     pub fn behavior_history(&self, days: u32) -> Result<Vec<BehaviorHistoryEvent>, String> {
         let mut statement = self.connection.prepare(
             "SELECT id, event_type, started_at, ended_at, COALESCE(duration_seconds, 0), reminder_action
