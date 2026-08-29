@@ -537,6 +537,57 @@ pub(crate) fn run() {
                     } else {
                         None
                     };
+                    // 热区命中判断（物理坐标）：优先使用窗口实际位置计算热区，
+                    // 确保热区与窗口真实位置对齐；窗口位置不可用时回退到显示器中心。
+                    let in_hot_zone = {
+                        let scale = window.scale_factor().unwrap_or(1.0);
+                        let (center_x, top) = match window.outer_position() {
+                            Ok(pos) => {
+                                // 以窗口中心为热区中心，热区顶部延伸到窗口上方 32px。
+                                let win_w = window
+                                    .outer_size()
+                                    .map(|s| s.width as f64)
+                                    .unwrap_or(ISLAND_COMPACT_WIDTH * scale);
+                                (pos.x as f64 + win_w / 2.0, pos.y as f64 - 32.0 * scale)
+                            }
+                            _ => match hover_handle.primary_monitor() {
+                                Ok(Some(monitor)) => (
+                                    monitor.position().x as f64 + monitor.size().width as f64 / 2.0,
+                                    monitor.position().y as f64,
+                                ),
+                                _ => (0.0, 0.0),
+                            },
+                        };
+                        let half = ISLAND_HOT_ZONE_HALF_WIDTH * scale;
+                        let bottom = top + ISLAND_HOT_ZONE_HEIGHT * scale;
+                        let x = cursor.x as f64;
+                        let y = cursor.y as f64;
+                        x >= center_x - half && x <= center_x + half && y >= top && y <= bottom
+                    };
+                    if !persistent_status_enabled
+                        && !reminder_active
+                        && !break_active
+                        && !behavior_notice_active
+                        && !away_notice
+                        && !menu_open
+                        && window.is_visible().unwrap_or(false)
+                        && !in_hot_zone
+                    {
+                        let detail_expanded = context
+                            .island_ui
+                            .lock()
+                            .map(|ui| ui.detail_expanded)
+                            .unwrap_or(false);
+                        if !detail_expanded {
+                            hide_island_window(&hover_handle);
+                            update_island_peek_state(&hover_handle, &mut pointer_peeking, None);
+                            update_island_hover_state(&hover_handle, &mut pointer_hovering, false);
+                            hover_inside = false;
+                            expanded_at = None;
+                            hot_zone_hits = 0;
+                            continue;
+                        }
+                    }
                     if menu_open {
                         let _ = window.set_ignore_cursor_events(false);
                         action_buttons_capturing = true;
@@ -622,35 +673,6 @@ pub(crate) fn run() {
                         &mut pointer_peeking,
                         pointer_in_island.filter(|_| settings.island_peek_through_enabled),
                     );
-                    // 热区命中判断（物理坐标）：优先使用窗口实际位置计算热区，
-                    // 确保热区与窗口真实位置对齐；窗口位置不可用时回退到显示器中心。
-                    let in_hot_zone = {
-                        let scale = window.scale_factor().unwrap_or(1.0);
-                        let (center_x, top) = match window.outer_position() {
-                            Ok(pos) => {
-                                // 以窗口中心为热区中心，热区顶部延伸到窗口上方 32px。
-                                let win_w = window
-                                    .outer_size()
-                                    .map(|s| s.width as f64)
-                                    .unwrap_or(ISLAND_COMPACT_WIDTH * scale);
-                                (pos.x as f64 + win_w / 2.0, pos.y as f64 - 32.0 * scale)
-                            }
-                            _ => match hover_handle.primary_monitor() {
-                                Ok(Some(monitor)) => (
-                                    monitor.position().x as f64 + monitor.size().width as f64 / 2.0,
-                                    monitor.position().y as f64,
-                                ),
-                                _ => (0.0, 0.0),
-                            },
-                        };
-                        let half = ISLAND_HOT_ZONE_HALF_WIDTH * scale;
-                        let bottom = top + ISLAND_HOT_ZONE_HEIGHT * scale;
-                        let x = cursor.x as f64;
-                        let y = cursor.y as f64;
-                        let hit =
-                            x >= center_x - half && x <= center_x + half && y >= top && y <= bottom;
-                        hit
-                    };
                     // 提醒按钮刚执行完时，光标仍在按钮/顶部热区内。此时等待它
                     // 真正离开，避免“提醒关闭 → 详情立即展开”的窗口竞争。
                     if hover_suppressed {

@@ -102,6 +102,9 @@ fn reminder_island_is_served_inside_the_guard_protocol() {
     assert!(html.contains("await hide(true)"));
     assert!(html.contains("closeAnimationMs = 250"));
     assert!(html.contains("定时提醒运行中"));
+    assert!(html.contains("暂停计时中"));
+    assert!(!html.contains("previewMode"));
+    assert!(!html.contains("durationSeconds: 1530"));
 }
 
 #[test]
@@ -279,11 +282,16 @@ fn disabling_persistent_status_keeps_monitoring_hover_available() {
         &settings,
         MonitoringLifecycle::Degraded
     ));
-    assert!(!island_hover_status_enabled(
+    assert!(island_hover_status_enabled(
         &settings,
         MonitoringLifecycle::Paused
     ));
 
+    settings.island_paused_status_enabled = false;
+    assert!(!island_hover_status_enabled(
+        &settings,
+        MonitoringLifecycle::Paused
+    ));
     settings.island_enabled = false;
     assert!(!island_hover_status_enabled(
         &settings,
@@ -295,12 +303,23 @@ fn disabling_persistent_status_keeps_monitoring_hover_available() {
 fn restored_pause_waits_for_a_user_pause_before_showing_status() {
     let settings = AppSettings::default();
     let mut ui = IslandUiState::default();
+    let now = std::time::Instant::now();
 
-    assert!(!ui.status_enabled(&settings, MonitoringLifecycle::Paused));
-    ui.request_pause_status();
-    assert!(ui.status_enabled(&settings, MonitoringLifecycle::Paused));
+    assert!(!ui.status_enabled_at(&settings, MonitoringLifecycle::Paused, now));
+    ui.request_pause_status_at(now);
+    assert!(ui.status_enabled_at(&settings, MonitoringLifecycle::Paused, now));
+    assert!(ui.status_enabled_at(
+        &settings,
+        MonitoringLifecycle::Paused,
+        now + PAUSE_STATUS_NOTICE_DURATION - std::time::Duration::from_millis(1)
+    ));
+    assert!(!ui.status_enabled_at(
+        &settings,
+        MonitoringLifecycle::Paused,
+        now + PAUSE_STATUS_NOTICE_DURATION
+    ));
     ui.clear_pause_status_request();
-    assert!(!ui.status_enabled(&settings, MonitoringLifecycle::Paused));
+    assert!(!ui.status_enabled_at(&settings, MonitoringLifecycle::Paused, now));
 }
 
 #[test]

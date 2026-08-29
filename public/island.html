@@ -143,8 +143,8 @@
       </div>
       <div class="detail-weather" id="d-weather" hidden><b id="d-weather-main"></b><span id="d-weather-meta"></span></div>
       <div class="detail-main">
-        <div class="detail-time"><small>连续坐姿</small><strong id="d-seated">0秒</strong></div>
-        <div class="detail-next"><small>下一次提醒</small><strong id="d-next">正在计算</strong></div>
+        <div class="detail-time"><small id="d-main-label">连续坐姿</small><strong id="d-seated">0秒</strong></div>
+        <div class="detail-next"><small id="d-side-label">下一次提醒</small><strong id="d-next">正在计算</strong></div>
       </div>
       <div class="detail-stats">
         <div class="detail-stat"><small>今日坐姿</small><strong id="d-today">0分钟</strong></div>
@@ -188,6 +188,7 @@
       let transitionVersion = 0;
       let language = 'zh-CN';
       const closeAnimationMs = 250;
+      const pauseStatusAutoHideMs = 6000;
       const tr = (zh, en) => language === 'en-US' ? en : zh;
       const weatherConditions = {
         '晴': 'Clear', '大部晴朗': 'Mostly clear', '局部多云': 'Partly cloudy', '阴': 'Overcast',
@@ -211,8 +212,8 @@
           ['[data-command="start_break"]', '休息', 'Break'],
           ['[data-command="snooze_reminder"]', '稍后', 'Later'],
           ['[data-command="end_break"]', '结束休息', 'End break'],
-          ['.detail-time small', '连续坐姿', 'Continuous sitting'],
-          ['.detail-next small', '下一次提醒', 'Next reminder'],
+          ['#d-main-label', '连续坐姿', 'Continuous sitting'],
+          ['#d-side-label', '下一次提醒', 'Next reminder'],
           ['.detail-stat:nth-child(1) small', '今日坐姿', 'Sitting today'],
           ['.detail-stat:nth-child(2) small', '已完成休息', 'Completed breaks'],
           ['.detail-stat:nth-child(3) small', '离座活动', 'Away activity'],
@@ -422,12 +423,19 @@
           renderMeta(resumeText);
         } else {
           renderMeta(`${tr('连续坐姿', 'Continuous sitting')} ${duration(snapshot.seatedSeconds)}`);
+          if (hideTimer) {
+            clearTimeout(hideTimer);
+            hideTimer = 0;
+          }
         }
         title.textContent = stateLabel(snapshot);
         if (mode !== 'status') enterMode('status');
+        if (snapshot.lifecycle === 'paused' && !hideTimer) {
+          hideTimer = setTimeout(() => void hide(true), pauseStatusAutoHideMs);
+        }
       };
       const stateLabel = (snapshot) => {
-        if (snapshot.lifecycle === 'paused') return tr('检测已暂停', 'Monitoring paused');
+        if (snapshot.lifecycle === 'paused') return tr('暂停计时中', 'Timer paused');
         if (snapshot.lifecycle === 'break') return tr('休息进行中', 'Break in progress');
         // 定时模式没有摄像头画面，“unknown”是正常占位状态，不能向用户显示
         // “等待稳定画面”这类只属于姿态识别管线的文案。
@@ -443,7 +451,7 @@
       };
       const nextLabel = (snapshot) => {
         if (snapshot.lifecycle === 'break') return `${tr('休息剩余', 'Break remaining')} ${duration(snapshot.breakRemainingSeconds)}`;
-        if (snapshot.lifecycle === 'paused') return tr('恢复检测后继续', 'Continues after resuming');
+        if (snapshot.lifecycle === 'paused') return tr('上一次暂停时间未知', 'Last pause time unknown');
         if (snapshot.currentReminder) return tr('提醒等待处理', 'Reminder awaiting action');
         if (snapshot.nextReminderAt) {
           const date = new Date(snapshot.nextReminderAt);
@@ -453,6 +461,16 @@
         return snapshot.reminderRemainingSeconds == null
           ? tr('按当前规则暂停', 'Paused by current schedule')
           : `${tr('还需', 'Remaining')} ${duration(snapshot.reminderRemainingSeconds)}`;
+      };
+      const pausedElapsedSeconds = (snapshot) => {
+        const started = snapshot && snapshot.pausedStartedAt ? new Date(snapshot.pausedStartedAt) : null;
+        if (!started || Number.isNaN(started.getTime())) return 0;
+        return Math.max(0, Math.floor((Date.now() - started.getTime()) / 1000));
+      };
+      const pauseStartedLabel = (snapshot) => {
+        const started = snapshot && snapshot.pausedStartedAt ? new Date(snapshot.pausedStartedAt) : null;
+        if (!started || Number.isNaN(started.getTime())) return tr('未知', 'Unknown');
+        return started.toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
       };
       const fillDetail = (snapshot) => {
         if (!snapshot) return;
@@ -465,8 +483,11 @@
         const currentState = stateLabel(snapshot);
         document.querySelector('#d-state').textContent = currentState;
         title.textContent = currentState;
-        document.querySelector('#d-seated').textContent = duration(snapshot.seatedSeconds);
-        document.querySelector('#d-next').textContent = nextLabel(snapshot);
+        const paused = snapshot.lifecycle === 'paused';
+        document.querySelector('#d-main-label').textContent = paused ? tr('距暂停离座', 'Away since pause') : tr('连续坐姿', 'Continuous sitting');
+        document.querySelector('#d-side-label').textContent = paused ? tr('上一次暂停时间', 'Last pause time') : tr('下一次提醒', 'Next reminder');
+        document.querySelector('#d-seated').textContent = paused ? duration(pausedElapsedSeconds(snapshot)) : duration(snapshot.seatedSeconds);
+        document.querySelector('#d-next').textContent = paused ? pauseStartedLabel(snapshot) : nextLabel(snapshot);
         document.querySelector('#d-today').textContent = duration(snapshot.today.seatedSeconds);
         document.querySelector('#d-breaks').textContent = language === 'en-US' ? `${snapshot.today.breakCount} times` : `${snapshot.today.breakCount} 次`;
         document.querySelector('#d-away').textContent = duration(snapshot.today.awaySeconds || 0);
@@ -518,31 +539,6 @@
       buttons.forEach((button) => button.addEventListener('click', () => void perform(button)));
 
       if (!api) {
-        const previewParams = new URLSearchParams(location.search);
-        const previewLanguage = previewParams.get('lang') === 'en-US' ? 'en-US' : 'zh-CN';
-        const previewMode = previewParams.get('preview') || location.hash.slice(1);
-        const preview = {
-          lifecycle: 'monitoring', behavior: 'sitting_normal', monitoringMode: 'camera', seatedSeconds: 1530,
-          nextReminderAt: new Date(Date.now() + 1170 * 1000).toISOString(), reminderRemainingSeconds: 1170,
-          today: { seatedSeconds: 8100, breakCount: 2, awaySeconds: 540 },
-          pausedUntil: null,
-          settings: { language: previewLanguage, islandPersistentStatusEnabled: true, islandPausedStatusEnabled: true, islandPeekThroughEnabled: true, islandPermanentCloseEnabled: true },
-        };
-        applyLanguage(preview);
-        permanentCloseAllowed = Boolean(preview.settings.islandPermanentCloseEnabled);
-        permanentClose.hidden = !permanentCloseAllowed;
-        updateWeather({ location: tr('南京', 'Nanjing'), condition: '局部多云', temperature: 27, humidity: 68, uvIndex: 4.2, weatherCode: 2 });
-        if (previewMode === 'detail') renderDetail(preview);
-        else if (previewMode === 'status') renderStatus(preview);
-        else if (previewMode === 'timer') renderStatus({ ...preview, lifecycle: 'degraded', monitoringMode: 'timer', behavior: 'unknown' });
-        else if (previewMode === 'paused') renderStatus({ ...preview, lifecycle: 'paused', pausedUntil: new Date(Date.now() + 15 * 60 * 1000).toISOString() });
-        else if (previewMode === 'away') renderAway();
-        else if (previewMode === 'returned') renderReturned();
-        else if (previewMode === 'head') renderBehavior({ behavior: 'head_down' });
-        else if (previewMode === 'standing') renderBehavior({ behavior: 'standing_break' });
-        else if (previewMode === 'break') renderBreak({ lifecycle: 'break', breakRemainingSeconds: 178 });
-        else if (previewMode === 'break-done') renderBreak({ lifecycle: 'break', breakRemainingSeconds: 0 });
-        else renderReminder({ durationSeconds: 1530, title: tr('该舒展一下了', 'Time to stretch') });
         return;
       }
 
@@ -571,7 +567,7 @@
         permanentClose.hidden = !permanentCloseAllowed;
         if (snapshot.lifecycle === 'break') renderBreak(snapshot);
         else if (snapshot.currentReminder) renderReminder(snapshot.currentReminder);
-        else if (snapshot.settings && (snapshot.lifecycle === 'paused' ? snapshot.settings.islandPausedStatusEnabled !== false : snapshot.settings.islandPersistentStatusEnabled)) renderStatus(snapshot);
+        else if (snapshot.settings && snapshot.lifecycle !== 'paused' && snapshot.settings.islandPersistentStatusEnabled) renderStatus(snapshot);
         else setTimeout(() => { if (mode === 'idle') void hide(false); }, 500);
       }).catch(() => void hide(false));
     })();

@@ -23,6 +23,8 @@ pub(crate) const ISLAND_EXPAND_GRACE_MS: u64 = 1200;
 pub(crate) const ISLAND_COLLAPSE_COOLDOWN_MS: u64 = 200;
 /// 检测到低头后，状态灵动岛的展示时长。
 pub(crate) const BEHAVIOR_NOTICE_DURATION: Duration = Duration::from_secs(6);
+/// 用户主动暂停后，暂停状态灵动岛只短暂展示，之后保留隐藏热区供悬停详情使用。
+pub(crate) const PAUSE_STATUS_NOTICE_DURATION: Duration = Duration::from_secs(6);
 /// 紧凑提醒中三个按钮的逻辑像素命中矩形。窗口其余区域保持原生鼠标穿透。
 /// 数值与 public/island.html 的 360×76 布局保持一致。
 pub(crate) const ISLAND_ACTION_RECTS: [(f64, f64, f64, f64); 3] = [
@@ -67,8 +69,8 @@ pub(crate) struct IslandUiState {
     /// 本次运行内彻底关闭。持久开关仍由 AppSettings 控制是否允许该操作。
     pub(crate) muted_permanently: bool,
     /// 启动恢复出的 Paused 只是安全的初始状态，不应被当成本次用户操作弹出。
-    /// 只有本次运行里用户主动暂停后，才允许展示暂停状态灵动岛。
-    pub(crate) pause_status_requested: bool,
+    /// 只有本次运行里用户主动暂停后，才短暂展示暂停状态灵动岛。
+    pub(crate) pause_status_until: Option<Instant>,
     pub(crate) menu_open: bool,
     pub(crate) active_break_event: Option<(String, Instant)>,
 }
@@ -84,7 +86,7 @@ impl Default for IslandUiState {
             restore_main_after_break: false,
             muted_until: None,
             muted_permanently: false,
-            pause_status_requested: false,
+            pause_status_until: None,
             menu_open: false,
             active_break_event: None,
         }
@@ -144,11 +146,20 @@ impl IslandUiState {
     }
 
     pub(crate) fn request_pause_status(&mut self) {
-        self.pause_status_requested = true;
+        self.request_pause_status_at(Instant::now());
+    }
+
+    pub(crate) fn request_pause_status_at(&mut self, now: Instant) {
+        self.pause_status_until = Some(now + PAUSE_STATUS_NOTICE_DURATION);
     }
 
     pub(crate) fn clear_pause_status_request(&mut self) {
-        self.pause_status_requested = false;
+        self.pause_status_until = None;
+    }
+
+    pub(crate) fn pause_status_active_at(&self, now: Instant) -> bool {
+        self.pause_status_until
+            .is_some_and(|deadline| now < deadline)
     }
 
     pub(crate) fn status_enabled(
@@ -156,8 +167,17 @@ impl IslandUiState {
         settings: &AppSettings,
         lifecycle: MonitoringLifecycle,
     ) -> bool {
+        self.status_enabled_at(settings, lifecycle, Instant::now())
+    }
+
+    pub(crate) fn status_enabled_at(
+        &self,
+        settings: &AppSettings,
+        lifecycle: MonitoringLifecycle,
+        now: Instant,
+    ) -> bool {
         island_status_enabled(settings, lifecycle)
-            && (lifecycle != MonitoringLifecycle::Paused || self.pause_status_requested)
+            && (lifecycle != MonitoringLifecycle::Paused || self.pause_status_active_at(now))
     }
 
     /// 核心状态已经完成画面质量和人物置信度门控；一旦收到该稳定返回信号，
@@ -303,10 +323,11 @@ pub(crate) fn island_hover_status_enabled(
     lifecycle: MonitoringLifecycle,
 ) -> bool {
     settings.island_enabled
-        && matches!(
-            lifecycle,
-            MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded
-        )
+        && match lifecycle {
+            MonitoringLifecycle::Monitoring | MonitoringLifecycle::Degraded => true,
+            MonitoringLifecycle::Paused => settings.island_paused_status_enabled,
+            _ => false,
+        }
 }
 
 pub(crate) fn island_height_for_menu(open: bool, detail_expanded: bool) -> f64 {
