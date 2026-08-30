@@ -105,11 +105,11 @@
 </head>
 <body>
   <section class="island" role="dialog" aria-modal="false" aria-labelledby="title">
-    <button class="island-close" id="island-close" title="关闭灵动岛" aria-label="关闭灵动岛">×</button>
+    <button class="island-close" id="island-close" title="隐藏灵动岛" aria-label="隐藏灵动岛">×</button>
     <div class="close-menu" id="close-menu">
-      <button data-mute-minutes="5">关闭 5 分钟</button>
-      <button data-mute-minutes="15">关闭 15 分钟</button>
-      <button data-mute-minutes="60">关闭 1 小时</button>
+      <button data-mute-minutes="5">隐藏 5 分钟</button>
+      <button data-mute-minutes="15">隐藏 15 分钟</button>
+      <button data-mute-minutes="60">隐藏 1 小时</button>
       <button class="danger" id="permanent-close" hidden>彻底关闭</button>
     </div>
     <div class="signal" id="signal" aria-hidden="true">
@@ -205,9 +205,9 @@
         document.documentElement.lang = next;
         document.title = tr('健康提醒', 'Health Reminder');
         const labels = [
-          ['[data-mute-minutes="5"]', '关闭 5 分钟', 'Close for 5 minutes'],
-          ['[data-mute-minutes="15"]', '关闭 15 分钟', 'Close for 15 minutes'],
-          ['[data-mute-minutes="60"]', '关闭 1 小时', 'Close for 1 hour'],
+          ['[data-mute-minutes="5"]', '隐藏 5 分钟', 'Hide for 5 minutes'],
+          ['[data-mute-minutes="15"]', '隐藏 15 分钟', 'Hide for 15 minutes'],
+          ['[data-mute-minutes="60"]', '隐藏 1 小时', 'Hide for 1 hour'],
           ['#permanent-close', '彻底关闭', 'Close permanently'],
           ['[data-command="start_break"]', '休息', 'Break'],
           ['[data-command="snooze_reminder"]', '稍后', 'Later'],
@@ -219,7 +219,7 @@
           ['.detail-stat:nth-child(3) small', '离座活动', 'Away activity'],
         ];
         labels.forEach(([selector, zh, en]) => { const node = document.querySelector(selector); if (node) node.textContent = tr(zh, en); });
-        closeButton.title = closeButton.ariaLabel = tr('关闭灵动岛', 'Close Dynamic Island');
+        closeButton.title = closeButton.ariaLabel = tr('隐藏灵动岛', 'Hide Dynamic Island');
         document.querySelector('[data-command="dismiss_reminder"]').title = document.querySelector('[data-command="dismiss_reminder"]').ariaLabel = tr('关闭本次', 'Close');
       };
 
@@ -233,6 +233,19 @@
         const rest = minutes % 60;
         if (language === 'en-US') return rest ? `${plural(hours, 'hour')} ${plural(rest, 'minute')}` : plural(hours, 'hour');
         return rest ? `${hours} 小时 ${rest} 分钟` : `${hours} 小时`;
+      };
+      const sedentaryThreshold = (snapshot) => Math.max(1, Number(snapshot && snapshot.settings && snapshot.settings.sedentarySeconds) || 45 * 60);
+      const sedentaryOverdue = (snapshot) => Math.max(0, Number(snapshot && snapshot.seatedSeconds) - sedentaryThreshold(snapshot));
+      const overdueText = (snapshot) => {
+        const overdue = sedentaryOverdue(snapshot);
+        return language === 'en-US'
+          ? `${duration(overdue)} over recommendation`
+          : `已超过建议 ${duration(overdue)}`;
+      };
+      const remainingText = (snapshot) => {
+        const remaining = Number(snapshot && snapshot.reminderRemainingSeconds);
+        if (!Number.isFinite(remaining) || remaining < 0) return null;
+        return duration(remaining);
       };
       const clearTimers = () => {
         clearTimeout(hideTimer); clearTimeout(collapseTimer); clearInterval(refreshTimer);
@@ -420,7 +433,15 @@
           const resumeText = resumeAt && !Number.isNaN(resumeAt.getTime())
             ? `${tr('恢复时间', 'Resumes at')} ${resumeAt.toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}`
             : tr('等待手动恢复', 'Waiting for manual resume');
-          renderMeta(resumeText);
+          renderMeta(snapshot.sedentaryReminderState === 'paused_overdue' ? overdueText(snapshot) : resumeText);
+        } else if (snapshot.sedentaryReminderState === 'snoozed') {
+          const remaining = remainingText(snapshot);
+          renderMeta(remaining ? `${remaining}${tr('后再次提醒', ' until next reminder')}` : overdueText(snapshot));
+        } else if (snapshot.sedentaryReminderState === 'dismissed') {
+          const remaining = remainingText(snapshot);
+          renderMeta(remaining ? `${remaining}${tr('后再次提醒', ' until next reminder')}` : tr('有效休息后重置', 'Break to reset'));
+        } else if (snapshot.sedentaryReminderState === 'overdue') {
+          renderMeta(overdueText(snapshot));
         } else {
           renderMeta(`${tr('连续坐姿', 'Continuous sitting')} ${duration(snapshot.seatedSeconds)}`);
           if (hideTimer) {
@@ -437,6 +458,9 @@
       const stateLabel = (snapshot) => {
         if (snapshot.lifecycle === 'paused') return tr('暂停计时中', 'Timer paused');
         if (snapshot.lifecycle === 'break') return tr('休息进行中', 'Break in progress');
+        if (snapshot.sedentaryReminderState === 'snoozed') return tr('已稍后 · 等待提醒', 'Snoozed · waiting');
+        if (snapshot.sedentaryReminderState === 'dismissed') return tr('已关闭本次', 'Closed once');
+        if (snapshot.sedentaryReminderState === 'overdue') return tr('已超过建议', 'Overdue');
         // 定时模式没有摄像头画面，“unknown”是正常占位状态，不能向用户显示
         // “等待稳定画面”这类只属于姿态识别管线的文案。
         if (snapshot.monitoringMode === 'timer' || snapshot.lifecycle === 'degraded') {

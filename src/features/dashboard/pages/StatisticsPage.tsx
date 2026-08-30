@@ -29,7 +29,7 @@ const statisticsMessages = defineMessages({
   completedBreaks: { zh: '完成休息次数', en: 'Completed breaks' },
   times: { zh: '次', en: 'times' },
   conversion: { zh: '提醒转化', en: 'reminder conversion' },
-  reminderFollowups: { zh: '提醒延后/关闭', en: 'Delayed/closed reminders' },
+  reminderFollowups: { zh: '未及时休息', en: 'Deferred reminders' },
   ofReminders: { zh: '的提醒', en: 'of reminders' },
   noReminders: { zh: '暂无提醒', en: 'No reminders yet' },
   localOnly: { zh: '习惯趋势', en: 'Trends' },
@@ -73,7 +73,7 @@ const historyActionMessages = defineMessages({
   manual: { zh: '手动恢复', en: 'Manual resume' },
   pause30: { zh: '暂停 30 分钟', en: 'Pause for 30 minutes' },
   snoozed: { zh: '稍后提醒', en: 'Snoozed' },
-  dismissed: { zh: '已关闭', en: 'Closed' }
+  dismissed: { zh: '关闭本次', en: 'Closed once' }
 })
 
 export function localDateKey(value: Date): string {

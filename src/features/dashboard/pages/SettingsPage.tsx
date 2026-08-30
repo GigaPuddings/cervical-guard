@@ -97,7 +97,7 @@ const settingsMessages = defineMessages({
   enableIsland: { zh: '启用灵动岛', en: 'Enable Dynamic Island' },
   islandMasterDescription: { zh: '总开关；关闭后保留下面的行为偏好', en: 'Master switch; behavior preferences are retained' },
   sedentaryReminder: { zh: '久坐提醒', en: 'Sitting reminder' },
-  sedentaryReminderDescription: { zh: '显示休息、稍后和关闭操作', en: 'Show break, snooze, and close actions' },
+  sedentaryReminderDescription: { zh: '显示休息、稍后和关闭本次', en: 'Show break, snooze, and close-once actions' },
   awayStatus: { zh: '离座状态', en: 'Away status' },
   awayStatusDescription: { zh: '确认无人后保持显示计时暂停', en: 'Show paused timing after absence is confirmed' },
   headDownDetection: { zh: '低头检测', en: 'Head-down detection' },
