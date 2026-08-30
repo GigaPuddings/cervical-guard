@@ -426,6 +426,23 @@ pub enum ReminderLevel {
     Strong,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SedentaryReminderState {
+    Counting,
+    Due,
+    Snoozed,
+    Dismissed,
+    Overdue,
+    Paused,
+    PausedOverdue,
+    Break,
+}
+
+fn default_sedentary_reminder_state() -> SedentaryReminderState {
+    SedentaryReminderState::Counting
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReminderPayload {
@@ -463,6 +480,9 @@ pub struct AppSnapshot {
     #[serde(default)]
     pub paused_started_at: Option<String>,
     pub current_reminder: Option<ReminderPayload>,
+    /// 当前久坐提醒的投递状态。连续坐姿本身只由有效休息/离座清零。
+    #[serde(default = "default_sedentary_reminder_state")]
+    pub sedentary_reminder_state: SedentaryReminderState,
     pub next_reminder_at: Option<String>,
     pub reminder_remaining_seconds: Option<u64>,
     pub today: DailyStatistics,

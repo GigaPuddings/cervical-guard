@@ -8,7 +8,8 @@ use crate::{
     model::{
         AppSettings, AppSnapshot, BehaviorState, CalibrationResult, DailyStatistics, FrameQuality,
         MonitoringLifecycle, MonitoringMode, PermissionState, PersistedMeta, PostureState,
-        ReminderKind, ReminderLevel, ReminderPayload, VisionObservation, SCHEMA_VERSION,
+        ReminderKind, ReminderLevel, ReminderPayload, SedentaryReminderState, VisionObservation,
+        SCHEMA_VERSION,
     },
 };
 
@@ -19,6 +20,12 @@ const HEAD_DOWN_EXIT_CONFIRMATION_SECS: u64 = 6;
 const HEAD_DOWN_STATISTICS_MIN_SECS: u64 = 60;
 const HEAD_DOWN_SEGMENT_MERGE_GRACE_SECS: u64 = 15;
 pub(crate) const MIN_RECORDED_BREAK_SECS: u64 = 60;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SedentaryReminderAction {
+    Snoozed,
+    Dismissed,
+}
 
 pub struct RuntimeState {
     snapshot: AppSnapshot,
@@ -34,6 +41,7 @@ pub struct RuntimeState {
     paused_deadline: Option<Instant>,
     snoozed_until: Option<Instant>,
     last_sedentary_reminder: Option<Instant>,
+    last_sedentary_action: Option<SedentaryReminderAction>,
     last_head_reminder: Option<Instant>,
     break_started_at: Option<Instant>,
     effective_break_recorded: bool,
@@ -167,6 +175,7 @@ impl RuntimeState {
             paused_until: None,
             paused_started_at: None,
             current_reminder: None,
+            sedentary_reminder_state: SedentaryReminderState::Counting,
             next_reminder_at: None,
             reminder_remaining_seconds: None,
             today,
@@ -199,6 +208,7 @@ impl RuntimeState {
             paused_deadline: None,
             snoozed_until: None,
             last_sedentary_reminder: None,
+            last_sedentary_action: None,
             last_head_reminder: None,
             break_started_at: None,
             effective_break_recorded: false,
@@ -220,6 +230,70 @@ impl RuntimeState {
         Duration::from_secs(seconds.max(1))
     }
 
+    fn reminder_includes_sedentary(reminder: &ReminderPayload) -> bool {
+        matches!(
+            &reminder.kind,
+            ReminderKind::Sedentary | ReminderKind::Combined
+        )
+    }
+
+    fn current_sedentary_reminder_active(&self) -> bool {
+        self.snapshot
+            .current_reminder
+            .as_ref()
+            .is_some_and(Self::reminder_includes_sedentary)
+    }
+
+    fn active_sedentary_snooze(&self, now: Instant) -> Option<Instant> {
+        if !matches!(
+            self.last_sedentary_action,
+            Some(SedentaryReminderAction::Snoozed)
+        ) {
+            return None;
+        }
+        self.snoozed_until.filter(|deadline| *deadline > now)
+    }
+
+    fn sedentary_snooze_due(&self, now: Instant) -> bool {
+        matches!(
+            self.last_sedentary_action,
+            Some(SedentaryReminderAction::Snoozed)
+        ) && self.snoozed_until.is_some_and(|deadline| now >= deadline)
+    }
+
+    fn sedentary_reminder_state(&self, now: Instant) -> SedentaryReminderState {
+        if self.current_sedentary_reminder_active() {
+            return SedentaryReminderState::Due;
+        }
+        if self.snapshot.lifecycle == MonitoringLifecycle::Break {
+            return SedentaryReminderState::Break;
+        }
+
+        let overdue = self.snapshot.seated_seconds >= self.snapshot.settings.sedentary_seconds;
+        if self.snapshot.lifecycle == MonitoringLifecycle::Paused {
+            return if overdue {
+                SedentaryReminderState::PausedOverdue
+            } else {
+                SedentaryReminderState::Paused
+            };
+        }
+        if overdue && self.active_sedentary_snooze(now).is_some() {
+            return SedentaryReminderState::Snoozed;
+        }
+        if overdue
+            && matches!(
+                self.last_sedentary_action,
+                Some(SedentaryReminderAction::Dismissed)
+            )
+        {
+            return SedentaryReminderState::Dismissed;
+        }
+        if overdue {
+            return SedentaryReminderState::Overdue;
+        }
+        SedentaryReminderState::Counting
+    }
+
     fn reminder_remaining(&self, now: Instant) -> Option<u64> {
         if self.snapshot.current_reminder.is_some()
             || !matches!(
@@ -230,7 +304,7 @@ impl RuntimeState {
         {
             return None;
         }
-        if let Some(deadline) = self.snoozed_until.filter(|deadline| *deadline > now) {
+        if let Some(deadline) = self.active_sedentary_snooze(now) {
             return Some(deadline.duration_since(now).as_secs().saturating_add(1));
         }
         if self.snapshot.seated_seconds < self.snapshot.settings.sedentary_seconds {
@@ -240,6 +314,9 @@ impl RuntimeState {
                     .sedentary_seconds
                     .saturating_sub(self.snapshot.seated_seconds),
             );
+        }
+        if self.sedentary_snooze_due(now) {
+            return Some(0);
         }
         match self.last_sedentary_reminder {
             None => Some(0),
@@ -281,6 +358,7 @@ impl RuntimeState {
         } else {
             None
         };
+        self.snapshot.sedentary_reminder_state = self.sedentary_reminder_state(now);
     }
 
     pub fn tick(&mut self) -> Option<ReminderPayload> {
@@ -401,7 +479,9 @@ impl RuntimeState {
                 None
             };
             self.last_sedentary_reminder = None;
+            self.last_sedentary_action = None;
             self.last_head_reminder = None;
+            self.snoozed_until = None;
         }
     }
 
@@ -415,13 +495,16 @@ impl RuntimeState {
         let sedentary_threshold = self.snapshot.settings.sedentary_seconds;
         let head_threshold = self.snapshot.settings.head_down_minutes * 60;
         let repeat = self.reminder_repeat_delay();
+        let sedentary_snooze_due = self.sedentary_snooze_due(now);
 
         let sedentary_due = self.sedentary_clock_running()
             && self.snapshot.seated_seconds >= sedentary_threshold
             && match self.last_sedentary_reminder {
                 None => true,
                 Some(last) => {
-                    self.snapshot.settings.repeat_reminders && now.duration_since(last) >= repeat
+                    sedentary_snooze_due
+                        || (self.snapshot.settings.repeat_reminders
+                            && now.duration_since(last) >= repeat)
                 }
             };
         let head_due = self.snapshot.settings.island_head_down_enabled
@@ -438,9 +521,13 @@ impl RuntimeState {
 
         if sedentary_due {
             self.last_sedentary_reminder = Some(now);
+            self.last_sedentary_action = None;
         }
         if head_due {
             self.last_head_reminder = Some(now);
+        }
+        if sedentary_snooze_due || (self.snoozed_until.is_some_and(|deadline| now >= deadline)) {
+            self.snoozed_until = None;
         }
         let language = Language::of_settings(&self.snapshot.settings);
         let (kind, title, message) = match (sedentary_due, head_due) {
@@ -639,6 +726,7 @@ impl RuntimeState {
             self.snapshot.today.break_count = self.snapshot.today.break_count.saturating_add(1);
         }
         self.effective_break_recorded = true;
+        self.snoozed_until = None;
         self.snapshot.seated_seconds = 0;
         self.snapshot.head_down_seconds = 0;
         self.snapshot.away_seconds = 0;
@@ -649,6 +737,7 @@ impl RuntimeState {
         self.snapshot.reminder_remaining_seconds = None;
         self.snapshot.session_started_at = Some(Utc::now().to_rfc3339());
         self.last_sedentary_reminder = None;
+        self.last_sedentary_action = None;
         self.last_head_reminder = None;
         self.head_candidate_since = None;
         self.person_missing_since = None;
@@ -672,17 +761,34 @@ impl RuntimeState {
     }
 
     pub fn snooze(&mut self, minutes: u64) {
+        let applies_to_sedentary = self
+            .snapshot
+            .current_reminder
+            .as_ref()
+            .is_some_and(Self::reminder_includes_sedentary);
         if self.snapshot.current_reminder.take().is_some() {
             self.snapshot.today.snoozed_count = self.snapshot.today.snoozed_count.saturating_add(1);
+        }
+        if applies_to_sedentary {
+            self.last_sedentary_action = Some(SedentaryReminderAction::Snoozed);
         }
         self.snoozed_until = Some(Instant::now() + Duration::from_secs(minutes.clamp(1, 120) * 60));
         self.refresh_reminder_schedule(Instant::now());
     }
 
     pub fn dismiss(&mut self) {
+        let applies_to_sedentary = self
+            .snapshot
+            .current_reminder
+            .as_ref()
+            .is_some_and(Self::reminder_includes_sedentary);
         if self.snapshot.current_reminder.take().is_some() {
             self.snapshot.today.dismissed_count =
                 self.snapshot.today.dismissed_count.saturating_add(1);
+        }
+        if applies_to_sedentary {
+            self.last_sedentary_action = Some(SedentaryReminderAction::Dismissed);
+            self.snoozed_until = None;
         }
         self.refresh_reminder_schedule(Instant::now());
     }
@@ -754,10 +860,14 @@ impl RuntimeState {
         self.snapshot.away_seconds = 0;
         self.reset_head_down_segment();
         self.snapshot.current_reminder = None;
+        self.snapshot.next_reminder_at = None;
+        self.snapshot.reminder_remaining_seconds = None;
         self.snapshot.last_detection_at = None;
         self.snapshot.session_started_at = None;
         self.last_sedentary_reminder = None;
+        self.last_sedentary_action = None;
         self.last_head_reminder = None;
+        self.snoozed_until = None;
     }
 
     pub fn ingest(
@@ -909,13 +1019,17 @@ impl RuntimeState {
         }
         self.effective_break_recorded = true;
         self.snapshot.today.break_count = self.snapshot.today.break_count.saturating_add(1);
+        self.snoozed_until = None;
         self.snapshot.seated_seconds = 0;
         self.snapshot.head_down_seconds = 0;
         self.snapshot.away_seconds = 0;
         self.reset_head_down_segment();
         self.snapshot.current_reminder = None;
+        self.snapshot.next_reminder_at = None;
+        self.snapshot.reminder_remaining_seconds = None;
         self.snapshot.session_started_at = Some(Utc::now().to_rfc3339());
         self.last_sedentary_reminder = None;
+        self.last_sedentary_action = None;
         self.last_head_reminder = None;
     }
 

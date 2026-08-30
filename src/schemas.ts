@@ -82,6 +82,7 @@ export const snapshotSchema = z.object({
   pausedUntil: z.string().nullable(),
   pausedStartedAt: z.string().nullable().default(null),
   currentReminder: reminderSchema.nullable(),
+  sedentaryReminderState: z.enum(['counting', 'due', 'snoozed', 'dismissed', 'overdue', 'paused', 'paused_overdue', 'break']).default('counting'),
   nextReminderAt: z.string().nullable(),
   reminderRemainingSeconds: z.number().nonnegative().nullable(),
   today: dailyStatisticsSchema,

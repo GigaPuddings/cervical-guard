@@ -7,6 +7,7 @@ export type FrameQuality = 'good' | 'dark' | 'occluded' | 'multi_person' | 'unst
 export type PostureState = 'unknown' | 'sitting' | 'standing'
 export type ReminderKind = 'sedentary' | 'head_down' | 'combined'
 export type ReminderLevel = 'gentle' | 'noticeable' | 'strong'
+export type SedentaryReminderState = 'counting' | 'due' | 'snoozed' | 'dismissed' | 'overdue' | 'paused' | 'paused_overdue' | 'break'
 export type ReminderSound = 'auto' | 'system' | 'chime' | 'soft' | 'alert' | 'off'
 export type BehaviorEventType = 'away' | 'head_down' | 'break' | 'proactive_break' | 'early_break' | 'proactive_pause' | 'reminder'
 
@@ -120,6 +121,8 @@ export interface AppSnapshot {
   /** 本次暂停开始时间（RFC3339）。 */
   pausedStartedAt: string | null
   currentReminder: ReminderPayload | null
+  /** 当前久坐提醒投递状态；连续坐姿只由有效休息/离座清零。 */
+  sedentaryReminderState: SedentaryReminderState
   nextReminderAt: string | null
   reminderRemainingSeconds: number | null
   today: DailyStatistics

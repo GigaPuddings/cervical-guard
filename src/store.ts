@@ -18,6 +18,9 @@ function loadCachedSnapshot(): AppSnapshot | null {
       awaySeconds: cached.awaySeconds ?? 0,
       lifecycle: cached.lifecycle === 'unavailable' ? 'unavailable' : 'paused',
       currentReminder: null,
+      sedentaryReminderState: cached.lifecycle === 'unavailable'
+        ? 'counting'
+        : cached.seatedSeconds >= cached.settings.sedentarySeconds ? 'paused_overdue' : 'paused',
       nextReminderAt: null,
       reminderRemainingSeconds: null,
       pausedUntil: null,

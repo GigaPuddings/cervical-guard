@@ -610,6 +610,84 @@ fn snoozed_and_dismissed_reminders_are_counted_separately() {
 }
 
 #[test]
+fn snoozed_sedentary_reminder_retriggers_even_when_repeat_is_disabled() {
+    let mut state = state();
+    state.snapshot.settings.sedentary_seconds = 60;
+    state.snapshot.settings.repeat_reminders = false;
+    let now = Instant::now();
+
+    assert!(state.advance(60, now).is_some());
+    state.snooze(1);
+    assert_eq!(
+        state.snapshot().sedentary_reminder_state,
+        SedentaryReminderState::Snoozed
+    );
+    assert!(state.advance(59, now + Duration::from_secs(59)).is_none());
+
+    let reminder = state.advance(1, Instant::now() + Duration::from_secs(61));
+
+    assert!(matches!(
+        reminder.map(|item| item.kind),
+        Some(ReminderKind::Sedentary)
+    ));
+    assert_eq!(state.snapshot.today.reminder_count, 2);
+}
+
+#[test]
+fn dismissed_sedentary_reminder_keeps_the_session_overdue() {
+    let mut state = state();
+    state.snapshot.settings.sedentary_seconds = 60;
+    let now = Instant::now();
+
+    assert!(state.advance(60, now).is_some());
+    state.dismiss();
+    let snapshot = state.snapshot();
+
+    assert_eq!(snapshot.seated_seconds, 60);
+    assert_eq!(
+        snapshot.sedentary_reminder_state,
+        SedentaryReminderState::Dismissed
+    );
+}
+
+#[test]
+fn pausing_an_overdue_session_marks_the_debt_without_resetting_it() {
+    let mut state = state();
+    state.snapshot.settings.sedentary_seconds = 60;
+    state.snapshot.seated_seconds = 120;
+
+    state.pause(None);
+    let snapshot = state.snapshot();
+
+    assert_eq!(snapshot.seated_seconds, 120);
+    assert_eq!(
+        snapshot.sedentary_reminder_state,
+        SedentaryReminderState::PausedOverdue
+    );
+}
+
+#[test]
+fn completing_a_break_clears_snoozed_sedentary_delivery_state() {
+    let mut state = state();
+    state.snapshot.settings.sedentary_seconds = 60;
+    let now = Instant::now();
+
+    assert!(state.advance(60, now).is_some());
+    state.snooze(1);
+    state.start_break();
+    state.advance(MIN_RECORDED_BREAK_SECS, now + Duration::from_secs(60));
+    state.end_break();
+    let snapshot = state.snapshot();
+
+    assert_eq!(snapshot.seated_seconds, 0);
+    assert_eq!(
+        snapshot.sedentary_reminder_state,
+        SedentaryReminderState::Counting
+    );
+    assert_eq!(snapshot.reminder_remaining_seconds, Some(60));
+}
+
+#[test]
 fn snapshot_exposes_the_next_reminder_time_and_countdown() {
     let mut state = state();
     state.snapshot.settings.sedentary_seconds = 10;
