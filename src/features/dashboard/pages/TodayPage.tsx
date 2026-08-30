@@ -12,7 +12,7 @@ import { cn, compactDuration, percent } from '../../../utils'
 import { TodayWeatherHeader } from '../../weather/WeatherOverview'
 import type { DashboardProps } from '../dashboardTypes'
 import { resolvePosturePresentationState, type PosturePresentationState } from '../posturePresentation'
-import { buildHealthAdvice, buildTodayMetricInsights, formatReminderSchedule, formatRestCadence, reminderFollowupCount, type InsightIcon, type InsightTone } from '../todayInsights'
+import { buildHealthAdvice, buildSedentarySessionPresentation, buildTodayMetricInsights, formatReminderSchedule, formatRestCadence, reminderFollowupCount, type InsightIcon, type InsightTone } from '../todayInsights'
 
 const todayMessages = defineMessages({
   today: { zh: '今天', en: 'Today' },
@@ -41,7 +41,7 @@ const todayMessages = defineMessages({
   sittingToday: { zh: '今日坐姿', en: 'Sitting today' },
   cumulativeHeadDown: { zh: '累计低头', en: 'Head-down time' },
   completedBreaks: { zh: '完成休息', en: 'Completed breaks' },
-  reminderFollowups: { zh: '延后/关闭', en: 'Delayed/closed' },
+  reminderFollowups: { zh: '未及时休息', en: 'Deferred reminders' },
   awayActivity: { zh: '累计活动', en: 'Total activity' },
   getMoving: { zh: '起来动一动吧！', en: 'Get up and move!' },
   naturalPosture: { zh: '姿态自然', en: 'Natural posture' },
@@ -78,7 +78,6 @@ const todayMessages = defineMessages({
   liftGaze: { zh: '抬起视线，轻轻放松颈部', en: 'Lift your gaze and gently relax your neck.' },
   recommended: { zh: '建议', en: 'Recommended' },
   rest: { zh: '休息', en: 'Break' },
-  active: { zh: '进行中', en: 'Active' },
   stable: { zh: '稳定', en: 'Stable' },
   notApplicable: { zh: '不适用', en: 'Not applicable' },
   timerNoPose: { zh: '定时模式无需姿态判断', en: 'Posture confidence is not used in timer mode' }
@@ -130,6 +129,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
   const insightToneClasses: Record<InsightTone, string> = { danger: 'text-danger', muted: 'text-muted', positive: 'text-accent', warning: 'text-warning' }
   const reminderSchedule = formatReminderSchedule(snapshot, language)
   const healthAdvice = buildHealthAdvice(snapshot, snapshot.settings.sedentarySeconds, language)
+  const sessionPresentation = buildSedentarySessionPresentation(snapshot, snapshot.settings.sedentarySeconds, language)
   const progress = percent(snapshot.seatedSeconds, snapshot.settings.sedentarySeconds)
   const confidence = Math.round(snapshot.postureConfidence * 100)
   const canEnableCamera = !isCamera && (snapshot.lifecycle === 'monitoring' || snapshot.lifecycle === 'degraded')
@@ -172,7 +172,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
             </span>
           </header>
           <div className="today-session-body grid min-h-0 flex-1 grid-cols-[minmax(226px,.95fr)_minmax(210px,1.05fr)] items-center gap-5 px-5 py-3" data-posture-state={postureState}>
-            <SessionProgressRing progress={progress} label={messages.continuousSitting} value={sessionClock} recommendation={`${messages.recommended} ${Math.round(snapshot.settings.sedentarySeconds / 60)} ${messages.minute}${messages.rest}`} status={messages.active} />
+            <SessionProgressRing progress={progress} label={messages.continuousSitting} value={sessionClock} recommendation={`${messages.recommended} ${Math.round(snapshot.settings.sedentarySeconds / 60)} ${messages.minute}${messages.rest}`} status={sessionPresentation.status} detail={sessionPresentation.detail} tone={sessionPresentation.tone} />
             <div className="min-w-0 border-edge-soft py-1 pl-5">
               <div className="flex items-center gap-3">
                 <span className="today-posture-icon grid size-13 place-items-center rounded-[14px] bg-accent-soft text-accent">

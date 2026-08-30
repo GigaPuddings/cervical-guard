@@ -3,6 +3,7 @@ import type { AppSnapshot, DailyStatistics } from '../../types'
 
 export type InsightIcon = 'activity' | 'alert' | 'check' | 'clock' | 'target' | 'thumbs-up'
 export type InsightTone = 'danger' | 'muted' | 'positive' | 'warning'
+export type SessionRingTone = 'danger' | 'info' | 'muted' | 'normal' | 'warning'
 
 export interface MetricInsight {
   note: string
@@ -18,8 +19,14 @@ export interface TodayMetricInsights {
   activity: MetricInsight
 }
 
-type ReminderScheduleSnapshot = Pick<AppSnapshot, 'currentReminder' | 'lifecycle' | 'monitoringMode' | 'nextReminderAt' | 'personPresent' | 'reminderRemainingSeconds'>
-type HealthAdviceSnapshot = Pick<AppSnapshot, 'behavior' | 'currentReminder' | 'lifecycle' | 'monitoringMode' | 'reminderRemainingSeconds' | 'seatedSeconds'>
+export interface SedentarySessionPresentation {
+  status: string
+  detail: string | undefined
+  tone: SessionRingTone
+}
+
+type ReminderScheduleSnapshot = Pick<AppSnapshot, 'currentReminder' | 'lifecycle' | 'monitoringMode' | 'nextReminderAt' | 'personPresent' | 'reminderRemainingSeconds' | 'seatedSeconds' | 'sedentaryReminderState'> & { settings: Pick<AppSnapshot['settings'], 'sedentarySeconds'> }
+type HealthAdviceSnapshot = Pick<AppSnapshot, 'behavior' | 'currentReminder' | 'lifecycle' | 'monitoringMode' | 'reminderRemainingSeconds' | 'seatedSeconds' | 'sedentaryReminderState'>
 
 function minuteText(seconds: number, language: Language): string {
   const minutes = Math.max(1, Math.ceil(seconds / 60))
@@ -41,26 +48,89 @@ export function reminderFollowupCount(today: Pick<DailyStatistics, 'dismissedCou
   return today.dismissedCount + today.snoozedCount
 }
 
+function overdueSeconds(seatedSeconds: number, sedentarySeconds: number): number {
+  return Math.max(0, seatedSeconds - sedentarySeconds)
+}
+
+function overdueText(seconds: number, language: Language): string {
+  const elapsed = elapsedMinuteText(seconds, language)
+  return language === 'en-US' ? `${elapsed} over the recommendation` : `已超过建议 ${elapsed}`
+}
+
+function reminderCountdownText(seconds: number, language: Language): string {
+  return seconds < 60 ? (language === 'en-US' ? 'less than 1 min' : '不足 1 分钟') : minuteText(seconds, language)
+}
+
 export function formatRestCadence(sedentarySeconds: number, language: Language): string {
   const minutes = Math.max(1, Math.round(sedentarySeconds / 60))
   return language === 'en-US' ? `Take a break every ${minutes} minutes` : `建议每 ${minutes} 分钟休息一次`
 }
 
+export function buildSedentarySessionPresentation(snapshot: Pick<AppSnapshot, 'currentReminder' | 'lifecycle' | 'reminderRemainingSeconds' | 'seatedSeconds' | 'sedentaryReminderState'>, sedentarySeconds: number, language: Language): SedentarySessionPresentation {
+  const english = language === 'en-US'
+  const overdue = overdueSeconds(snapshot.seatedSeconds, sedentarySeconds)
+
+  if (snapshot.sedentaryReminderState === 'break') {
+    return { status: english ? 'On break' : '休息中', detail: english ? 'A break over 1 min resets the ring' : '休息满 1 分钟后重置', tone: 'info' }
+  }
+  if (snapshot.sedentaryReminderState === 'due' || snapshot.currentReminder) {
+    return { status: english ? 'Break due' : '提醒已到', detail: overdue > 0 ? overdueText(overdue, language) : undefined, tone: 'danger' }
+  }
+  if (snapshot.sedentaryReminderState === 'snoozed') {
+    const remaining = snapshot.reminderRemainingSeconds == null ? undefined : reminderCountdownText(snapshot.reminderRemainingSeconds, language)
+    return { status: english ? 'Snoozed' : '已稍后', detail: remaining ? (english ? `Reminds again in ${remaining}` : `${remaining}后再次提醒`) : overdueText(overdue, language), tone: 'warning' }
+  }
+  if (snapshot.sedentaryReminderState === 'dismissed') {
+    const remaining = snapshot.reminderRemainingSeconds == null ? undefined : reminderCountdownText(snapshot.reminderRemainingSeconds, language)
+    return {
+      status: english ? 'Closed once' : '已关闭本次',
+      detail: remaining ? (english ? `Next reminder in ${remaining}` : `${remaining}后再次提醒`) : (english ? 'Still counts until a real break' : '有效休息后才会重置'),
+      tone: 'danger'
+    }
+  }
+  if (snapshot.sedentaryReminderState === 'paused_overdue') {
+    return { status: english ? 'Paused overdue' : '暂停超时', detail: overdueText(overdue, language), tone: 'danger' }
+  }
+  if (snapshot.sedentaryReminderState === 'paused') {
+    return { status: english ? 'Paused' : '已暂停', detail: english ? 'Resume to continue timing' : '恢复后继续计时', tone: 'muted' }
+  }
+  if (snapshot.sedentaryReminderState === 'overdue') {
+    return { status: english ? 'Overdue' : '已超时', detail: overdueText(overdue, language), tone: 'danger' }
+  }
+
+  const threshold = Math.max(60, sedentarySeconds)
+  const remaining = snapshot.reminderRemainingSeconds ?? Math.max(0, threshold - snapshot.seatedSeconds)
+  if (remaining <= threshold * 0.2) {
+    return { status: english ? 'Nearly due' : '即将休息', detail: `${reminderCountdownText(remaining, language)}${english ? ' left' : '后提醒'}`, tone: 'warning' }
+  }
+  return { status: english ? 'Active' : '进行中', detail: undefined, tone: 'normal' }
+}
+
 export function formatReminderSchedule(snapshot: ReminderScheduleSnapshot, language: Language): string {
   const english = language === 'en-US'
   if (snapshot.currentReminder) return english ? 'Break reminder is due' : '休息提醒已到'
-  if (snapshot.lifecycle === 'paused') return english ? 'Resume detection to continue' : '恢复检测后继续计时'
+  const overdue = overdueSeconds(snapshot.seatedSeconds, snapshot.settings.sedentarySeconds)
+  if (snapshot.lifecycle === 'paused') {
+    if (overdue > 0) return english ? `${overdueText(overdue, language)}; reminds after resume` : `${overdueText(overdue, language)}，恢复后继续提醒`
+    return english ? 'Resume detection to continue' : '恢复检测后继续计时'
+  }
   if (snapshot.lifecycle === 'break') return english ? 'Next cycle starts after this break' : '休息结束后开始下一轮'
   if (!['monitoring', 'degraded'].includes(snapshot.lifecycle)) return english ? 'Waiting for detection to start' : '等待检测开始'
 
+  if (snapshot.sedentaryReminderState === 'dismissed' && snapshot.reminderRemainingSeconds == null) {
+    return english ? 'Closed once; take a break to reset' : '已关闭本次，休息后重置'
+  }
   if (snapshot.nextReminderAt && snapshot.reminderRemainingSeconds !== null) {
     const reminderDate = new Date(snapshot.nextReminderAt)
     if (!Number.isNaN(reminderDate.getTime())) {
       const time = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(reminderDate)
-      const remaining = snapshot.reminderRemainingSeconds < 60 ? (english ? 'less than 1 min' : '不足 1 分钟') : minuteText(snapshot.reminderRemainingSeconds, language)
+      const remaining = reminderCountdownText(snapshot.reminderRemainingSeconds, language)
+      if (snapshot.sedentaryReminderState === 'snoozed') return english ? `Snoozed until ${time} · ${remaining} left` : `已稍后至 ${time} · 剩余 ${remaining}`
+      if (snapshot.sedentaryReminderState === 'dismissed') return english ? `Closed once · next reminder ${time}` : `已关闭本次 · 下次提醒 ${time}`
       return english ? `Next break ${time} · ${remaining} left` : `下次休息 ${time} · 剩余 ${remaining}`
     }
   }
+  if (overdue > 0) return overdueText(overdue, language)
 
   if (snapshot.monitoringMode === 'camera' && !snapshot.personPresent) return english ? 'Timer starts after posture is confirmed' : '确认坐姿后开始倒计时'
   return english ? 'No reminder scheduled right now' : '当前时段无需提醒'
@@ -70,7 +140,15 @@ export function buildHealthAdvice(snapshot: HealthAdviceSnapshot, sedentarySecon
   const english = language === 'en-US'
   if (snapshot.lifecycle === 'break') return english ? 'Stand up and move around during this break, then look into the distance.' : '休息时站起来走动，并把视线投向远处。'
   if (snapshot.currentReminder) return english ? 'Your break reminder is due. Stand up and move for a few minutes now.' : '休息提醒已到，建议现在起身活动几分钟。'
+  const overdue = overdueSeconds(snapshot.seatedSeconds, sedentarySeconds)
+  if (snapshot.sedentaryReminderState === 'paused_overdue') return english ? `${overdueText(overdue, language)}. Pausing does not reset the sitting session.` : `${overdueText(overdue, language)}，暂停不会重置连续坐姿。`
   if (snapshot.lifecycle === 'paused') return english ? 'Detection is paused. Resume to continue posture tracking and reminders.' : '检测已暂停，恢复后会继续记录坐姿与提醒时间。'
+  if (snapshot.sedentaryReminderState === 'snoozed') {
+    const remaining = snapshot.reminderRemainingSeconds == null ? undefined : reminderCountdownText(snapshot.reminderRemainingSeconds, language)
+    return remaining ? (english ? `Reminder snoozed. You will be reminded again in ${remaining}, and sitting time still accumulates.` : `提醒已稍后，${remaining}后会再次提醒；这段时间仍计入连续坐姿。`) : (english ? 'Reminder snoozed. Sitting time still accumulates.' : '提醒已稍后，这段时间仍计入连续坐姿。')
+  }
+  if (snapshot.sedentaryReminderState === 'dismissed') return english ? 'This reminder was closed once. A real break is still needed to reset the sitting session.' : '本次提醒已关闭，仍需有效休息才能重置连续坐姿。'
+  if (snapshot.sedentaryReminderState === 'overdue') return english ? `${overdueText(overdue, language)}. Take a break before starting another focus block.` : `${overdueText(overdue, language)}，建议先起身休息再进入下一段专注。`
   if (!['monitoring', 'degraded'].includes(snapshot.lifecycle)) return english ? 'Detection is getting ready. Keep the camera available while posture is confirmed.' : '检测准备中，请保持摄像头可用并等待状态确认。'
 
   if (snapshot.monitoringMode === 'camera') {
@@ -121,10 +199,10 @@ export function buildTodayMetricInsights(today: DailyStatistics, sedentarySecond
 
   const followupCount = reminderFollowupCount(today)
   const reminderFollowups: MetricInsight = followupCount === 0
-    ? { note: english ? 'No reminders delayed or closed today' : '今天没有延后或关闭提醒', icon: 'thumbs-up', tone: 'positive' }
+    ? { note: english ? 'No reminders snoozed or closed today' : '今天没有稍后或关闭本次', icon: 'thumbs-up', tone: 'positive' }
     : followupCount <= 2
-      ? { note: english ? `${countText(followupCount, 'reminder', language)} delayed or closed; take the next break` : `已延后/关闭 ${followupCount} 次，下次尽量及时休息`, icon: 'alert', tone: 'warning' }
-      : { note: english ? `${countText(followupCount, 'reminder', language)} delayed or closed; adjust your schedule` : `已延后/关闭 ${followupCount} 次，建议调整提醒节奏`, icon: 'alert', tone: 'danger' }
+      ? { note: english ? `${today.snoozedCount} snoozed · ${today.dismissedCount} closed` : `稍后 ${today.snoozedCount} 次 · 关闭本次 ${today.dismissedCount} 次`, icon: 'alert', tone: 'warning' }
+      : { note: english ? `${today.snoozedCount} snoozed · ${today.dismissedCount} closed; adjust cadence` : `稍后 ${today.snoozedCount} 次 · 关闭本次 ${today.dismissedCount} 次`, icon: 'alert', tone: 'danger' }
 
   const activitySummary = today.awayCount > 0
     ? english

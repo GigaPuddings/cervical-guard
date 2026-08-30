@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DailyStatistics } from '../../types'
-import { buildHealthAdvice, buildTodayMetricInsights, formatReminderSchedule, formatRestCadence } from './todayInsights'
+import { buildHealthAdvice, buildSedentarySessionPresentation, buildTodayMetricInsights, formatReminderSchedule, formatRestCadence } from './todayInsights'
 
 function day(overrides: Partial<DailyStatistics> = {}): DailyStatistics {
   return {
@@ -35,7 +35,10 @@ describe('today reminder schedule', () => {
           reminderRemainingSeconds: 40 * 60,
           currentReminder: null,
           monitoringMode: 'camera',
-          personPresent: true
+          personPresent: true,
+          seatedSeconds: 5 * 60,
+          sedentaryReminderState: 'counting',
+          settings: { sedentarySeconds: 45 * 60 }
         },
         'zh-CN'
       )
@@ -51,11 +54,33 @@ describe('today reminder schedule', () => {
           reminderRemainingSeconds: null,
           currentReminder: null,
           monitoringMode: 'camera',
-          personPresent: false
+          personPresent: false,
+          seatedSeconds: 0,
+          sedentaryReminderState: 'paused',
+          settings: { sedentarySeconds: 45 * 60 }
         },
         'zh-CN'
       )
     ).toBe('恢复检测后继续计时')
+  })
+
+  it('shows paused overdue sessions as health debt', () => {
+    expect(
+      formatReminderSchedule(
+        {
+          lifecycle: 'paused',
+          nextReminderAt: null,
+          reminderRemainingSeconds: null,
+          currentReminder: null,
+          monitoringMode: 'camera',
+          personPresent: false,
+          seatedSeconds: 70 * 60,
+          sedentaryReminderState: 'paused_overdue',
+          settings: { sedentarySeconds: 45 * 60 }
+        },
+        'zh-CN'
+      )
+    ).toContain('恢复后继续提醒')
   })
 })
 
@@ -78,7 +103,7 @@ describe('today metric insights', () => {
     expect(insights.sitting.note).toContain('2 个提醒周期')
     expect(insights.headDown.note).toContain('10%')
     expect(insights.breaks.note).toContain('还差 1 次')
-    expect(insights.reminderFollowups.note).toBe('今天没有延后或关闭提醒')
+    expect(insights.reminderFollowups.note).toBe('今天没有稍后或关闭本次')
     expect(insights.activity.note).toContain('2 次离座')
     expect(new Set(Object.values(insights).map(item => item.icon)).size).toBeGreaterThan(2)
   })
@@ -86,7 +111,7 @@ describe('today metric insights', () => {
   it('treats snoozed and closed reminders as follow-ups', () => {
     const insights = buildTodayMetricInsights(day({ snoozedCount: 1, dismissedCount: 1 }), 45 * 60, 'zh-CN')
 
-    expect(insights.reminderFollowups.note).toContain('已延后/关闭 2 次')
+    expect(insights.reminderFollowups.note).toContain('稍后 1 次 · 关闭本次 1 次')
   })
 
   it('changes guidance as the day accumulates behavior', () => {
@@ -111,6 +136,7 @@ describe('today health advice', () => {
     lifecycle: 'monitoring' as const,
     monitoringMode: 'camera' as const,
     reminderRemainingSeconds: 30 * 60,
+    sedentaryReminderState: 'counting' as const,
     seatedSeconds: 15 * 60
   }
 
@@ -128,5 +154,26 @@ describe('today health advice', () => {
     expect(buildHealthAdvice({ ...base, lifecycle: 'paused' }, 45 * 60, 'zh-CN')).toContain('检测已暂停')
     expect(buildHealthAdvice({ ...base, lifecycle: 'break' }, 45 * 60, 'zh-CN')).toContain('站起来走动')
     expect(buildHealthAdvice({ ...base, reminderRemainingSeconds: 5 * 60, seatedSeconds: 40 * 60 }, 45 * 60, 'zh-CN')).toContain('5 分钟')
+    expect(buildHealthAdvice({ ...base, lifecycle: 'paused', seatedSeconds: 70 * 60, sedentaryReminderState: 'paused_overdue' }, 45 * 60, 'zh-CN')).toContain('暂停不会重置')
+  })
+})
+
+describe('sedentary session presentation', () => {
+  const base = {
+    currentReminder: null,
+    lifecycle: 'monitoring' as const,
+    reminderRemainingSeconds: 30 * 60,
+    seatedSeconds: 15 * 60,
+    sedentaryReminderState: 'counting' as const
+  }
+
+  it('keeps normal sitting separate from overdue delivery states', () => {
+    expect(buildSedentarySessionPresentation(base, 45 * 60, 'zh-CN')).toMatchObject({ status: '进行中', tone: 'normal' })
+    expect(buildSedentarySessionPresentation({ ...base, seatedSeconds: 55 * 60, sedentaryReminderState: 'overdue' }, 45 * 60, 'zh-CN')).toMatchObject({ status: '已超时', tone: 'danger' })
+  })
+
+  it('explains snoozed and dismissed sessions without resetting the clock', () => {
+    expect(buildSedentarySessionPresentation({ ...base, seatedSeconds: 50 * 60, reminderRemainingSeconds: 10 * 60, sedentaryReminderState: 'snoozed' }, 45 * 60, 'zh-CN')).toMatchObject({ status: '已稍后', detail: '10 分钟后再次提醒', tone: 'warning' })
+    expect(buildSedentarySessionPresentation({ ...base, seatedSeconds: 50 * 60, reminderRemainingSeconds: null, sedentaryReminderState: 'dismissed' }, 45 * 60, 'zh-CN')).toMatchObject({ status: '已关闭本次', detail: '有效休息后才会重置', tone: 'danger' })
   })
 })
