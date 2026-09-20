@@ -475,7 +475,7 @@
       };
       const nextLabel = (snapshot) => {
         if (snapshot.lifecycle === 'break') return `${tr('休息剩余', 'Break remaining')} ${duration(snapshot.breakRemainingSeconds)}`;
-        if (snapshot.lifecycle === 'paused') return tr('上一次暂停时间未知', 'Last pause time unknown');
+        if (snapshot.lifecycle === 'paused') return `${tr('上次暂停于', 'Paused since')} ${pauseStartedLabel(snapshot)}`;
         if (snapshot.currentReminder) return tr('提醒等待处理', 'Reminder awaiting action');
         if (snapshot.nextReminderAt) {
           const date = new Date(snapshot.nextReminderAt);
@@ -486,14 +486,21 @@
           ? tr('按当前规则暂停', 'Paused by current schedule')
           : `${tr('还需', 'Remaining')} ${duration(snapshot.reminderRemainingSeconds)}`;
       };
+      // 暂停时刻不随快照持久化：应用重启后 pausedStartedAt 为空，此时退回
+      // lastDetectionAt（与主界面“上次检测”同源），保证两处显示一致。
+      const pausedStartedAt = (snapshot) => {
+        const raw = snapshot && (snapshot.pausedStartedAt || snapshot.lastDetectionAt);
+        const started = raw ? new Date(raw) : null;
+        return started && !Number.isNaN(started.getTime()) ? started : null;
+      };
       const pausedElapsedSeconds = (snapshot) => {
-        const started = snapshot && snapshot.pausedStartedAt ? new Date(snapshot.pausedStartedAt) : null;
-        if (!started || Number.isNaN(started.getTime())) return 0;
+        const started = pausedStartedAt(snapshot);
+        if (!started) return 0;
         return Math.max(0, Math.floor((Date.now() - started.getTime()) / 1000));
       };
       const pauseStartedLabel = (snapshot) => {
-        const started = snapshot && snapshot.pausedStartedAt ? new Date(snapshot.pausedStartedAt) : null;
-        if (!started || Number.isNaN(started.getTime())) return tr('未知', 'Unknown');
+        const started = pausedStartedAt(snapshot);
+        if (!started) return tr('未知', 'Unknown');
         return started.toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
       };
       const fillDetail = (snapshot) => {
