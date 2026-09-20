@@ -93,7 +93,10 @@
     .detail-weather span { flex: 0 0 auto; color: #7f9988; font-size: 7px; }
     .detail-main { display: grid; grid-template-columns: 1fr 1.2fr; align-items: end; gap: 14px; margin-top: 9px; }
     .detail-time small, .detail-next small { display: block; color: #81958a; font-size: 8px; font-weight: 650; }
-    .detail-time strong { display: block; margin-top: 2px; font-size: 25px; line-height: 1; letter-spacing: -.04em; }
+    .detail-time strong {
+      display: block; margin-top: 2px; font-size: 22px; line-height: 1; letter-spacing: -.04em;
+      white-space: nowrap; font-variant-numeric: tabular-nums;
+    }
     .detail-next { min-width: 0; padding-left: 13px; border-left: 1px solid rgba(255,255,255,.08); }
     .detail-next strong { display: block; margin-top: 3px; color: #d4e8d9; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .detail-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: auto; }
@@ -233,6 +236,11 @@
         const rest = minutes % 60;
         if (language === 'en-US') return rest ? `${plural(hours, 'hour')} ${plural(rest, 'minute')}` : plural(hours, 'hour');
         return rest ? `${hours} 小时 ${rest} 分钟` : `${hours} 小时`;
+      };
+      // 与主页面当前会话圆环使用同一计时格式，避免灵动岛在暂停时另算一套时长。
+      const sessionClock = (seconds) => {
+        const value = Math.max(0, Math.floor(Number(seconds) || 0));
+        return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
       };
       const sedentaryThreshold = (snapshot) => Math.max(1, Number(snapshot && snapshot.settings && snapshot.settings.sedentarySeconds) || 45 * 60);
       const sedentaryOverdue = (snapshot) => Math.max(0, Number(snapshot && snapshot.seatedSeconds) - sedentaryThreshold(snapshot));
@@ -493,11 +501,6 @@
         const started = raw ? new Date(raw) : null;
         return started && !Number.isNaN(started.getTime()) ? started : null;
       };
-      const pausedElapsedSeconds = (snapshot) => {
-        const started = pausedStartedAt(snapshot);
-        if (!started) return 0;
-        return Math.max(0, Math.floor((Date.now() - started.getTime()) / 1000));
-      };
       const pauseStartedLabel = (snapshot) => {
         const started = pausedStartedAt(snapshot);
         if (!started) return tr('未知', 'Unknown');
@@ -515,9 +518,9 @@
         document.querySelector('#d-state').textContent = currentState;
         title.textContent = currentState;
         const paused = snapshot.lifecycle === 'paused';
-        document.querySelector('#d-main-label').textContent = paused ? tr('距暂停离座', 'Away since pause') : tr('连续坐姿', 'Continuous sitting');
+        document.querySelector('#d-main-label').textContent = tr('连续坐姿', 'Continuous sitting');
         document.querySelector('#d-side-label').textContent = paused ? tr('上一次暂停时间', 'Last pause time') : tr('下一次提醒', 'Next reminder');
-        document.querySelector('#d-seated').textContent = paused ? duration(pausedElapsedSeconds(snapshot)) : duration(snapshot.seatedSeconds);
+        document.querySelector('#d-seated').textContent = sessionClock(snapshot.seatedSeconds);
         document.querySelector('#d-next').textContent = paused ? pauseStartedLabel(snapshot) : nextLabel(snapshot);
         document.querySelector('#d-today').textContent = duration(snapshot.today.seatedSeconds);
         document.querySelector('#d-breaks').textContent = language === 'en-US' ? `${snapshot.today.breakCount} times` : `${snapshot.today.breakCount} 次`;
