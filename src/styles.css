@@ -3,20 +3,20 @@
 /* Product design tokens. Dark mode is the product default and only shipped theme. */
 :root {
   color-scheme: dark;
-  --theme-canvas: #0d120f;
-  --theme-sidebar: #101712;
-  --theme-panel: #161f19;
-  --theme-panel-muted: #1b261f;
-  --theme-panel-strong: #080d0a;
+  --theme-canvas: #07110d;
+  --theme-sidebar: rgba(7, 18, 13, 0.88);
+  --theme-panel: rgba(16, 34, 25, 0.86);
+  --theme-panel-muted: rgba(24, 53, 38, 0.68);
+  --theme-panel-strong: rgba(5, 15, 10, 0.92);
   --theme-foreground: #edf4ef;
   --theme-muted: #9aa99f;
   --theme-subtle: #74837a;
-  --theme-edge: #2d3b32;
-  --theme-edge-soft: #243128;
-  --theme-accent: #62ad78;
-  --theme-accent-strong: #79c58e;
-  --theme-accent-soft: #203b29;
-  --theme-accent-soft-strong: #2b5037;
+  --theme-edge: rgba(137, 184, 156, 0.18);
+  --theme-edge-soft: rgba(132, 177, 150, 0.10);
+  --theme-accent: #69c184;
+  --theme-accent-strong: #7bd99a;
+  --theme-accent-soft: rgba(49, 142, 79, 0.20);
+  --theme-accent-soft-strong: rgba(62, 159, 94, 0.30);
   --theme-warning: #e1ad5c;
   --theme-warning-soft: #3a2c18;
   --theme-warning-foreground: #f0c77d;
@@ -31,13 +31,13 @@
   --theme-break: #162a1d;
   --theme-break-soft: #b9d6bd;
   --theme-focus: #79c58e;
-  --theme-session-ring-track: #28372f;
+  --theme-session-ring-track: rgba(116, 154, 133, 0.26);
   --theme-session-ring-start: #79c58e;
   --theme-session-ring-mid: #62ad78;
   --theme-session-ring-end: #41684f;
   --theme-session-ring-dot-stroke: #17231b;
-  --theme-shadow-panel: 0 14px 42px rgba(0, 0, 0, 0.22);
-  --theme-shadow-control: 0 8px 20px rgba(0, 0, 0, 0.24);
+  --theme-shadow-panel: 0 10px 32px rgba(0, 0, 0, 0.16);
+  --theme-shadow-control: 0 8px 20px rgba(0, 0, 0, 0.20);
 }
 
 @theme inline {
@@ -216,7 +216,99 @@
 }
 
 .sidebar-nav-button-active {
+  position: relative;
   border-color: color-mix(in srgb, var(--theme-accent) 38%, transparent);
+  background: rgba(62, 159, 94, 0.18);
+}
+
+.sidebar-nav-button-active::before {
+  position: absolute;
+  left: -1px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--theme-accent-strong);
+  content: "";
+}
+
+.dashboard-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.dashboard-shell[data-page="today"] {
+  --theme-panel: rgba(24, 40, 35, 0.88);
+  --theme-panel-muted: rgba(29, 55, 46, 0.72);
+}
+
+.dashboard-shell[data-page="today"] .app-sidebar {
+  --theme-panel: rgba(20, 36, 32, 0.88);
+}
+
+.dashboard-shell[data-page="today"]::before,
+.dashboard-shell[data-page="today"]::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+}
+
+.dashboard-shell[data-page="today"]::before {
+  background-image:
+    url("./assets/today-dashboard-forest.png"),
+    url("./assets/today-dashboard-forest.png");
+  background-position:
+    -2.5vw top,
+    right top;
+  background-repeat: no-repeat, no-repeat;
+  background-size: 100% auto, 100% auto;
+  opacity: 0.88;
+}
+
+.dashboard-shell[data-page="today"]::after {
+  background: linear-gradient(180deg, rgba(4, 12, 8, 0.03), rgba(4, 12, 8, 0.13));
+}
+
+.dashboard-shell > * {
+  z-index: 1;
+}
+
+.app-sidebar {
+  backdrop-filter: blur(2px);
+}
+
+.dashboard-primary-action {
+  background-color: #81f0b4;
+  color: #0b2a1b;
+  transition-property: background-color, box-shadow, transform;
+  transition-duration: 160ms;
+}
+
+.dashboard-primary-action:hover {
+  background-color: #8af3bb;
+}
+
+.dashboard-primary-action:active {
+  transform: translateY(1px);
+}
+
+.window-chrome {
+  background-image:
+    linear-gradient(rgba(7, 18, 13, 0.72), rgba(7, 18, 13, 0.72)),
+    url("./assets/today-dashboard-forest.png");
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-size: 100vw auto;
+}
+
+.today-header-decoration {
+  top: 32px;
+  left: calc(35% + 35px);
+  width: clamp(305px, 23.5vw, 390px);
+  height: auto;
+  opacity: 0.9;
 }
 
 .weather-detail-hero-grid {
@@ -252,6 +344,11 @@
   .weather-page-header {
     grid-template-columns: minmax(280px, .8fr) minmax(430px, 1.2fr);
     gap: 20px;
+  }
+
+  .today-header-decoration {
+    left: calc(31% + 35px);
+    width: 315px;
   }
 }
 
@@ -375,7 +472,7 @@
 
   .today-metrics-grid {
     height: 116px;
-    margin-top: 13px;
+    margin-top: 0;
   }
 
   .statistics-page-layout {
@@ -926,6 +1023,10 @@
 }
 
 @media (max-width: 1199px) {
+  .today-header-decoration {
+    display: none;
+  }
+
   .today-page-layout {
     grid-template-rows: 109px minmax(394px, 1fr) auto;
     overflow-y: auto;

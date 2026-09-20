@@ -27,7 +27,7 @@ const mount = async () => {
   }
   createRoot(root).render(
     <StrictMode>
-      <div className="h-full overflow-hidden pt-9">
+      <div className="h-full overflow-hidden pt-10">
         <WindowChrome />
         <App />
       </div>

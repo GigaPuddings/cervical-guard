@@ -1,6 +1,7 @@
 import { Activity, BadgeCheck, BellOff, BicepsFlexed, Camera, ChevronRight, CirclePause, CirclePlus, Clock3, Coffee, Gauge, Leaf, ScanFace, ShieldCheck, SlidersHorizontal, Target, ThumbsUp, TriangleAlert, UserRound, UserRoundX } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import dashboardMessage from '../../../assets/today-dashboard-message.png'
 import { MetricCard } from '../../../components/MetricCard'
 import { PoseCanvas } from '../../../components/PoseCanvas'
 import { SectionHeader } from '../../../components/SectionHeader'
@@ -16,7 +17,8 @@ import { buildHealthAdvice, buildSedentarySessionPresentation, buildTodayMetricI
 
 const todayMessages = defineMessages({
   today: { zh: '今天', en: 'Today' },
-  title: { zh: '照顾好当下的姿势', en: 'Take care of your posture' },
+  titlePrefix: { zh: '照顾好当下的', en: 'Take care of your ' },
+  titleAccent: { zh: '姿势', en: 'posture' },
   subtitle: { zh: '每一次挺直，都是对未来的温柔。', en: 'Every upright moment is a kindness to your future self.' },
   startBreak: { zh: '开始休息', en: 'Start break' },
   endBreak: { zh: '结束休息', en: 'End break' },
@@ -136,11 +138,12 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
   const sessionClock = `${Math.floor(snapshot.seatedSeconds / 60)}:${String(Math.floor(snapshot.seatedSeconds % 60)).padStart(2, '0')}`
 
   return (
-    <div className="today-page-layout themed-scrollbar mx-auto grid h-full min-h-0 w-full max-w-337 grid-rows-[141px_minmax(0,493px)_166px] content-start gap-4 overflow-hidden px-6 pb-9 pt-8">
+    <div className="today-page-layout themed-scrollbar relative isolate mx-auto grid h-full min-h-0 w-full max-w-337 grid-rows-[141px_minmax(0,493px)_166px] content-start gap-4 overflow-hidden px-6 pb-9 pt-8">
+      <img className="today-header-decoration pointer-events-none absolute z-0 select-none" src={dashboardMessage} alt="" aria-hidden="true" />
       <SectionHeader
-        className="today-page-header [&_h1]:mt-7 [&_h1]:text-[32px] [&_p]:mt-5"
+        className="today-page-header relative z-10 [&_h1]:mt-7 [&_h1]:text-[32px] [&_p]:mt-5"
         eyebrow={`${messages.today} · ${new Intl.DateTimeFormat(language, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}`}
-        title={messages.title}
+        title={<>{messages.titlePrefix}<span className="text-accent">{messages.titleAccent}</span></>}
         subtitle={messages.subtitle}
         actions={
           <div className="today-page-actions flex items-center gap-5 pt-9">
@@ -148,7 +151,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
               <TodayWeatherHeader language={language} />
             </div>
             <div className="text-center">
-              <button className="today-break-button inline-flex h-15 min-w-52.5 items-center justify-center gap-2 rounded-full bg-accent px-7 text-[14px] font-bold text-inverse shadow-control transition hover:bg-accent-strong" onClick={snapshot.lifecycle === 'break' ? onEndBreak : onStartBreak}>
+              <button className="dashboard-primary-action today-break-button inline-flex h-15 min-w-52.5 items-center justify-center gap-2 rounded-full px-7 text-[14px] font-bold shadow-control transition" onClick={snapshot.lifecycle === 'break' ? onEndBreak : onStartBreak}>
                 <Coffee size={18} /> {snapshot.lifecycle === 'break' ? messages.endBreak : messages.startBreak}
               </button>
               <small className="mt-2 block text-[9px] text-muted">{formatRestCadence(snapshot.settings.sedentarySeconds, language)}</small>
@@ -159,7 +162,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
 
       {error ? <div className="absolute left-66 right-6 top-28 z-30 rounded-[12px] border border-warning/25 bg-warning-soft px-4 py-2 text-[10px] text-warning-foreground">{error}</div> : null}
 
-      <div className="today-primary-grid grid min-h-0 gap-5 min-[1120px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.85fr)]">
+      <div className="today-primary-grid relative z-10 grid min-h-0 gap-5 min-[1120px]:grid-cols-[minmax(0,1.35fr)_minmax(320px,.85fr)]">
         <section className="flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-edge bg-panel shadow-panel">
           <header className="today-session-header flex h-15 min-w-0 shrink-0 items-center border-b border-edge-soft px-5 text-[12px] font-bold">
             <span className="flex shrink-0 items-center">
@@ -210,6 +213,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
               <strong className="block text-[11px] text-accent">{messages.healthAdvice}</strong>
               <small className="mt-1 line-clamp-2 block text-[10px] leading-4 text-muted">{healthAdvice}</small>
             </span>
+            <ChevronRight className="shrink-0 text-muted" size={17} aria-hidden="true" />
           </div>
         </section>
 
@@ -281,7 +285,7 @@ export function TodayPage({ snapshot, visionStatus, streamUrl, previewError, lan
         </section>
       </div>
 
-      <div className="today-metrics-grid mt-5.25 grid min-h-0 grid-cols-5 gap-3">
+      <div className="today-metrics-grid relative z-10 mt-1.5 grid min-h-0 grid-cols-5 gap-3">
         <MetricCard
           icon={Clock3}
           label={messages.sittingToday}

@@ -70,9 +70,9 @@ export function WindowChrome() {
   }
 
   return (
-    <header className="fixed inset-x-0 top-0 z-250 flex h-9 select-none items-center border-b border-edge bg-sidebar/98 pl-3 backdrop-blur-xl" data-tauri-drag-region onPointerDown={startDragging}>
+    <header className="window-chrome fixed inset-x-0 top-0 z-250 flex h-10 select-none items-center border-b border-edge pl-3 backdrop-blur-xl" data-tauri-drag-region onPointerDown={startDragging}>
       <div className="flex min-w-0 flex-1 items-center gap-2 self-stretch" data-tauri-drag-region>
-        <span className="size-2 rounded-full bg-accent" aria-hidden="true" />
+        <img src="/favicon.svg" className="size-5 rounded-[6px]" alt="" aria-hidden="true" />
         <span className="truncate text-[11px] font-bold text-foreground" data-tauri-drag-region>
           {messages.title}
         </span>

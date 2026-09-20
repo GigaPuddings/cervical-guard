@@ -28,7 +28,7 @@ export function Dashboard(props: DashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <main className="dashboard-shell grid h-full min-h-0 overflow-hidden bg-canvas text-foreground md:grid-cols-[240px_minmax(0,1fr)]">
+    <main className="dashboard-shell grid h-full min-h-0 overflow-hidden bg-canvas text-foreground md:grid-cols-[240px_minmax(0,1fr)]" data-page={page}>
       <Sidebar snapshot={snapshot} page={page} language={language} open={sidebarOpen} onClose={() => setSidebarOpen(false)} onPage={onPage} onPause={props.onPause} onResume={props.onResume} onEndBreak={props.onEndBreak} onLanguage={props.onLanguage} onHelp={props.onHelp} updater={props.updater} />
 
       {sidebarOpen ? <button className="fixed inset-0 z-30 bg-panel-strong/20 md:hidden" aria-label={messages.closeNavigation} onClick={() => setSidebarOpen(false)} /> : null}
