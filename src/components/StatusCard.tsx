@@ -69,15 +69,15 @@ export function StatusCard({
       <p className="mt-1.5 text-[10px] text-muted">{statusNote}</p>
 
       {isBreak ? (
-        <button className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full bg-accent text-[12px] font-bold text-inverse shadow-control hover:bg-accent-strong" onClick={onEndBreak}>
+        <button className="dashboard-primary-action mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full text-[12px] font-bold shadow-control" onClick={onEndBreak}>
           <Coffee size={15} /> {messages.endBreak}
         </button>
       ) : monitoring ? (
-        <button className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full bg-accent text-[12px] font-bold text-inverse shadow-control hover:bg-accent-strong" onClick={() => setPauseOpen(value => !value)}>
+        <button className="dashboard-primary-action mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full text-[12px] font-bold shadow-control" onClick={() => setPauseOpen(value => !value)}>
           <Pause size={15} /> {messages.pauseDetection} <ChevronDown size={13} />
         </button>
       ) : (
-        <button className="mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full bg-accent text-[12px] font-bold text-inverse shadow-control hover:bg-accent-strong" onClick={onResume}>
+        <button className="dashboard-primary-action mt-3 flex h-9 w-full items-center justify-center gap-2 rounded-full text-[12px] font-bold shadow-control" onClick={onResume}>
           <Play size={15} /> {messages.resumeDetection}
         </button>
       )}

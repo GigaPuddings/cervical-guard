@@ -10,6 +10,14 @@ const toneClasses = {
   neutral: 'bg-neutral-soft text-muted'
 } as const
 
+const progressToneClasses = {
+  green: 'bg-accent shadow-[0_0_9px_rgba(105,193,132,.5)]',
+  amber: 'bg-warning shadow-[0_0_8px_rgba(225,173,92,.42)]',
+  blue: 'bg-info shadow-[0_0_8px_rgba(137,181,200,.42)]',
+  rose: 'bg-danger shadow-[0_0_8px_rgba(223,133,133,.42)]',
+  neutral: 'bg-muted'
+} as const
+
 export function MetricCard({
   icon: Icon,
   label,
@@ -35,6 +43,8 @@ export function MetricCard({
   compact?: boolean
   className?: string
 }) {
+  const normalizedProgress = progress === undefined ? undefined : Math.max(0, Math.min(100, progress))
+
   if (compact) {
     return (
       <section className={cn('metric-card-compact relative min-w-0 overflow-hidden rounded-[16px] border border-edge bg-panel px-4.25 py-4.25 shadow-panel', className)}>
@@ -64,7 +74,7 @@ export function MetricCard({
       </span>
       <div className="min-w-0">
         <span className="block truncate text-[11px] text-muted">{label}</span>
-        <strong className={cn('mt-1.5 block truncate font-black leading-none tracking-tight text-foreground', language === 'en-US' ? 'text-[14px]' : 'text-[16px]')} title={value}>
+        <strong className={cn('mt-1.5 block truncate font-black leading-none tracking-tight text-foreground', language === 'en-US' ? 'text-[15px]' : 'text-[18px]')} title={value}>
           {value}
         </strong>
         {note ? (
@@ -74,9 +84,12 @@ export function MetricCard({
           </small>
         ) : null}
       </div>
-      {progress !== undefined ? (
-        <span className="absolute inset-x-4 bottom-3 h-0.5 overflow-hidden rounded-full bg-edge-soft">
-          <i className="block h-full rounded-full bg-accent" style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
+      {normalizedProgress !== undefined && normalizedProgress > 0 ? (
+        <span className="absolute inset-x-4 bottom-3 h-0.5 overflow-hidden rounded-full" data-metric-progress={normalizedProgress}>
+          <i
+            className={cn('block h-full rounded-full', progressToneClasses[tone])}
+            style={{ width: `${normalizedProgress}%` }}
+          />
         </span>
       ) : null}
     </section>
