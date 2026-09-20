@@ -15,7 +15,9 @@ use crate::{
 
 /// 连续缺失达到该时长后，才把“不确定/丢点”升级为真正离座。
 /// 确认窗口内继续沿用上一个已确认状态；只有确认离座后才暂停坐姿计时。
-const DEFAULT_PERSON_ABSENCE_CONFIRMATION_SECS: u64 = 3;
+/// 窗口必须明显长于单次遮挡或检测抖动，否则短暂丢点会被累计成离座；
+/// 平衡档要求连续缺失满 30 秒，较高/较低档在此基础上增减。
+const DEFAULT_PERSON_ABSENCE_CONFIRMATION_SECS: u64 = 30;
 const HEAD_DOWN_EXIT_CONFIRMATION_SECS: u64 = 6;
 const HEAD_DOWN_STATISTICS_MIN_SECS: u64 = 60;
 const HEAD_DOWN_SEGMENT_MERGE_GRACE_SECS: u64 = 15;
@@ -50,8 +52,8 @@ pub struct RuntimeState {
 impl RuntimeState {
     fn person_absence_confirmation(&self) -> Duration {
         let seconds = match self.snapshot.settings.sensitivity.as_str() {
-            "high" => 2,
-            "low" => 5,
+            "high" => 20,
+            "low" => 45,
             _ => DEFAULT_PERSON_ABSENCE_CONFIRMATION_SECS,
         };
         Duration::from_secs(seconds)

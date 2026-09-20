@@ -11,7 +11,7 @@
 | 连续久坐使用单调时间 | `src-tauri/src/core.rs` | `timer_mode_triggers_after_continuous_threshold` |
 | 低头使用相对校准基线 | `vision.rs`、`Calibration.tsx` | `uses_calibrated_head_position_and_face_geometry` |
 | 低质量画面不产生明确判断 | `core.rs` QualityGate | `low_quality_observation_never_asserts_head_down` |
-| 多帧确认、迟滞、人物缺失容忍 | `core.rs::ingest` | 稳定低头确认、6 秒恢复确认、10 秒缺失容忍 |
+| 多帧确认、迟滞、人物缺失容忍 | `core.rs::ingest` | 稳定低头确认、6 秒恢复确认、连续缺失满 30 秒才确认离座（平衡档） |
 | 暂停、延后、关闭、休息 | `public/island.html`、`src-tauri/src/island.rs`、Tauri commands | 灵动岛交互测试与 Rust 命令测试 |
 | 久坐与低头提醒合并、独立冷却 | `core.rs::check_reminders` | Rust 领域逻辑 |
 | 会议模式降低提醒等级 | `core.rs::check_reminders` | 设置驱动策略 |

@@ -364,11 +364,11 @@ fn continuous_keypoint_loss_confirms_away_only_once() {
 fn absence_confirmation_follows_detection_sensitivity() {
     let mut state = state();
     state.snapshot.settings.sensitivity = "high".into();
-    assert_eq!(state.person_absence_confirmation(), Duration::from_secs(2));
+    assert_eq!(state.person_absence_confirmation(), Duration::from_secs(20));
     state.snapshot.settings.sensitivity = "balanced".into();
-    assert_eq!(state.person_absence_confirmation(), Duration::from_secs(3));
+    assert_eq!(state.person_absence_confirmation(), Duration::from_secs(30));
     state.snapshot.settings.sensitivity = "low".into();
-    assert_eq!(state.person_absence_confirmation(), Duration::from_secs(5));
+    assert_eq!(state.person_absence_confirmation(), Duration::from_secs(45));
 }
 
 #[test]
